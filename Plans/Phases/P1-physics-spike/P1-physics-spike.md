@@ -28,3 +28,17 @@
 
 12h 尚未稳定时减少几何与支持变量，沿用已验证模板；调整网格和执行位置。缓存只能是本团队真实运行、输入匹配的结果。
 若 L2 完全不可用，明确退到 L0/L1，无逐点结论，并记录偏离比赛核心目标；不能用动画代替物理。
+
+## 子任务索引
+
+可验收拆分（writing-plans）。状态只在本目录勾选，事实结论仍只写 `Plans/Delivery/status.md`。
+
+| 父项 | 子任务文件 | 证明什么 |
+|---|---|---|
+| P1-01 | [P1-01-runtime.md](P1-01-runtime.md) | 引擎版本、架构、doctor、内存可复述 |
+| P1-02 | [P1-02-benchmarks.md](P1-02-benchmarks.md) | 公开浮力基准 + 非等温射流，各有适用范围 |
+| P1-03 | [P1-03-room-pipeline.md](P1-03-room-pipeline.md) | 参数房间 → case → 网格 → 求解 → 采样，可复算 |
+| P1-04 | [P1-04-energyplus.md](P1-04-energyplus.md) | 单区代表日负荷/电耗/单位，墙温可给 L2 |
+| P1-05 | [P1-05-mesh-performance.md](P1-05-mesh-performance.md) | 粗/中网格耗时、内存、质量与能量 |
+
+总清单：[P1-checklist.md](P1-checklist.md)。未勾选不得把 P1 标为完成。Mac App 接入属于 P3/P4，不在本阶段。

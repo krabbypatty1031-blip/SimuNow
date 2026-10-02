@@ -6,8 +6,9 @@ import SimuSimulation
 @MainActor
 @Observable
 public final class WorkspaceStore {
-    public var selection: WorkspaceDestination? = .workspace
-    public var project: ProjectDocument?
+    public var destination: WorkspaceDestination? = .workspace
+    /// The open project's editing session; nil shows the home screen.
+    public var session: ProjectSession?
     public let modelRegistry: ModelRegistry
     public let projectValidator: ProjectValidator
     public let simulationClient: any SimulationClient
@@ -17,6 +18,21 @@ public final class WorkspaceStore {
         self.modelRegistry = modelRegistry
         self.projectValidator = projectValidator
         self.simulationClient = simulationClient
+    }
+
+    public func openProject(_ project: ProjectDocument, packageURL: URL? = nil) {
+        session = ProjectSession(project: project, packageURL: packageURL,
+                                 registry: modelRegistry, validator: projectValidator)
+        destination = .workspace
+    }
+
+    public func openPackage(at url: URL) throws {
+        session = try ProjectSession.load(from: url, registry: modelRegistry)
+        destination = .workspace
+    }
+
+    public func closeProject() {
+        session = nil
     }
 }
 

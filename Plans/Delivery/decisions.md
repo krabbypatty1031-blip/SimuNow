@@ -68,3 +68,11 @@ OpenFOAM 2412/2506/更新版本均存在，选定 2506 的可核实 arm64 镜像
 日期：2026-10-02；任务 P1-01。触发：P0 doctor 硬编码引擎状态无法解释本机环境，也不能把外部命令可执行当作管线完成。备选：覆盖 P0 字段、升级整个项目协议、为 CLI 添加独立环境报告。选择：保留 protocol_version 1 / scaffold / 四级 not_configured，新增 environment.report_version 1；目标配置与发现值分开，状态和提示明确，未知用 null；严格退出作为显式选项。诊断只在用户 CLI 调用，默认退出 0 保留旧行为，blocked 的 strict 退出 2，配置错误 JSON 退出 3。
 
 影响：项目/请求/receipt/Swift Codable 不变；新增独立 snake_case schema 和协议说明。标准库 SystemProbe 的进程执行可注入，有限超时、局部进程树终止、独立 bounded Docker 清理；解析后的指定字段进入报告，原始 stderr/凭据/私人路径不输出。任何引擎 startup 通过也保持 simulation_pipeline=not_implemented、physical_validation=not_performed。证据：doctor 行为/CLI/schema 测试、真实无引擎诊断和 contracts 回归，见 verification.md。
+
+## ADR-012：开发机 Python 固定版本 3.13.7 → 3.13.16（已接受）
+
+日期：2026-10-03。触发：当前开发机（tanchai）无 3.13.7；Homebrew 3.13 系列瓶装版本为 3.13.16，精确编译 3.13.7 需要额外工具链。备选：pyenv 源码编译 3.13.7、改用 3.14、升级固定到 3.13.16。选择：固定 3.13.16（Homebrew python@3.13），manifest、test_doctor 同步更新；requirements-dev.lock 不变。影响：与原固定路线同为 CPython 3.13 补丁级差异；doctor 环境检查在本机 python_matches=true。证据：2026-10-03 本机 24 项 doctor 测试与 contracts 全部通过，见 verification.md。其他固定目标（Colima/OpenFOAM/EnergyPlus）不变；本机尚无容器工具，P1 引擎验证条件不变。
+
+## ADR-013：P2 项目包与窗口策略（已接受）
+
+日期：2026-10-03。触发：P2-04 需要保存/导入；文档窗口生命周期是 P2 待决定项。备选：DocumentGroup/ReferenceFileDocument 文档架构、WindowGroup + 显式打开/保存面板。选择：WindowGroup + 显式面板 + 原子写入；项目包为单文件 `project.json` 的 `.simunow` 目录包；多窗口各自管理各自项目，无共享可变状态；本阶段不提供结构性撤销/重做（文本编辑走系统原生；删除有确认）。理由：文档架构重构改变 P0 已验证的入口结构，在本机无 UI 自动化验证的条件下风险高于收益；runs/、measurements/ 等子目录在 P3/P6 接入时扩展包格式并记录。影响：最近项目列表自行维护（UserDefaults 书签）；撤销范围在 P5 产品加固时重估。证据：P2 执行计划与验收记录。

@@ -76,8 +76,8 @@ private let codec = ProjectCodec(registry:.builtIn)
 }
 @Test @MainActor func workspaceAcceptsInjectedModelServices() throws {
     let store = WorkspaceStore(modelRegistry:.builtIn,projectValidator:ProjectValidator())
-    store.project = try codec.decode(fixture())
-    #expect(store.project?.schemaVersion == 2)
+    store.openProject(try codec.decode(fixture()))
+    #expect(store.session?.project.schemaVersion == 2)
     #expect(store.modelRegistry.registrations.count == 3)
 }
 @Test func adapterRequirementsCheckDayCoverage() throws {
@@ -99,6 +99,8 @@ private let codec = ProjectCodec(registry:.builtIn)
         #expect(try codec.decodeSnapshot(Data(contentsOf:snapshotFile)) == snapshot)
         try codec.encode(project).write(to:directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of:".python.",with:".swift.")))
         try codec.encodeSnapshot(snapshot).write(to:directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of:".python.",with:".swift-snapshot.")))
+        let expectedHash = try String(contentsOf:directory.appendingPathComponent(file.lastPathComponent.replacingOccurrences(of:".python.json",with:".snapshot-hash.txt")),encoding:.utf8)
+        #expect(try InputHash.snapshotHash(snapshot) == expectedHash, Comment(rawValue:"cross-language input hash must match"))
     }
     for file in files where file.lastPathComponent.hasSuffix(".invalid.json") {
         #expect(throws:(any Error).self, Comment(rawValue:file.lastPathComponent)) { try codec.decode(Data(contentsOf:file)) }

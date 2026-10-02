@@ -25,7 +25,7 @@ class FakeProbe:
         self.settings = {}
         self.local = {"os": "Darwin", "os_version": "27.0", "architecture": "arm64",
                       "physical_memory_bytes": 34359738368, "memory_probe_state": "ok",
-                      "python_version": "3.13.7", "python_isolated": True,
+                      "python_version": "3.13.16", "python_isolated": True,
                       "dependencies": deepcopy(load_manifest()["python"]["dependencies"])}
         self.ep_present = True
         self.results = {

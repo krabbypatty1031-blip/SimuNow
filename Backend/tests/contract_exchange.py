@@ -9,13 +9,16 @@ from simunow_worker.models.registry import default_registry
 from simunow_worker.models.validation import ProjectValidator
 from simunow_worker.models.schema import generated_schema
 from simunow_worker.models.json_value import parse
+from simunow_worker.models.hashing import snapshot_hash
 
 codec=ProjectCodec(); directory=Path(sys.argv[2]); directory.mkdir(parents=True,exist_ok=True)
 if sys.argv[1]=='prepare':
     for space in ('office','classroom'):
         p=codec.decode(json.dumps(project(space)))
         (directory/(space+'.python.json')).write_text(codec.encode(p))
-        (directory/(space+'.python-snapshot.json')).write_text(codec.encode_snapshot(ScenarioSnapshotBuilder.capture(p,p.scenarios[0].id)))
+        snapshot=ScenarioSnapshotBuilder.capture(p,p.scenarios[0].id)
+        (directory/(space+'.python-snapshot.json')).write_text(codec.encode_snapshot(snapshot))
+        (directory/(space+'.snapshot-hash.txt')).write_text(snapshot_hash(snapshot))
     for name,raw in semantic_cases().items():
         p=codec.decode(json.dumps(raw)); (directory/(name+'.case.json')).write_text(codec.encode(p))
         (directory/(name+'.expected.json')).write_text(json.dumps(ProjectValidator().validate(p,default_registry()).keys()))

@@ -1,14 +1,14 @@
 {
   "manifest_version": 1,
   "profile": "mac-arm64-colima",
-  "checked_on": "2026-10-02",
+  "checked_on": "2026-10-03",
   "host": {
     "os": "Darwin",
     "architecture": "arm64",
     "minimum_os_version": "14.0"
   },
   "python": {
-    "version": "3.13.7",
+    "version": "3.13.16",
     "environment": "Backend/.venv",
     "dependency_lock": "Backend/requirements-dev.lock",
     "dependencies": {

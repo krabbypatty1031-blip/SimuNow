@@ -131,3 +131,10 @@ App 内运行 worker 的开发配置（一次性，本机）：`defaults write c
 | PDF 导出 | 通过（单测） | BasicReportExporter 产出 %PDF 有效文件（分页、非空、中文系统字体）；无有效内容时导出抛出 noEligibleContent |
 | `Scripts/check.sh all` | 退出 0 | Python 71 项、Swift 49+2 项、契约运行与交换、macOS/iOS BUILD SUCCEEDED；日志 `Artifacts/P5-check-all.log` |
 | App 内演示（生成候选→运行→对比→导出 PDF） | 未验证 | 需用户本机手动执行；sandbox 下 App 内 worker 执行仍待 P7 桥接 ADR |
+
+## 应用启动验证（2026-10-03，本机 tanchai）
+
+| 检查 | 结果 | 证据与范围 |
+|---|---|---|
+| Mac App 进程启动 | 通过 | 直接运行 Debug 产物（无签名构建）：进程存活 6 秒并响应正常终止信号；无崩溃日志。Debug 无签名构建不应用 sandbox 描述文件，日志有一条预期内的 sandbox_extension 提示。未做界面交互检查 |
+| iOS App 模拟器启动 | 通过 | iPhone 17 模拟器（已安装运行时）启动 → install → launch 成功分配 PID（28271），5 秒后仍在运行，随后正常 terminate 并关闭模拟器。未做界面交互与真机验证；最低系统（iOS 17）实机仍未验证 |

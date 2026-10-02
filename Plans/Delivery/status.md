@@ -19,6 +19,21 @@
 | P5 方案对比/建议卡/基础 PDF | 已完成（L0 口径；舒适与年度费用不含，见计划） | Comparison/、Reporting/；verification.md P5 节 |
 | 场渲染/舒适评价 | 待开发 | P4 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
+| iOS 模拟器启动 | 已验证（iPhone 17，install+launch+存活） | verification.md「应用启动验证」 |
+| Mac App 进程启动 | 已验证（存活 6 秒，无界面交互检查） | verification.md「应用启动验证」 |
+
+## 阻塞项与所需条件（明确记录后继续其他工作）
+
+| 阻塞项 | 影响 | 所需条件 |
+|---|---|---|
+| P1-01 收尾（引擎环境） | L1/L2 不可用 | 授权：启动 Colima arm64 VM（guest 镜像下载）、拉取固定 OpenFOAM digest（约 340 MB）、下载校验 EnergyPlus 26.1.0（约 210 MB）；strict doctor 通过并留证据 |
+| P1-02…05 基准与性能 | P4 前置 | P1-01 完成 + 独立固定的浮力/非等温射流基准来源（镜像不含 tutorials） |
+| P4 CFD 与位置级结果 | 舒适评价 | P1 全部 + P3 任务框架（已具备）；当前无任何逐点结果能力 |
+| App sandbox 内执行 worker | App 内一键运行 | P7 打包 ADR：受控 helper / companion / 权限例外；当前 DEBUG 无签名构建不受 sandbox 限制，进程级链路已由 LocalSimulationClient 集成测试验证 |
+| P6 iOS 采集与校准 | 扫描建模 | 稳定结果管线（已具备）+ LiDAR 设备实机 + 现场测量数据 |
+| P7 优化/批量/发布 | 产品化 | 真实案例与误差数据（P6）+ 签名/公证账号 |
+
+GUI 手动演示路径（需用户本机执行）：模板建项目 → inspector 补全未知（室外温度等）→ 计算任务页运行 L0 → 改设定温度看旧结果「待重算」→ 方案对比页生成 ±1 °C 候选并各跑一次 → 查看建议卡 → 报告页导出 PDF。
 
 ## 下一步
 

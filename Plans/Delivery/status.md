@@ -16,13 +16,20 @@
 | L0 稳态代表日能耗 | 已完成（集总平均估算，非 CFD；计算接线验证，非物理标定） | adapters/l0/steady_state.py、test_l0.py、contract_run.py |
 | P1-01 固定运行环境与能力检查 | 部分完成：manifest、doctor、行为测试已实现；本机（tanchai）无容器工具与 EnergyPlus，引擎安装未授权 | runtime/；verification.md |
 | L1/L2/L3 引擎 | 待开发（阻塞：Colima VM + OpenFOAM 镜像 + EnergyPlus 安装授权） | P1/P3 遗留条件 |
-| 场渲染/舒适/成本对比/报告 | 待开发 | P4/P5 |
+| P5 方案对比/建议卡/基础 PDF | 已完成（L0 口径；舒适与年度费用不含，见计划） | Comparison/、Reporting/；verification.md P5 节 |
+| 场渲染/舒适评价 | 待开发 | P4 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P3 已完成。下一步按依赖顺序：P5（方案对比、建议卡、基础 PDF，不依赖外部引擎）；P1-01 收尾需要授权安装 Colima VM、固定 OpenFOAM 镜像与 EnergyPlus 26.1.0 后才可继续 P1-02…05 与 P4 真实 CFD。
+P3 与 P5（L0 口径部分）已完成。下一步按依赖顺序：P1-01 收尾需要授权安装 Colima VM、固定 OpenFOAM 镜像与 EnergyPlus 26.1.0，之后 P1-02…05 与 P4 真实 CFD；P6/P7 依赖真实案例与现场数据。报告图表增强、费用数据来源是 P5 遗留。
 不要开始用示意场制作定量推荐。任何阶段完成都要添加 run/命令/验证依据。
+
+## P5 决策与基础报告完成记录（2026-10-03，development 分支）
+
+- 范围：L0 口径的方案对比（有效 run 筛选：completed + 质量通过 + 未过期；同口径分组按 environment+usage 规范文本）、±1 °C 设定温度候选生成、三类建议卡（运行调整/容量配置/舒适改善——舒适卡固定为「需 L2」的状态说明）、费用分层（电价/报价/待报价，不填 0、不外推全年）、CoreGraphics 文本型 PDF 报告（ADR-016）与报告页（无有效 run 时阻止导出并解释）。
+- 验证：Swift 49+2 项全部通过（对比筛选/同口径/候选身份/卡片文案含 runID/报告构建/PDF 有效性/空报告阻止导出）；`check.sh all` 退出 0；日志 `Artifacts/P5-check-all.log`。
+- 限制：GUI 演示路径（模板 → 补全 → 三方案运行 → 对比 → 导出 PDF）未在本机自动执行，待用户手动验证；Pareto、年度费用、位置级舒适按规则未提供。
 
 ## P2 房间编辑套件完成记录（2026-10-03，development 分支，提交 2ad08b2）
 

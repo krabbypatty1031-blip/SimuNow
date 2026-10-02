@@ -183,20 +183,11 @@ public struct MetricTable: View {
     public let metrics: [RunMetric]
     public init(metrics: [RunMetric]) { self.metrics = metrics }
 
-    public static let titles: [String: String] = [
-        "averageRoomTemperature": "平均室温",
-        "coolingLoadPeak": "峰值冷负荷",
-        "dailyCoolingEnergy": "日冷量（热）",
-        "estimatedElectricEnergy": "估算电耗（等效 COP）",
-        "capacityAdequate": "容量是否充足",
-        "dailyCost": "日费用",
-    ]
-
     public var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(metrics, id: \.name) { metric in
                 HStack {
-                    Text(Self.titles[metric.name] ?? metric.name).font(.caption)
+                    Text(RunsMetricTitles.title(for: metric.name)).font(.caption)
                     Spacer()
                     if metric.isMissing {
                         Text("缺失：\(metric.missingReason ?? "未知原因")").font(.caption).foregroundStyle(.secondary)

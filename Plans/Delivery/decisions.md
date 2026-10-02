@@ -58,12 +58,20 @@
 
 影响：doctor-report schema 的 engines.l0 由 const 改为枚举，新增顶层 l0 对象；ADR-011 的兼容语义中「四级 not_configured」自此只适用 l1/l2/l3。证据：test_doctor 新增 3 项自检测试、真实 doctor 输出（l0 verified_available，environment blocked）、contracts 回归。
 
+## ADR-016：基础 PDF 报告用 CoreGraphics 文本排版（已接受）
+
+日期：2026-10-03；任务 P5-04。触发：比赛链路需要可导出的基础报告；P5 阶段计划要求本阶段决定并锁定 PDF renderer。
+
+备选：ImageRenderer 截图式导出（位图，文本不可选不可搜索）；引入第三方 PDF 库（新依赖）；CoreGraphics PDF context + CTFramesetter。选择：CoreGraphics/CoreText 文本排版（A4、分页、系统字体含中文 fallback、文本可选中），无新依赖，双平台可用。报告内容来自固定 ReportContent 快照（ReportBuilder 只做格式化，不重算指标）；无有效 run 时导出被阻止并解释。
+
+影响：报告版式为清晰基础版；图表/复杂排版在后续阶段增强。证据：ReportTests 的 PDF 有效性测试（%PDF 头、分页对象、非空）与 verification.md P5 节。
+
 ## 待决定
 
 - P1：固定路线的执行验证；候选求解器的基准适用性、网格与湍流，EnergyPlus 设备模型。
-- P3：Mac helper/companion 运行时和权限桥接，事件/重启策略。
+- P3：Mac helper/companion 运行时和权限桥接（sandbox 下 App 内执行 worker），事件/重启策略。
 - P4：renderer 及各平台预算、舒适档案与边界。
-- P5：PDF 实现与成本数据；P7：代理/远程/发布渠道。
+- P5：成本数据来源；P7：代理/远程/发布渠道。
 
 每条新增决策记录触发原因、备选、选择、影响、验证证据与日期。
 

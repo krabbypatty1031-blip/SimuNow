@@ -152,11 +152,11 @@ public struct WorkspaceView: View {
                 .padding(8)
             }
         case .scenarios:
-            ScenarioListView(session: session, runStore: store.runStore)
+            ComparisonView(session: session, runStore: store.runStore)
         case .runs:
             RunsView(session: session, runStore: store.runStore)
         case .reports:
-            EmptyStateView("暂无报告", symbol: "doc.text", message: "通过质量检查的结果可用于生成建议报告。")
+            ReportView(session: session, runStore: store.runStore)
         }
     }
 

@@ -360,36 +360,13 @@ public struct InspectorView: View {
 
     private var assumptionsSection: some View {
         Section("未知与假设") {
-            let items = assumptionItems
+            let items = AssumptionCollector.items(in: session.project)
             if items.isEmpty {
                 Text("当前没有未知参数。").foregroundStyle(.secondary)
             } else {
                 ForEach(items, id: \.self) { Text($0).font(.caption) }
             }
         }
-    }
-
-    private func walk(_ node: JSONValue, path: String, into items: inout [String]) {
-        if node["state"]?.string == "unknown", let reason = node["reason"]?.string {
-            items.append("\(path)：\(reason)")
-        }
-        if node["source"]?["kind"]?.string == "assumed", let note = node["source"]?["note"]?.string {
-            items.append("\(path)：假设 — \(note)")
-        }
-        if let fields = node.fields {
-            for key in fields.keys.sorted() where key != "payload" {
-                walk(fields[key]!, path: path + "/" + key, into: &items)
-            }
-        } else if let array = node.items {
-            for (index, item) in array.enumerated() { walk(item, path: path + "/\(index)", into: &items) }
-        }
-    }
-
-    private var assumptionItems: [String] {
-        guard let node = try? JSONTreeCoding.encode(session.project) else { return [] }
-        var items: [String] = []
-        walk(node, path: "", into: &items)
-        return items.sorted()
     }
 }
 

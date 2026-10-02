@@ -116,3 +116,18 @@ P1-01 尚未完成：目标版本/路线、manifest、doctor 和测试已完成�
 基线复核（本轮开头，提交 2ad08b2 原样）：contracts/mac/ios 全绿，Python 54 项、Swift 27 项、交换 2+28 通过（日志 `Artifacts/P3/baseline-*.log`），确认已完成的 P2/P3 基础真实可编译可测试。
 
 App 内运行 worker 的开发配置（一次性，本机）：`defaults write com.simunow.mac simunow.worker.python "<仓库>/Backend/.venv/bin/python"` 与 `defaults write com.simunow.mac simunow.worker.src "<仓库>/Backend/src"`；run 目录位于 `~/Library/Application Support/SimuNow/Runs/...`（ADR-014）。
+
+## P5 决策与基础报告验收（2026-10-03）
+
+执行计划：`Plans/Execution/P5-decision-report-execution.md`（含范围裁减说明）。全部验证在 L0 口径下进行；舒适与年度费用按硬约束不提供。
+
+| 检查 | 结果 | 证据与范围 |
+|---|---|---|
+| 有效 run 筛选 | 通过（单测） | completed+质量通过+未过期才参与；stale/质量失败/未完成/无运行分别排除并说明（ComparisonModelTests） |
+| 同口径分组 | 通过（单测） | 修改室外温度的方案进入不同 basis 组，不互相排序 |
+| 候选生成 | 通过（单测） | ±1 °C 设定候选保留实体 ID、新 scenarioID；设定未知不生成；风向/角度候选不生成（需 L2） |
+| 建议卡 | 通过（单测） | 运行调整卡选最低电耗方案且含 run 短码与方法；容量卡报峰值与不足；舒适卡固定为「需 L2」状态；无有效 run 时只解释不推荐 |
+| 报告构建 | 通过（单测） | ReportContent 含 runID/输入哈希/质量/假设/费用分层；缺失费用显示缺失原因不含 0；stale run 被排除（content 为 nil） |
+| PDF 导出 | 通过（单测） | BasicReportExporter 产出 %PDF 有效文件（分页、非空、中文系统字体）；无有效内容时导出抛出 noEligibleContent |
+| `Scripts/check.sh all` | 退出 0 | Python 71 项、Swift 49+2 项、契约运行与交换、macOS/iOS BUILD SUCCEEDED；日志 `Artifacts/P5-check-all.log` |
+| App 内演示（生成候选→运行→对比→导出 PDF） | 未验证 | 需用户本机手动执行；sandbox 下 App 内 worker 执行仍待 P7 桥接 ADR |

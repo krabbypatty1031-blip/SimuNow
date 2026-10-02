@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p0:run-receipt:1",
+  "title": "run-receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "identity",
+    "state",
+    "quality"
+  ],
+  "properties": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runID",
+        "scenarioID",
+        "inputHash"
+      ],
+      "properties": {
+        "runID": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scenarioID": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "inputHash": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "state": {
+      "enum": [
+        "queued",
+        "validating",
+        "meshing",
+        "solving",
+        "postprocessing",
+        "checking",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "quality": {
+      "enum": [
+        "notEvaluated",
+        "passed",
+        "failed"
+      ]
+    }
+  }
+}

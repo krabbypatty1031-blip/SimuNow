@@ -1,0 +1,55 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		06A8C0A7C50DA7CD5D556A7D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Apps/SimuNowMac/SimuNowMacApp.swift"; sourceTree = "<group>"; };
+		D8849A2C3D481798C3E359AB = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Apps/SimuNowiOS/SimuNowiOSApp.swift"; sourceTree = "<group>"; };
+		22520FBEC9C55AFE872D0567 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Apps/Shared/Assets.xcassets"; sourceTree = "<group>"; };
+		5F0A4A37184631DE7E4F23B0 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Configurations/Shared.xcconfig"; sourceTree = "<group>"; };
+		299A92FB1361C3076E528534 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Configurations/macOS.xcconfig"; sourceTree = "<group>"; };
+		C40FD7FAA17A7F6EBEAF426A = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Configurations/iOS.xcconfig"; sourceTree = "<group>"; };
+		26129CB6B647CDC265385096 = { isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Apps/SimuNowMac/SimuNowMac.entitlements"; sourceTree = "<group>"; };
+		8EC9A00BFD09B3190AC6B222 = { isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "README.md"; sourceTree = "<group>"; };
+		37DD68363FC1D45D64469B99 = { isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "AGENTS.md"; sourceTree = "<group>"; };
+		CF2E5F26FEF855CE77A1BA3A = { isa = PBXFileReference; lastKnownFileType = folder; path = "Plans"; sourceTree = "<group>"; };
+		2A6E3082F7BD2A56B001FBB1 = { isa = PBXFileReference; lastKnownFileType = folder; path = "Protocols"; sourceTree = "<group>"; };
+		E758CA64563FDD62965A2B97 = { isa = PBXFileReference; lastKnownFileType = folder; path = "Backend"; sourceTree = "<group>"; };
+		93A9D4B62C49DF4936D5F701 = { isa = PBXFileReference; lastKnownFileType = folder; path = "Fixtures"; sourceTree = "<group>"; };
+		381E3298B2B8F6CAEB2208B5 = { isa = PBXFileReference; lastKnownFileType = folder; path = "Scripts"; sourceTree = "<group>"; };
+		AB962355F8AB7894FA0F28FA = { isa = PBXFileReference; lastKnownFileType = folder; path = "Packages/SimuKit"; sourceTree = "<group>"; };
+		CF21FADD42EAB8F8303A3895 = { isa = XCLocalSwiftPackageReference; relativePath = "Packages/SimuKit"; };
+		91FC5BBF268B86357FCD8788 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimuNow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EFFD14B0B6722C3B19C7474F = { isa = XCSwiftPackageProductDependency; package = CF21FADD42EAB8F8303A3895; productName = SimuWorkspace; };
+		F8067E92FF9ED460B82FBAF0 = { isa = PBXBuildFile; fileRef = 06A8C0A7C50DA7CD5D556A7D; };
+		C211E2D08F96C7FBD2BAC8EC = { isa = PBXBuildFile; fileRef = 22520FBEC9C55AFE872D0567; };
+		3D87BCE25633DF4F05E09F0B = { isa = PBXBuildFile; productRef = EFFD14B0B6722C3B19C7474F; };
+		65E924E8B71F983CFB4C52FC = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F8067E92FF9ED460B82FBAF0,); runOnlyForDeploymentPostprocessing = 0; };
+		938FA539E9708571008F5711 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (C211E2D08F96C7FBD2BAC8EC,); runOnlyForDeploymentPostprocessing = 0; };
+		1190BE62842A9FB5400278E1 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (3D87BCE25633DF4F05E09F0B,); runOnlyForDeploymentPostprocessing = 0; };
+		302256C745575C2CA55E45D2 = { isa = XCBuildConfiguration; baseConfigurationReference = 299A92FB1361C3076E528534; buildSettings = { SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; COMBINE_HIDPI_IMAGES = YES; }; name = Debug; };
+		1B14DE1240DFEE3469710ED3 = { isa = XCBuildConfiguration; baseConfigurationReference = 299A92FB1361C3076E528534; buildSettings = { SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; COMBINE_HIDPI_IMAGES = YES; }; name = Release; };
+		F5B3711DB2A79E813681748B = { isa = XCConfigurationList; buildConfigurations = (302256C745575C2CA55E45D2,1B14DE1240DFEE3469710ED3,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		D9E212F6C12FFB91B83BED59 = { isa = PBXNativeTarget; buildConfigurationList = F5B3711DB2A79E813681748B; buildPhases = (65E924E8B71F983CFB4C52FC,938FA539E9708571008F5711,1190BE62842A9FB5400278E1,); buildRules = (); dependencies = (); name = SimuNowMac; packageProductDependencies = (EFFD14B0B6722C3B19C7474F,); productName = SimuNow; productReference = 91FC5BBF268B86357FCD8788; productType = "com.apple.product-type.application"; };
+		CB7261C56903214EF13AD42C = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimuNow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E8A613DBB0F4DDE171E02241 = { isa = XCSwiftPackageProductDependency; package = CF21FADD42EAB8F8303A3895; productName = SimuWorkspace; };
+		EC9A28851A03050F851BFFEE = { isa = PBXBuildFile; fileRef = D8849A2C3D481798C3E359AB; };
+		FAEC590CD1F2065927E1131E = { isa = PBXBuildFile; fileRef = 22520FBEC9C55AFE872D0567; };
+		18E5196EE77770EABD65DF02 = { isa = PBXBuildFile; productRef = E8A613DBB0F4DDE171E02241; };
+		C9ABF8FC46BA30470EB5E38B = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (EC9A28851A03050F851BFFEE,); runOnlyForDeploymentPostprocessing = 0; };
+		5A801EC0AB15511669BE6153 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (FAEC590CD1F2065927E1131E,); runOnlyForDeploymentPostprocessing = 0; };
+		B6C69D0ADF252D2062A09A4D = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (18E5196EE77770EABD65DF02,); runOnlyForDeploymentPostprocessing = 0; };
+		7FB742E69AA36D4629B9988D = { isa = XCBuildConfiguration; baseConfigurationReference = C40FD7FAA17A7F6EBEAF426A; buildSettings = { SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO; }; name = Debug; };
+		87D87C5CEFA86286C8E37BBD = { isa = XCBuildConfiguration; baseConfigurationReference = C40FD7FAA17A7F6EBEAF426A; buildSettings = { SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO; }; name = Release; };
+		D7D36D08E97241B10A76E857 = { isa = XCConfigurationList; buildConfigurations = (7FB742E69AA36D4629B9988D,87D87C5CEFA86286C8E37BBD,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		0F09C7F776F8AA9C6178AFE2 = { isa = PBXNativeTarget; buildConfigurationList = D7D36D08E97241B10A76E857; buildPhases = (C9ABF8FC46BA30470EB5E38B,5A801EC0AB15511669BE6153,B6C69D0ADF252D2062A09A4D,); buildRules = (); dependencies = (); name = SimuNowiOS; packageProductDependencies = (E8A613DBB0F4DDE171E02241,); productName = SimuNow; productReference = CB7261C56903214EF13AD42C; productType = "com.apple.product-type.application"; };
+		615B463D1028E4E24B674CF7 = { isa = PBXGroup; children = (91FC5BBF268B86357FCD8788,CB7261C56903214EF13AD42C,); name = Products; sourceTree = "<group>"; };
+		870B3294C0CBD48AF6BBCC1B = { isa = PBXGroup; children = (06A8C0A7C50DA7CD5D556A7D,D8849A2C3D481798C3E359AB,22520FBEC9C55AFE872D0567,5F0A4A37184631DE7E4F23B0,299A92FB1361C3076E528534,C40FD7FAA17A7F6EBEAF426A,26129CB6B647CDC265385096,8EC9A00BFD09B3190AC6B222,37DD68363FC1D45D64469B99,CF2E5F26FEF855CE77A1BA3A,2A6E3082F7BD2A56B001FBB1,E758CA64563FDD62965A2B97,93A9D4B62C49DF4936D5F701,381E3298B2B8F6CAEB2208B5,AB962355F8AB7894FA0F28FA,615B463D1028E4E24B674CF7,); sourceTree = "<group>"; };
+		ED8772ADEC3A6C25161BC957 = { isa = XCBuildConfiguration; baseConfigurationReference = 5F0A4A37184631DE7E4F23B0; buildSettings = { ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ENABLE_TESTABILITY = YES; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; }; name = Debug; };
+		00F209874A1F7309F6DCEAA7 = { isa = XCBuildConfiguration; baseConfigurationReference = 5F0A4A37184631DE7E4F23B0; buildSettings = { ONLY_ACTIVE_ARCH = NO; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; }; name = Release; };
+		6650A2B5E24FA7522CE6B81C = { isa = XCConfigurationList; buildConfigurations = (ED8772ADEC3A6C25161BC957,00F209874A1F7309F6DCEAA7,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2700; }; buildConfigurationList = 6650A2B5E24FA7522CE6B81C; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hans"; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", en, Base,); mainGroup = 870B3294C0CBD48AF6BBCC1B; packageReferences = (CF21FADD42EAB8F8303A3895,); productRefGroup = 615B463D1028E4E24B674CF7; projectDirPath = ""; projectRoot = ""; targets = (D9E212F6C12FFB91B83BED59,0F09C7F776F8AA9C6178AFE2,); };
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0;
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p0:project-draft:1",
+  "title": "project-draft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "spaceType",
+    "lengthUnit",
+    "coordinateSystem"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string"
+    },
+    "spaceType": {
+      "enum": [
+        "office",
+        "classroom",
+        "home",
+        "publicSpace"
+      ]
+    },
+    "lengthUnit": {
+      "const": "m"
+    },
+    "coordinateSystem": {
+      "const": "rightHandedZUp"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+#include "Shared.xcconfig"
+MACOSX_DEPLOYMENT_TARGET = 14.0
+PRODUCT_BUNDLE_IDENTIFIER = com.simunow.mac
+PRODUCT_NAME = SimuNow
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.productivity
+CODE_SIGN_ENTITLEMENTS = Apps/SimuNowMac/SimuNowMac.entitlements
+ENABLE_HARDENED_RUNTIME = YES

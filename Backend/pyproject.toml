@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simunow-worker"
+version = "0.1.0"
+description = "SimuNow orchestration scaffold; numerical engines are not yet configured"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+simunow-worker = "simunow_worker.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

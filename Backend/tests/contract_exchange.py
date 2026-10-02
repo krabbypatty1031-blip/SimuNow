@@ -46,5 +46,14 @@ elif sys.argv[1]=='verify':
         original=codec.decode(path.with_name(path.name.replace('.swift-case.','.case.')).read_text())
         assert codec.decode(path.read_text())==original, path
     if len(list(directory.glob('*.swift-case.json')))!=len(semantic_cases()): raise SystemExit('Missing semantic exchange outputs')
-    print(f'Cross-language exchange passed: {len(outputs)} projects, snapshots, {len(semantic_cases())} error/compatibility cases.')
+    from schema_registry import validator as schema_validator
+    v_input=schema_validator('run-input.schema.json')
+    runinputs=list(directory.glob('*.swift-runinput.json'))
+    if len(runinputs)!=2: raise SystemExit('Missing Swift run-input outputs')
+    for path in runinputs:
+        raw=json.loads(path.read_text()); v_input.validate(raw)
+        snapshot=codec.decode_snapshot(json.dumps(raw['snapshot']))
+        assert snapshot_hash(snapshot)==raw['inputHash'].lower(), path
+        assert str(snapshot.scenario_id).upper()==raw['scenarioID'].upper(), path
+    print(f'Cross-language exchange passed: {len(outputs)} projects, snapshots, {len(semantic_cases())} error/compatibility cases, {len(runinputs)} run-inputs.')
 else: raise SystemExit('prepare or verify required')

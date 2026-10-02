@@ -239,7 +239,11 @@ class DoctorTests(unittest.TestCase):
                 Draft202012Validator(schema).validate(wire)
                 self.assertEqual(wire["protocol_version"], 1)
                 self.assertEqual(wire["status"], "scaffold")
-                self.assertEqual(set(wire["engines"].values()), {"not_configured"})
+                # L0 runs its real self-check; L1/L2/L3 stay honestly unconfigured.
+                self.assertEqual(wire["engines"]["l0"], "verified_available")
+                self.assertEqual(wire["l0"]["state"], "verified_available")
+                self.assertEqual({k: v for k, v in wire["engines"].items() if k != "l0"},
+                                 {"l1": "not_configured", "l2": "not_configured", "l3": "not_configured"})
 
     def test_invalid_config_json_exit_and_no_raw_path(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -285,6 +289,31 @@ class DoctorTests(unittest.TestCase):
                     self.assertEqual(main(["doctor", "--manifest", str(path)]), 3)
                 self.assertEqual(json.loads(output.getvalue())["environment"]["status"], "invalid_configuration")
                 self.assertNotIn("private-token", output.getvalue())
+
+
+class L0SelfCheckTests(unittest.TestCase):
+    def test_real_self_check_is_verified(self):
+        from simunow_worker.runtime.selfcheck import l0_check
+        result = l0_check()
+        self.assertEqual(result["state"], "verified_available")
+        self.assertEqual(result["evidence"][0]["state"], "ok")
+
+    def test_broken_adapter_is_probe_failed_not_silent(self):
+        from simunow_worker.runtime.selfcheck import l0_check
+        with patch("simunow_worker.adapters.l0.steady_state.run", side_effect=RuntimeError("synthetic")):
+            result = l0_check()
+        self.assertEqual(result["state"], "probe_failed")
+        self.assertIn("synthetic", result["hint"])
+
+    def test_invalid_manifest_skips_self_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.json"
+            path.write_text('{"manifest_version":99}')
+            with redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(main(["doctor", "--manifest", str(path)]), 3)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["l0"]["state"], "not_configured")
+            self.assertEqual(report["engines"]["l0"], "not_configured")
 
 
 class ProcessTests(unittest.TestCase):

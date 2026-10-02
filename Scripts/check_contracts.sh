@@ -20,6 +20,7 @@ trap 'rm -rf "$SIMUNOW_CONTRACT_DIR"' EXIT
 "$contract_python" "$project_root/Scripts/generate_domain_models.py" --check
 "$contract_python" -m simunow_worker.models.schema --check
 "$contract_python" -m unittest discover -s "$project_root/Backend/tests" -v
+"$contract_python" "$project_root/Backend/tests/contract_run.py"
 "$contract_python" "$project_root/Backend/tests/contract_exchange.py" prepare "$SIMUNOW_CONTRACT_DIR"
 "$project_root/Scripts/check.sh" test
 "$contract_python" "$project_root/Backend/tests/contract_exchange.py" verify "$SIMUNOW_CONTRACT_DIR"

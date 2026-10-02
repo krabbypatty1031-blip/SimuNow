@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "simunow-worker"
 version = "0.1.0"
-description = "SimuNow environment probes and orchestration boundary; numerical pipelines are not implemented"
+description = "SimuNow orchestration boundary: project contracts, environment probes, L0 representative-day runs; L1/L2/L3 engines are not configured"
 requires-python = ">=3.11"
 dependencies = ["pydantic==2.13.4"]
 

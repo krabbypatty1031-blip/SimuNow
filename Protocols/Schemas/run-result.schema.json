@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.local/schemas/run-result.schema.json",
+  "title": "run-result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "identity",
+    "fidelity",
+    "state",
+    "metrics",
+    "quality",
+    "assumptions",
+    "startedAt",
+    "finishedAt"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "run-result/1"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runID",
+        "scenarioID",
+        "inputHash"
+      ],
+      "properties": {
+        "runID": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scenarioID": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "inputHash": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "fidelity": {
+      "enum": [
+        "l0",
+        "l1",
+        "l2",
+        "l3"
+      ]
+    },
+    "state": {
+      "enum": [
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "value",
+          "unit",
+          "aggregation",
+          "method",
+          "fidelity"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": [
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "missing_reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "aggregation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fidelity": {
+            "enum": [
+              "l0",
+              "l1",
+              "l2",
+              "l3"
+            ]
+          }
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "checks"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "notEvaluated",
+            "passed",
+            "failed"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "state"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "state": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "finishedAt": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "message"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

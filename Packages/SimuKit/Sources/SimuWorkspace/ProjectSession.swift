@@ -43,6 +43,9 @@ public final class ProjectSession {
     public private(set) var validation: ValidationReport
     public let registry: ModelRegistry
     public let validator: ProjectValidator
+    /// Notified after every committed edit (dirty + revalidation). RunStore uses it to
+    /// refresh input hashes so edited scenarios mark old results stale immediately.
+    public var onMutate: ((ProjectDocument) -> Void)?
     private let packageCodec: ProjectPackageCodec
 
     public init(project: ProjectDocument, packageURL: URL? = nil,
@@ -65,6 +68,7 @@ public final class ProjectSession {
         edit(&project)
         isDirty = true
         revalidate()
+        onMutate?(project)
     }
 
     public func revalidate() {

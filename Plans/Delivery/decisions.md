@@ -42,6 +42,22 @@
 
 触发：两语言新增完整字段容易漂移。选择：model spec 生成 Python/Swift 结构声明，Python wire model + 注册 schema 生成 Draft2020-12；行为在两语言独立实现并通过真实双向交换验证。Core 打包同一 schema 的资源副本；check 模式拒绝漂移。影响：生成文件不可手工修改，Schema 是结构验证，语义/物理规则另行检查。Swift 的 schema 校验只支持生成器使用的子集，未知断言失败。证据：contracts 的生成漂移、独立 jsonschema 与两端校验一致性检查。
 
+## ADR-014：run 目录位置与 worker 显式配置（已接受）
+
+日期：2026-10-03；任务 P3。触发：P3 需要独立 run 目录存放 input.json/events.jsonl/result.json；目标布局（项目包内 runs/<run-id>/）依赖包的持久写入权限，而 Mac sandbox 下项目包的用户授权访问不跨会话保留（当前 recents 只存路径，重开需重新选择）。
+
+备选：直接写项目包 runs/ 子目录；Application Support 按项目/方案/run ID 分层；临时目录。选择：本阶段写 `~/Library/Application Support/SimuNow/Runs/<projectID>/<scenarioID>/<runID>/`（sandbox 始终允许），P7 打包/书签方案落地后按 ADR 迁移到项目包内；每个 run 只写自己的目录，worker 与客户端都不越界。worker 位置不猜路径：仅 UserDefaults（simunow.worker.python / simunow.worker.src）或 SIMUNOW_WORKER_PYTHON / SIMUNOW_WORKER_SRC 环境变量显式配置，未配置则界面显示修复指引并指向 doctor，不产生假执行。
+
+影响：旧 run 在 App 重启后可从目录扫描恢复（无 result.json 的目录标记为「已中断」）；iOS 无本地执行器，为 UnavailableRunClient。证据：RunStore 测试（提交/陈旧/重载/中断/取消）、LocalSimulationClient 真实进程集成测试、verification.md P3 节。
+
+## ADR-015：doctor 增加 L0 真实自检（已接受）
+
+日期：2026-10-03；任务 P3。触发：P3 计划要求「L0 为纯 Python，环境满足即 verified_available（真实执行一次自检计算）」；P0 的 engines.l0=not_configured 硬编码已不符合现实。
+
+选择：doctor 在进程内对固定最小自检快照真实执行两次 L0 适配器，核对确定性、质量状态与关键指标；结果写入新增顶层 `l0` 对象并镜像到 `engines.l0`（verified_available / probe_failed / not_configured）。doctor 核心保持仅标准库可导入（自检惰性导入锁定依赖，缺失即 not_configured）。`--strict` 语义不变：仍只由 environment.status 决定，L0 自检是管线 sanity 信号而非环境门槛。physical_validation=not_performed 不变——自检不是物理验证。
+
+影响：doctor-report schema 的 engines.l0 由 const 改为枚举，新增顶层 l0 对象；ADR-011 的兼容语义中「四级 not_configured」自此只适用 l1/l2/l3。证据：test_doctor 新增 3 项自检测试、真实 doctor 输出（l0 verified_available，environment blocked）、contracts 回归。
+
 ## 待决定
 
 - P1：固定路线的执行验证；候选求解器的基准适用性、网格与湍流，EnergyPlus 设备模型。

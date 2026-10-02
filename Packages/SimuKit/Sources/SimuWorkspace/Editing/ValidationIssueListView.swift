@@ -49,8 +49,12 @@ public struct ValidationIssueListView: View {
 /// Scenario list: current scenario, duplication as candidates, per-scenario validation status.
 public struct ScenarioListView: View {
     let session: ProjectSession
+    let runStore: RunStore?
 
-    public init(session: ProjectSession) { self.session = session }
+    public init(session: ProjectSession, runStore: RunStore? = nil) {
+        self.session = session
+        self.runStore = runStore
+    }
 
     public var body: some View {
         List {
@@ -73,6 +77,11 @@ public struct ScenarioListView: View {
                         } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(.borderless)
                         .help("复制为候选方案（实体身份保留，可独立改参数）")
+                    }
+                    if let runStore {
+                        LatestRunSummary(record: runStore.latest(for: scenario.id),
+                                         freshness: runStore.latest(for: scenario.id)
+                                            .map { $0.freshness(relativeTo: runStore.currentHash(for: scenario.id)) } ?? .stale)
                     }
                 }
             }

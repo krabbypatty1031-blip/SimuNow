@@ -17,7 +17,11 @@
       "type": "object",
       "properties": {
         "l0": {
-          "const": "not_configured"
+          "enum": [
+            "not_configured",
+            "verified_available",
+            "probe_failed"
+          ]
         },
         "l1": {
           "const": "not_configured"
@@ -36,6 +40,61 @@
         "l3"
       ],
       "additionalProperties": false
+    },
+    "l0": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "not_configured",
+            "verified_available",
+            "probe_failed"
+          ]
+        },
+        "hint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "minLength": 1
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "command_missing",
+                  "timeout",
+                  "process_failed",
+                  "probe_failed"
+                ]
+              },
+              "exit_code": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "command",
+              "state",
+              "exit_code"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "state",
+        "hint",
+        "evidence"
+      ],
+      "additionalProperties": true
     },
     "environment": {
       "oneOf": [
@@ -543,7 +602,8 @@
     "worker_version",
     "status",
     "engines",
-    "environment"
+    "environment",
+    "l0"
   ],
   "additionalProperties": true
 }

@@ -9,7 +9,7 @@ Mac arm64 上运行 Python worker；现有 Colima + Docker 提供原生 Linux ar
 | 项目 | 固定目标 | 选择依据与验证边界 |
 |---|---|---|
 | 宿主 | macOS 14+ / arm64 | 当前实际 macOS 27.0；此 profile 不接受 x86 模拟执行 |
-| Python | 3.13.7 / Backend/.venv | 本机现有解释器，独立环境已建立；模型/测试依赖沿用 requirements-dev.lock |
+| Python | 3.13.16 / Backend/.venv | 独立环境与锁定依赖；2026-10-03 由 3.13.7 重钉（ADR-012，补丁级差异） |
 | VM 工具 | Colima 0.10.3、Lima 2.1.4、Docker CLI 29.6.2；context colima | 复用已安装工具，daemon/VM 版本与实际 Linux 架构尚未知；不为未知 server 编造版本 |
 | OpenFOAM | **OpenCFD / openfoam.com v2506**，linux/arm64 | 官方镜像 arm64 manifest digest 固定；不是 Foundation 同名数字版本，也不采用 latest |
 | EnergyPlus | **26.1.0 / build 6f2e40d102**，官方 Darwin macOS13 arm64 tar.gz | 固定官方 macOS 原生包及 SHA-256；实际在 macOS 27 启动仍待验证 |
@@ -54,7 +54,7 @@ manifest 唯一文件为 [src/simunow_worker/runtime/manifest.json](../src/simun
 从项目根执行：
 
 ```bash
-python3 --version  # 应为 3.13.7
+python3 --version  # 应为 3.13.16（ADR-012）
 python3 -m venv Backend/.venv
 Backend/.venv/bin/python -m pip install -r Backend/requirements-dev.lock
 Scripts/check.sh runtime

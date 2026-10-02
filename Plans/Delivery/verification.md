@@ -93,3 +93,26 @@ P1-01 尚未完成：目标版本/路线、manifest、doctor 和测试已完成�
 - 协议：`Protocols/doctor-v1.md`、`Protocols/README.md`、`Protocols/Schemas/{runtime-manifest,doctor-report}.schema.json`。
 - 检查：`Scripts/check_runtime.sh`、`Scripts/check.sh`；`.gitignore` 排除本地 RuntimeLocal。requirements-dev.lock 沿用未改，依赖仅安装到忽略的 Backend/.venv。
 - 交付：`Plans/Delivery/{status,verification,decisions}.md` 增补 P1-01 事实/证据/ADR，保留既有宣传材料记录。
+
+## P2 编辑套件 + P3 任务链路验收（2026-10-03，development 分支）
+
+环境：Apple Silicon Mac（tanchai），macOS 27.0.1 arm64，16 GiB，Xcode 27.0 (27A266a)，Python 3.13.16（Backend/.venv，锁定依赖）。本轮覆盖提交 2ad08b2（P2 全套 + P3 基础）与其后的 P3 收尾（runner 接入 CLI、协议文档与 schema、Swift 运行协议、Mac 本地执行器、任务页 UI、doctor L0 自检）。
+
+| 检查 | 结果 | 证据与范围 |
+|---|---|---|
+| `Scripts/check.sh contracts` | 退出 0 | Python 71 项（models 14 + doctor 27 + hashing 6 + L0 10 + runner 14）；生成漂移/schema 漂移检查；`contract_run.py` 对 2 份夹具做真实 `python -m simunow_worker run` 并逐行校验 run-event schema、result 过 run-result schema、输入过 run-input schema（跨文件 $ref 经 referencing registry 解析）；Swift 39+2 项；双向交换 2 项目/快照 + 28 错误案例 + 2 份 Swift 写出的 RunInput 由 Python 校验 schema 与哈希一致。日志 `Artifacts/P3/check-all-p3.log` |
+| `Scripts/check.sh mac` / `ios` | BUILD SUCCEEDED ×2 | 关闭签名；iOS 为 generic Simulator。同日志 |
+| `Scripts/check.sh runtime` | 退出 0 | doctor 27 项行为测试 + 本机真实诊断：engines.l0=verified_available（真实执行两次自检计算且结果一致），l1/l2/l3=not_configured，environment=blocked（本机无 Docker/Colima/EnergyPlus）。日志 `Artifacts/P3/check-runtime.log` |
+| `Scripts/check_runtime.sh --strict` | 退出 2 | 环境受阻时严格门槛正确拒绝；日志 `Artifacts/P3/check-runtime-strict.log` |
+| CLI 端到端真实运行 | 通过 | 夹具 office → RunInput（runID 44D203E6…，inputHash 4b87711d…）→ worker 退出 0：peak 371.2 W、日冷量 8.909 kWh、电耗 2.97 kWh（等效 COP）、容量充足、平均室温=设定 25°C、dailyCost 缺失并注明「不编造费用」、quality passed。产物 `Artifacts/P3/demo-run/` |
+| runner 异常路径 | 通过（单测） | 哈希不符退出 3+failed 事件；协议/UUID/哈希格式/scenarioID 不一致退出 3 且无事件；快照非法退出 1 保留证据；开始前取消与运行中取消都得 cancelled；重复取消无害；adapter 异常写 stderr.log；stdout 纯 JSONL |
+| Swift 事件解析 | 通过（单测） | 跨行分块、错 run/乱序/缺口/未知 eventType 拒绝、截断报错、未知可选字段容忍、空行容忍 |
+| Mac 本地执行器 | 通过（真实进程集成测试） | posix_spawn SETSID 进程组；端到端完成（accepted→progress→quality→completed、序列连续、result 身份一致）；开始前取消得 cancelled；exit 3 无事件表面化为 workerCrashed(3)；哈希不符得 failed 终态且 result 留证 |
+| RunStore | 通过（非 UI 测试） | 提交门控（inputPreparation 不过不提交）、完成加载 result、改输入即 stale、双 run 各自目录互不覆盖、磁盘恢复、无 result 的目录标记「已中断」、事件流截断报完整性错误、取消透传 |
+| App 内发起运行（sandbox 下 GUI） | 未验证 | 子进程继承 sandbox，读取仓库路径预期被拒；打包桥接（helper/companion）是 P7 ADR。GUI 手动演示路径待用户本机执行 |
+| iOS 实际启动/真机/最低系统 | 未验证 | 编译通过不等于运行验证 |
+| L0 物理正确性 | 未标定 | 单测与夹具只验证计算接线与口径诚实；不是实测/基准对比 |
+
+基线复核（本轮开头，提交 2ad08b2 原样）：contracts/mac/ios 全绿，Python 54 项、Swift 27 项、交换 2+28 通过（日志 `Artifacts/P3/baseline-*.log`），确认已完成的 P2/P3 基础真实可编译可测试。
+
+App 内运行 worker 的开发配置（一次性，本机）：`defaults write com.simunow.mac simunow.worker.python "<仓库>/Backend/.venv/bin/python"` 与 `defaults write com.simunow.mac simunow.worker.src "<仓库>/Backend/src"`；run 目录位于 `~/Library/Application Support/SimuNow/Runs/...`（ADR-014）。

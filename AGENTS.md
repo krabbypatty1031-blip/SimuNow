@@ -4,7 +4,7 @@
 
 SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与运行分析工具。用统一模型连接 EnergyPlus 能耗与 OpenFOAM 气流，评价位置级舒适、用电和成本。
 团队 3–4 人；比赛 48–72 小时；之后按 6–8 周路线完善。首个场景为单房间办公室或教室。
-当前是可编译的 P0 骨架，数值引擎尚未接入。不要把未来计划描述为已实现功能。
+当前状态：P0 骨架、P2 房间编辑全套、P3 任务链路与 L0 能耗（集总平均估算）已验收；L1/L2 数值引擎未安装未接入，P4+ 待开发。以 `Plans/Delivery/status.md` 为唯一状态入口；不要把未来计划描述为已实现功能。
 
 ## 开工阅读顺序
 
@@ -25,7 +25,7 @@ SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与�
 - `SimuVisualization`：显示接口与场数据适配；不计算热负荷或推荐。
 - `SimuReporting`：报告接口与证据要求；不重算指标。
 - `SimuWorkspace`：共享状态、导航与业务工作流；通过依赖注入访问任务和报告。
-- `Backend`：Python 编排、引擎转换、网格、后处理、质量与候选搜索。
+- `Backend`：Python 编排、引擎转换、网格、后处理、质量与候选搜索。当前含 models（v2 契约）、runtime（manifest/doctor/L0 自检）、adapters/l0（稳态代表日能耗）、jobs（run 命令与事件流）。
 
 坚持依赖方向：Core 在底层；Workspace 在顶层；平台入口组装适配器。计算引擎与渲染器各自可替换。
 
@@ -53,7 +53,7 @@ Mac 使用工作区与 inspector，iPad 自适应分栏，iPhone 保持导航可
 
 每次运行保存不可变输入快照、run ID、scenario ID、输入哈希、引擎版本、求解设置、网格与质量记录。
 旧任务完成后只进入其所属运行；不覆盖当前方案。任务成功、质量通过、结果新鲜度是独立状态。
-共享 JSON 接口改动同步更新 Swift Codable、Python 解析、schema、迁移说明和相应契约验证。当前 P0 schema 只覆盖 draft / request / receipt，不能当作完整可求解项目。
+共享 JSON 接口改动同步更新 Swift Codable、Python 解析、schema、迁移说明和相应契约验证。当前 schema 覆盖 P0 draft / request / receipt、P2 项目与快照、P3 run-input / run-event / run-result 与 doctor；草稿不能当作完整可求解项目。
 二进制场写清坐标、单位、float 格式、endian、轴序、有效掩码与哈希。墙和家具内部无效数据不能按 0 参与统计。
 路径以项目根或项目包为基准；禁止硬编码开发者 Desktop / Downloads 路径。
 

@@ -30,6 +30,10 @@ def known(parameter):
     return parameter.value if getattr(parameter, 'state', None) == 'known' else None
 
 
+class Cancelled(Exception):
+    """Raised between integration steps when the runner requests cancellation."""
+
+
 def fraction_at(schedule, minute):
     for interval in schedule.intervals:
         if interval.start_minute <= minute < interval.end_minute:
@@ -73,7 +77,7 @@ def surface_areas(snapshot, registry):
     return face_area, openings_by_surface, (w, d, h)
 
 
-def run(snapshot, registry=None):
+def run(snapshot, registry=None, should_cancel=None):
     registry = registry or default_registry()
     inputs = snapshot.inputs
     metrics = []
@@ -172,6 +176,8 @@ def run(snapshot, registry=None):
     balance_residual = 0.0
     total_conductance = sum(c for c, _ in conduction_terms) + sum(window_terms) + vent_conductance
     for minute in range(0, 1440, 30):
+        if should_cancel is not None and should_cancel():
+            raise Cancelled()
         internal = 0.0
         for occupant in inputs.usage.occupants:
             f = active_fraction(occupant.schedule, minute)

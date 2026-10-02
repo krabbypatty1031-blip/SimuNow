@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.local/schemas/run-input.schema.json",
+  "title": "run-input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "runID",
+    "scenarioID",
+    "inputHash",
+    "fidelity",
+    "snapshot"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "run-input/1"
+    },
+    "runID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scenarioID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "inputHash": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "fidelity": {
+      "enum": [
+        "l0",
+        "l1",
+        "l2",
+        "l3"
+      ]
+    },
+    "snapshot": {
+      "$ref": "scenario-input-snapshot.schema.json"
+    },
+    "settings": {
+      "type": "object"
+    }
+  }
+}

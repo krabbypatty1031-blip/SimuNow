@@ -152,9 +152,9 @@ public struct WorkspaceView: View {
                 .padding(8)
             }
         case .scenarios:
-            ScenarioListView(session: session)
+            ScenarioListView(session: session, runStore: store.runStore)
         case .runs:
-            EmptyStateView("暂无计算任务", symbol: "waveform.path", message: "计算引擎接入后，这里显示任务进度与质量状态。")
+            RunsView(session: session, runStore: store.runStore)
         case .reports:
             EmptyStateView("暂无报告", symbol: "doc.text", message: "通过质量检查的结果可用于生成建议报告。")
         }

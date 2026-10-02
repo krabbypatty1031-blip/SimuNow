@@ -1,16 +1,26 @@
 # Worker doctor 与 runtime manifest v1
 
-P1-01 的 CLI 专用环境诊断；与项目 v2、simulation request / receipt 分开。不会从 App 启动调用，也不承诺计算管线存在。
+P1-01 的 CLI 专用环境诊断；与项目 v2、simulation request / receipt 分开。不会从 App 启动调用，也不承诺计算管线存在。P3 起新增 L0 真实自检（见下「L0 自检」）。
 
 ## 兼容与结构
 
-保留 `protocol_version: 1`、`worker_version`、顶层 `status: scaffold` 和 `engines.l0/l1/l2/l3: not_configured`，新增可选 `environment`。既有消费者继续读取原字段；新消费者用 `environment.report_version: 1` 解析环境信息。snake_case，与 camelCase 项目契约分开。本轮没有更改 Swift Codable、项目模型、request、receipt 或其 schema；目前没有 Swift doctor 消费者。
+保留 `protocol_version: 1`、`worker_version`、顶层 `status: scaffold` 和 `engines.l1/l2/l3: not_configured`，新增可选 `environment`。既有消费者继续读取原字段；新消费者用 `environment.report_version: 1` 解析环境信息。snake_case，与 camelCase 项目契约分开。本轮没有更改 Swift Codable、项目模型、request、receipt 或其 schema；目前没有 Swift doctor 消费者。
 
 - [doctor-report.schema.json](Schemas/doctor-report.schema.json)：完整 CLI JSON，默认一次输出一行。子进程输出被捕获，stdout 只含报告。
 - [runtime-manifest.schema.json](Schemas/runtime-manifest.schema.json)：团队目标配置；实际发现值在 doctor 报告中，不写回 manifest。
 - `environment.status` 为 `ready` / `blocked` / `invalid_configuration`。`ready` 仅表示选定宿主、独立 Python、目标 VM 工具版本、daemon、引擎架构/身份/版本与最小启动检查满足，不能解释为 SimuNow 可求解。
 - `container.target`、`engine_checks.*.target` 是目标；`discovered_version`、`discovered_build`、架构、内存和 evidence 是发现值。未查询到的值为 null，不能作零或 false 推断。`executable` 只在成功解析真实版本/启动命令后为 true；版本不匹配仍可 executable，但环境受阻。
 - `physical_validation: not_performed`、`simulation_pipeline: not_implemented` 保持独立。任何可执行引擎都不会将 l1/l2 改成已实现。
+
+## L0 自检（P3 新增）
+
+L0 是纯 Python 保真度，不需要容器或外部引擎。doctor 在进程内用固定的最小自检快照真实执行两次 L0 稳态适配器，核对确定性、质量状态与关键指标，结果写入顶层 `l0` 对象（`state` / `hint` / `evidence`），并镜像到 P0 兼容字段 `engines.l0`：
+
+- `verified_available`：自检计算通过且两次结果一致。只证明 Python 计算链路可用，不代表物理验证，也不改变 L1/L2/L3 状态。
+- `probe_failed`：自检执行失败；hint 含原因。
+- `not_configured`：锁定依赖不可导入（doctor 核心保持仅标准库可导入），或 manifest 无效未执行自检。
+
+`--strict` 的退出语义不变：仍只由 `environment.status` 决定（L0 自检是管线 sanity 信号，不是环境门槛）。
 
 ## 状态语义
 

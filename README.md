@@ -6,8 +6,9 @@ Mac 优先、兼容 iPhone / iPad 的室内空调方案分析 App。通过房间
 
 ## 当前交付
 
-这是 **P0 工程骨架 + P2-01 项目模型基座**：两个原生 App target、六个本地 Swift Package 模块、可导航的空工作区、模型与任务接口、Python worker 边界、协议草案和开发计划。
-项目输入 v2、Swift/Python/schema 契约、校验、迁移与不可变快照已实现，见 [项目模型契约](Protocols/project-model-v2.md)。房间编辑、磁盘保存、扫描、CFD、EnergyPlus、舒适评价、优化及 PDF 报告均为待开发功能。空状态没有真实指标；未配置引擎会明确抛错。
+**P0 工程骨架 + P2 房间编辑全套 + P3 任务链路与 L0 能耗**：两个原生 App target、六个本地 Swift Package 模块、可导航的工作区；五步建房向导、办公室/教室模板、俯视图编辑、参数检查器（单位/来源/未知原因）、校验列表、`.simunow` 项目包原子保存与 v1 迁移导入。
+计算链路：项目输入 v2 契约、Swift/Python 双端输入哈希（契约交换验证一致）、`run-input/1` 请求、`run-event/1` JSONL 事件流、`run-result/1` 原子结果、L0 稳态代表日能耗适配器（集总平均估算，明确标注，非 CFD）、Mac 本地执行器（posix_spawn 进程组与协作取消）、任务页与结果新鲜度（改输入即「待重算」）。
+扫描、真实 CFD（OpenFOAM）、EnergyPlus L1、舒适评价、方案对比报告均为待开发；本机引擎未安装，doctor 如实报告 blocked。未知参数不填 0，质量失败结果不可用于推荐。
 
 ## 打开与运行
 

@@ -57,3 +57,39 @@ Debug 设置 ONLY_ACTIVE_ARCH=YES，保持 App 与本地包架构一致；Releas
 | 求解/守恒/舒适/能耗物理验证 | 未实现 | 输入一致性校验不是求解质量证据 |
 
 日志位于忽略的 `Artifacts/P2-01/check-all.log` 和 `doctor.json`。AppIntents metadata 提示与 P0 一致：当前无该框架依赖，不阻断构建。测试 fixture 是人工接口数据，天气路径与全零哈希不对应真实资产。
+
+## P1-01 环境检查部分交付（2026-10-02）
+
+目标分支 paco-development；单 Agent。已有演示稿、iOS scheme 及 Pitch 文档改动保留，不包含在本轮提交中。初次交付时未提交/推送，后续按用户明确授权提交；没有下载引擎/镜像或启动 VM。本轮改动仅 Backend、CLI/schema、检查脚本和文档；未修改共享 Swift 或平台入口，因此没有重跑 Mac/iOS 编译，也未新增 App 启动证据。
+
+本机：`sw_vers` 得 macOS 27.0 / build 26A428；`uname -m` 得 arm64；允许的只读 `sysctl -n hw.memsize` 得 34359738368（32 GiB）。Python 3.13.7；新建 Backend/.venv 并以 requirements-dev.lock 安装全部固定依赖（小型已有模型/测试依赖，非计算软件）；pydantic 2.13.4、jsonschema 4.26.0。环境与目标分离见 Backend/Runtime/README.md。
+
+| 命令/检查 | 结果 | 证明范围与证据 |
+|---|---|---|
+| docker --version；colima version；limactl --version | 29.6.2 / 0.10.3 / 2.1.4 | 仅 CLI/工具已安装，不证明 VM/daemon 可用 |
+| colima status；docker info（指定字段） | 非零退出；not running / cannot connect | runtime 不可连接；实际 Linux 架构、VM 内存、server version 未知 |
+| limactl list（只选状态/架构/CPU/内存字段） | 退出 0，无实例；No instance found | 未发现现有实例；不推断其他外部 VM 不存在 |
+| PATH 与常见安装目录检查 | foamVersion/buoyantSimpleFoam/energyplus 未发现；Podman/Multipass PATH 缺失 | 未发现所选命令/常见安装项；镜像库存因 daemon 不可连接而未知；远程节点未配置、未探测凭据 |
+| 官方 GitHub API + Docker Registry 公共元数据 | 26.1.0 非 prerelease；资产 SHA-256；2506 index/arm64 manifest 及响应 SHA-256 核实 | 只验证发行身份/目标架构/固定下载内容；无本机安装或执行证据。source-metadata.json、energyplus-release.json |
+| Backend/.venv/bin/python -m pip check | No broken requirements found | 独立依赖环境一致；venv-install.log 留安装记录 |
+| PYTHONPATH=Backend/src:Backend/tests Backend/.venv/bin/python -m unittest test_doctor -v | 24 项通过 | 无引擎、匹配/失配/构建、架构/身份、缺少命令、daemon、权限、子进程错误/超时/树终止、容器清理、配置结构/重复键、输出/退出和独立 schema；模拟 Probe 不证明引擎可用 |
+| Scripts/check.sh contracts | 退出 0 | Python 38 项（14 原有 + 24 doctor）、Swift 16 项、生成漂移/schema、2 项目/快照双向交换与 28 错误/兼容案例；contracts.log |
+| PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor | 退出 0，单行有效 JSON，无 stderr | environment=blocked，Python matches；container=unreachable，OpenFOAM=not_configured、image_present=null，EnergyPlus=not_installed；doctor.json |
+| 同上加 --strict | 退出 2，单行有效 JSON，无 stderr | 正确阻断环境门槛；doctor-strict.json。四级计算管线继续 not_configured |
+| 受限沙盒中的 doctor | 内存 null/权限失败、Docker permission_denied，部分工具可能 timeout | 权限限制单独报告；不据此虚构内存或直接认定 daemon 已停止 |
+| 独立 schema 校验真实 doctor / strict 报告和 manifest；git diff --check；bash -n 检查脚本；文档相对链接 | 通过 | 两份实际 JSON 满足协议、manifest 满足 schema/格式约束；无 whitespace/脚本语法/文档链接错误 |
+| OpenFOAM/EnergyPlus 真实版本/启动执行 | 未验证 | 没有任何引擎被标记 verified_available；需安装/VM 执行条件 |
+| 公开基准、守恒/收敛/精度、天气/设备、性能 | 未实现/未验证 | 属 P1-02…05，不由本轮命令替代 |
+
+第一次 contracts 在当前沙盒中停于 SwiftPM `sandbox-exec: sandbox_apply: Operation not permitted`；允许必要的构建/测试权限后重跑通过。没有关闭系统/App sandbox。官方元数据请求首次受 DNS/证书链限制，改用受允许的系统 curl 信任链访问小型公开 JSON，未禁用 TLS 校验，也未下载镜像层/软件包。
+
+可复现入口为 `Scripts/check.sh runtime`（行为测试+非 strict 本机盘点）、`Scripts/check_runtime.sh --strict`（环境门槛）、`Scripts/check.sh contracts`。doctor 默认不依赖第三方包；严格的完整开发 profile 仍要求独立 Python 和锁定模型/测试依赖。日志全部在忽略的 `Artifacts/P1-01/`，本机信息不写入团队 manifest。
+
+P1-01 尚未完成：目标版本/路线、manifest、doctor 和测试已完成，但 VM/daemon 不可连接、引擎尚无执行证据。下一步批准创建/启动原生 arm64 Colima VM（先核实 guest 下载条件）、拉取固定 OpenFOAM digest（压缩层 340,320,682 字节）、下载并校验 EnergyPlus 官方包（209,850,883 字节）并配置 binary；严格 doctor 成功且真实命令证据齐全后再完成 P1-01。P1-02 独立固定官方基准来源及对比数据，不用人工契约夹具替代物理验证。
+
+本轮修改文件归属（不含已有 Pitch/iOS scheme 改动）：
+
+- Backend：`src/simunow_worker/runtime/{__init__.py,manifest.json,probe.py,doctor.py}` 为目标与探测；`src/simunow_worker/__main__.py` 为兼容 CLI/退出；`pyproject.toml` 打包 manifest；`tests/test_doctor.py` 行为与契约；`README.md`、`Runtime/README.md` 为配置/证据/复现说明。
+- 协议：`Protocols/doctor-v1.md`、`Protocols/README.md`、`Protocols/Schemas/{runtime-manifest,doctor-report}.schema.json`。
+- 检查：`Scripts/check_runtime.sh`、`Scripts/check.sh`；`.gitignore` 排除本地 RuntimeLocal。requirements-dev.lock 沿用未改，依赖仅安装到忽略的 Backend/.venv。
+- 交付：`Plans/Delivery/{status,verification,decisions}.md` 增补 P1-01 事实/证据/ADR，保留既有宣传材料记录。

@@ -16,6 +16,8 @@ case "$mode" in
         swift test --package-path "$project_root/Packages/SimuKit" --scratch-path "$build_root/SwiftPackage" ;;
     contracts)
         "$project_root/Scripts/check_contracts.sh" ;;
+    runtime)
+        "$project_root/Scripts/check_runtime.sh" ;;
     mac)
         xcodebuild -project "$project_root/SimuNow.xcodeproj" -scheme SimuNowMac -configuration Debug -destination 'platform=macOS' -derivedDataPath "$build_root/macOS" CODE_SIGNING_ALLOWED=NO build ;;
     ios)
@@ -25,6 +27,6 @@ case "$mode" in
         "$0" mac
         "$0" ios ;;
     *)
-        echo "Usage: Scripts/check.sh [all|test|contracts|mac|ios]" >&2
+        echo "Usage: Scripts/check.sh [all|test|contracts|runtime|mac|ios]" >&2
         exit 2 ;;
 esac

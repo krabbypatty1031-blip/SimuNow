@@ -44,9 +44,27 @@
 
 ## 待决定
 
-- P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。
+- P1：固定路线的执行验证；候选求解器的基准适用性、网格与湍流，EnergyPlus 设备模型。
 - P3：Mac helper/companion 运行时和权限桥接，事件/重启策略。
 - P4：renderer 及各平台预算、舒适档案与边界。
 - P5：PDF 实现与成本数据；P7：代理/远程/发布渠道。
 
 每条新增决策记录触发原因、备选、选择、影响、验证证据与日期。
+
+## ADR-010：复用 Colima 的 arm64 OpenCFD 与原生 EnergyPlus（目标已接受，执行待验证）
+
+日期：2026-10-02；任务 P1-01。触发：本机 arm64 / 32 GiB，现有 Colima 0.10.3、Lima 2.1.4、Docker CLI 29.6.2，但无运行 VM/daemon 和可发现引擎；P1-02…04 需要固定发行身份、版本与架构。
+
+备选：原生 Mac OpenFOAM 源码构建、x86 Linux 模拟执行、全新 VM/远程节点、现有 Colima arm64 容器；EnergyPlus 原生 Mac 或另建 Linux 安装。选择：现有 Colima/Docker 提供 Linux arm64 OpenCFD v2506 镜像，使用 registry 核实的 arm64 子 manifest digest（见 runtime manifest）；EnergyPlus 26.1.0 / build 6f2e40d102 的官方 macOS13 arm64 tar.gz，固定官方资产 SHA-256。Python 固定现有 3.13.7 和项目独立环境/已有 dependency lock。推断依据：复用现有工具减少维护环节；原生 arm64 避免引入 x86 模拟执行；EnergyPlus 官方 native 包免去本轮定制镜像。该选择没有性能测量结论。
+
+OpenFOAM 2412/2506/更新版本均存在，选定 2506 的可核实 arm64 镜像身份作为首个固定基线；EnergyPlus 26.2.0 刚发布，本轮冻结 26.1.0。候选 `buoyantSimpleFoam` 的官方 v2506 说明覆盖稳态浮力/湍流/传热；能否满足室内非等温射流由 P1-02 独立基准判定，网格/湍流/近壁面策略仍未决定。
+
+官方查询日期 2026-10-02：[OpenCFD v2506](https://www.openfoam.com/news/main-news/openfoam-v2506)、[镜像 tags](https://hub.docker.com/r/opencfd/openfoam-dev/tags?name=2506)、[v2506 solver 源码索引](https://api.openfoam.com/2506/files.html)、[EnergyPlus 26.1.0](https://github.com/NatLabRockies/EnergyPlus/releases/tag/v26.1.0)、[Colima](https://github.com/abiosoft/colima)。具体 digest、资产字节数与 API 来源见 Backend/Runtime/README.md 与 manifest。
+
+影响：只选这一条主路线；doctor 不安装、不联网、不切 context、不启动 VM，不改变系统设置或 App sandbox；iOS 不承载任何进程/容器路径。daemon/kernel/VM guest 身份未发现，内存最低值保持 null，P1-05 实测再定。镜像不含 tutorials，P1-02 必须另固定来源；case/weather/output 布局仅声明未实现。安装批准后严格 doctor 和真实引擎版本/启动证据齐全才标 P1-01 完成；版本升级重新记录并验证。
+
+## ADR-011：兼容的环境诊断与计算能力分离（已接受）
+
+日期：2026-10-02；任务 P1-01。触发：P0 doctor 硬编码引擎状态无法解释本机环境，也不能把外部命令可执行当作管线完成。备选：覆盖 P0 字段、升级整个项目协议、为 CLI 添加独立环境报告。选择：保留 protocol_version 1 / scaffold / 四级 not_configured，新增 environment.report_version 1；目标配置与发现值分开，状态和提示明确，未知用 null；严格退出作为显式选项。诊断只在用户 CLI 调用，默认退出 0 保留旧行为，blocked 的 strict 退出 2，配置错误 JSON 退出 3。
+
+影响：项目/请求/receipt/Swift Codable 不变；新增独立 snake_case schema 和协议说明。标准库 SystemProbe 的进程执行可注入，有限超时、局部进程树终止、独立 bounded Docker 清理；解析后的指定字段进入报告，原始 stderr/凭据/私人路径不输出。任何引擎 startup 通过也保持 simulation_pipeline=not_implemented、physical_validation=not_performed。证据：doctor 行为/CLI/schema 测试、真实无引擎诊断和 contracts 回归，见 verification.md。

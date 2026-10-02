@@ -1,0 +1,97 @@
+{
+  "manifest_version": 1,
+  "profile": "mac-arm64-colima",
+  "checked_on": "2026-10-02",
+  "host": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "minimum_os_version": "14.0"
+  },
+  "python": {
+    "version": "3.13.7",
+    "environment": "Backend/.venv",
+    "dependency_lock": "Backend/requirements-dev.lock",
+    "dependencies": {
+      "annotated-types": "0.8.0",
+      "attrs": "26.1.0",
+      "jsonschema": "4.26.0",
+      "jsonschema-specifications": "2025.9.1",
+      "pydantic": "2.13.4",
+      "pydantic_core": "2.46.4",
+      "referencing": "0.37.0",
+      "rpds-py": "2026.6.3",
+      "typing-inspection": "0.4.4",
+      "typing_extensions": "4.16.0"
+    }
+  },
+  "container": {
+    "command": "docker",
+    "provider": "colima",
+    "provider_version": "0.10.3",
+    "lima_version": "2.1.4",
+    "client_version": "29.6.2",
+    "context": "colima",
+    "os": "linux",
+    "architecture": "arm64",
+    "platform": "linux/arm64"
+  },
+  "engines": {
+    "openfoam": {
+      "execution": "docker",
+      "distribution": "OpenCFD (openfoam.com)",
+      "version": "2506",
+      "os": "linux",
+      "architecture": "arm64",
+      "image_tag": "opencfd/openfoam-dev:2506",
+      "image": "opencfd/openfoam-dev@sha256:f1a4b6a78ff41bbbedb901078e0abcdee94076933cadace44915ecd0282c89c1",
+      "index_digest": "sha256:2e66fd9e77048af7f1c36c739a60a740fbdff4c2f9f4f29429f1a16834f3960f",
+      "environment_script": "/usr/lib/openfoam/openfoam2506/etc/bashrc",
+      "version_command": "foamVersion",
+      "solver_candidate": "buoyantSimpleFoam",
+      "compressed_layer_bytes": 340320682,
+      "sources": [
+        "https://www.openfoam.com/news/main-news/openfoam-v2506",
+        "https://hub.docker.com/r/opencfd/openfoam-dev/tags?name=2506",
+        "https://registry-1.docker.io/v2/opencfd/openfoam-dev/manifests/2506",
+        "https://api.openfoam.com/2506/files.html"
+      ]
+    },
+    "energyplus": {
+      "execution": "native",
+      "distribution": "DOE EnergyPlus (NatLabRockies/EnergyPlus)",
+      "version": "26.1.0",
+      "build": "6f2e40d102",
+      "os": "Darwin",
+      "architecture": "arm64",
+      "command": "energyplus",
+      "executable_env": "SIMUNOW_ENERGYPLUS_EXECUTABLE",
+      "asset": "EnergyPlus-26.1.0-6f2e40d102-Darwin-macOS13-arm64.tar.gz",
+      "asset_bytes": 209850883,
+      "asset_sha256": "7f2ec425e67f5d71c668e4504db1b10d91dc4d8cb802e9a8ee70c4f02a46d379",
+      "source": "https://github.com/NatLabRockies/EnergyPlus/releases/download/v26.1.0/EnergyPlus-26.1.0-6f2e40d102-Darwin-macOS13-arm64.tar.gz",
+      "sources": [
+        "https://github.com/NatLabRockies/EnergyPlus/releases/tag/v26.1.0"
+      ]
+    }
+  },
+  "memory": {
+    "minimum_bytes": null,
+    "basis": "No engine/case memory measurement yet; establish requirements in P1-05. VM allocation is a user choice, not a validated solver requirement."
+  },
+  "paths": {
+    "base": "project_root_or_project_package",
+    "case": "runs/<run-id>/openfoam",
+    "weather": "weather/<weather-file>.epw",
+    "output": "runs/<run-id>/",
+    "implemented": false
+  },
+  "scope": "Explicit CLI environment/version/startup probes only; no numerical pipeline or physical validation.",
+  "unverified": [
+    "VM execution architecture",
+    "OpenFOAM environment script and solver startup",
+    "EnergyPlus binary startup on macOS 27",
+    "case/weather/output adapters",
+    "physics, convergence, conservation, accuracy and performance",
+    "Mac App sandbox/helper integration"
+  ]
+}

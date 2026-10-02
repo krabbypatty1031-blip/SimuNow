@@ -1,0 +1,549 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.local/schemas/doctor-report.schema.json",
+  "type": "object",
+  "properties": {
+    "protocol_version": {
+      "const": 1
+    },
+    "worker_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "status": {
+      "const": "scaffold"
+    },
+    "engines": {
+      "type": "object",
+      "properties": {
+        "l0": {
+          "const": "not_configured"
+        },
+        "l1": {
+          "const": "not_configured"
+        },
+        "l2": {
+          "const": "not_configured"
+        },
+        "l3": {
+          "const": "not_configured"
+        }
+      },
+      "required": [
+        "l0",
+        "l1",
+        "l2",
+        "l3"
+      ],
+      "additionalProperties": false
+    },
+    "environment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "report_version": {
+              "const": 1
+            },
+            "manifest_version": {
+              "const": 1
+            },
+            "profile": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "enum": [
+                "ready",
+                "blocked"
+              ]
+            },
+            "host": {
+              "type": "object",
+              "properties": {
+                "os": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "os_version": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "architecture": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "physical_memory_bytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1
+                },
+                "memory_probe_state": {
+                  "enum": [
+                    "ok",
+                    "unsupported",
+                    "command_missing",
+                    "timeout",
+                    "process_failed",
+                    "probe_failed",
+                    "permission_denied"
+                  ]
+                },
+                "python_version": {
+                  "type": "string",
+                  "pattern": "^\\d+\\.\\d+\\.\\d+$"
+                },
+                "python_isolated": {
+                  "type": "boolean"
+                },
+                "dependencies": {
+                  "type": "object",
+                  "properties": {
+                    "annotated-types": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "attrs": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "jsonschema": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "jsonschema-specifications": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pydantic": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pydantic_core": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "referencing": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "rpds-py": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "typing-inspection": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "typing_extensions": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "annotated-types",
+                    "attrs",
+                    "jsonschema",
+                    "jsonschema-specifications",
+                    "pydantic",
+                    "pydantic_core",
+                    "referencing",
+                    "rpds-py",
+                    "typing-inspection",
+                    "typing_extensions"
+                  ],
+                  "additionalProperties": true
+                },
+                "memory_hint": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "os",
+                "os_version",
+                "architecture",
+                "physical_memory_bytes",
+                "memory_probe_state",
+                "python_version",
+                "python_isolated",
+                "dependencies"
+              ],
+              "additionalProperties": true
+            },
+            "host_matches": {
+              "type": "boolean"
+            },
+            "python_target": {
+              "type": "object"
+            },
+            "python_matches": {
+              "type": "boolean"
+            },
+            "container": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_installed",
+                    "not_configured",
+                    "unsupported",
+                    "unreachable",
+                    "permission_denied",
+                    "command_missing",
+                    "timeout",
+                    "process_failed",
+                    "probe_failed",
+                    "version_mismatch",
+                    "identity_mismatch",
+                    "verified_available",
+                    "discovered"
+                  ]
+                },
+                "hint": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "state",
+                "hint"
+              ],
+              "additionalProperties": true
+            },
+            "engine_checks": {
+              "type": "object",
+              "properties": {
+                "openfoam": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "not_installed",
+                        "not_configured",
+                        "unsupported",
+                        "unreachable",
+                        "permission_denied",
+                        "command_missing",
+                        "timeout",
+                        "process_failed",
+                        "probe_failed",
+                        "version_mismatch",
+                        "identity_mismatch",
+                        "verified_available",
+                        "discovered"
+                      ]
+                    },
+                    "hint": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target": {
+                      "type": "object"
+                    },
+                    "discovered_version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "version_matches": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "executable": {
+                      "type": "boolean"
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "command": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "state": {
+                            "enum": [
+                              "ok",
+                              "command_missing",
+                              "timeout",
+                              "process_failed",
+                              "probe_failed"
+                            ]
+                          },
+                          "exit_code": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "command",
+                          "state",
+                          "exit_code"
+                        ],
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "hint",
+                    "target",
+                    "discovered_version",
+                    "version_matches",
+                    "executable",
+                    "evidence"
+                  ],
+                  "additionalProperties": true
+                },
+                "energyplus": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "enum": [
+                        "not_installed",
+                        "not_configured",
+                        "unsupported",
+                        "unreachable",
+                        "permission_denied",
+                        "command_missing",
+                        "timeout",
+                        "process_failed",
+                        "probe_failed",
+                        "version_mismatch",
+                        "identity_mismatch",
+                        "verified_available",
+                        "discovered"
+                      ]
+                    },
+                    "hint": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target": {
+                      "type": "object"
+                    },
+                    "discovered_version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "version_matches": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "executable": {
+                      "type": "boolean"
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "command": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "state": {
+                            "enum": [
+                              "ok",
+                              "command_missing",
+                              "timeout",
+                              "process_failed",
+                              "probe_failed"
+                            ]
+                          },
+                          "exit_code": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "command",
+                          "state",
+                          "exit_code"
+                        ],
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "hint",
+                    "target",
+                    "discovered_version",
+                    "version_matches",
+                    "executable",
+                    "evidence"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "openfoam",
+                "energyplus"
+              ],
+              "additionalProperties": true
+            },
+            "inventory": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "enum": [
+                      "not_installed",
+                      "not_configured",
+                      "unsupported",
+                      "unreachable",
+                      "permission_denied",
+                      "command_missing",
+                      "timeout",
+                      "process_failed",
+                      "probe_failed",
+                      "version_mismatch",
+                      "identity_mismatch",
+                      "verified_available",
+                      "discovered"
+                    ]
+                  },
+                  "hint": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "state",
+                  "hint"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "component": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "state": {
+                    "enum": [
+                      "not_installed",
+                      "not_configured",
+                      "unsupported",
+                      "unreachable",
+                      "permission_denied",
+                      "command_missing",
+                      "timeout",
+                      "process_failed",
+                      "probe_failed",
+                      "version_mismatch",
+                      "identity_mismatch",
+                      "verified_available",
+                      "discovered"
+                    ]
+                  },
+                  "hint": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "component",
+                  "state",
+                  "hint"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "physical_validation": {
+              "const": "not_performed"
+            },
+            "simulation_pipeline": {
+              "const": "not_implemented"
+            }
+          },
+          "required": [
+            "report_version",
+            "manifest_version",
+            "profile",
+            "status",
+            "host",
+            "host_matches",
+            "python_target",
+            "python_matches",
+            "container",
+            "engine_checks",
+            "inventory",
+            "blockers",
+            "physical_validation",
+            "simulation_pipeline"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "report_version": {
+              "const": 1
+            },
+            "status": {
+              "const": "invalid_configuration"
+            },
+            "hint": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "report_version",
+            "status",
+            "hint"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    }
+  },
+  "required": [
+    "protocol_version",
+    "worker_version",
+    "status",
+    "engines",
+    "environment"
+  ],
+  "additionalProperties": true
+}

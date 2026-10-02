@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.local/schemas/runtime-manifest.schema.json",
+  "type": "object",
+  "properties": {
+    "manifest_version": {
+      "const": 1
+    },
+    "profile": {
+      "const": "mac-arm64-colima"
+    },
+    "checked_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "host": {
+      "type": "object",
+      "properties": {
+        "os": {
+          "const": "Darwin"
+        },
+        "architecture": {
+          "const": "arm64"
+        },
+        "minimum_os_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "os",
+        "architecture",
+        "minimum_os_version"
+      ],
+      "additionalProperties": false
+    },
+    "python": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "environment": {
+          "const": "Backend/.venv"
+        },
+        "dependency_lock": {
+          "const": "Backend/requirements-dev.lock"
+        },
+        "dependencies": {
+          "type": "object",
+          "properties": {
+            "annotated-types": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "attrs": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "jsonschema": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "jsonschema-specifications": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "pydantic": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "pydantic_core": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "referencing": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "rpds-py": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "typing-inspection": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "typing_extensions": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            }
+          },
+          "required": [
+            "annotated-types",
+            "attrs",
+            "jsonschema",
+            "jsonschema-specifications",
+            "pydantic",
+            "pydantic_core",
+            "referencing",
+            "rpds-py",
+            "typing-inspection",
+            "typing_extensions"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "environment",
+        "dependency_lock",
+        "dependencies"
+      ],
+      "additionalProperties": false
+    },
+    "container": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "const": "docker"
+        },
+        "provider": {
+          "const": "colima"
+        },
+        "provider_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "lima_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "client_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "context": {
+          "const": "colima"
+        },
+        "os": {
+          "const": "linux"
+        },
+        "architecture": {
+          "const": "arm64"
+        },
+        "platform": {
+          "const": "linux/arm64"
+        }
+      },
+      "required": [
+        "command",
+        "provider",
+        "provider_version",
+        "lima_version",
+        "client_version",
+        "context",
+        "os",
+        "architecture",
+        "platform"
+      ],
+      "additionalProperties": false
+    },
+    "engines": {
+      "type": "object",
+      "properties": {
+        "openfoam": {
+          "type": "object",
+          "properties": {
+            "execution": {
+              "const": "docker"
+            },
+            "distribution": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]{4}$"
+            },
+            "os": {
+              "enum": [
+                "Darwin",
+                "linux"
+              ]
+            },
+            "architecture": {
+              "const": "arm64"
+            },
+            "sources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "image_tag": {
+              "type": "string",
+              "pattern": "^opencfd/openfoam-dev:[0-9]{4}$"
+            },
+            "image": {
+              "type": "string",
+              "pattern": "^opencfd/openfoam-dev@sha256:[0-9a-f]{64}$"
+            },
+            "index_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "environment_script": {
+              "type": "string",
+              "pattern": "^/usr/lib/openfoam/openfoam[0-9]{4}/etc/bashrc$"
+            },
+            "version_command": {
+              "const": "foamVersion"
+            },
+            "solver_candidate": {
+              "const": "buoyantSimpleFoam"
+            },
+            "compressed_layer_bytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "execution",
+            "distribution",
+            "version",
+            "os",
+            "architecture",
+            "sources",
+            "image_tag",
+            "image",
+            "index_digest",
+            "environment_script",
+            "version_command",
+            "solver_candidate",
+            "compressed_layer_bytes"
+          ],
+          "additionalProperties": false
+        },
+        "energyplus": {
+          "type": "object",
+          "properties": {
+            "execution": {
+              "const": "native"
+            },
+            "distribution": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+$"
+            },
+            "os": {
+              "enum": [
+                "Darwin",
+                "linux"
+              ]
+            },
+            "architecture": {
+              "const": "arm64"
+            },
+            "sources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "build": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{10}$"
+            },
+            "command": {
+              "const": "energyplus"
+            },
+            "executable_env": {
+              "const": "SIMUNOW_ENERGYPLUS_EXECUTABLE"
+            },
+            "asset": {
+              "type": "string",
+              "minLength": 1
+            },
+            "asset_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "asset_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "source": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "execution",
+            "distribution",
+            "version",
+            "os",
+            "architecture",
+            "sources",
+            "build",
+            "command",
+            "executable_env",
+            "asset",
+            "asset_bytes",
+            "asset_sha256",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "openfoam",
+        "energyplus"
+      ],
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "minimum_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "minimum_bytes",
+        "basis"
+      ],
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "const": "project_root_or_project_package"
+        },
+        "case": {
+          "type": "string",
+          "minLength": 1
+        },
+        "weather": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1
+        },
+        "implemented": {
+          "const": false
+        }
+      },
+      "required": [
+        "base",
+        "case",
+        "weather",
+        "output",
+        "implemented"
+      ],
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unverified": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "manifest_version",
+    "profile",
+    "checked_on",
+    "host",
+    "python",
+    "container",
+    "engines",
+    "memory",
+    "paths",
+    "scope",
+    "unverified"
+  ],
+  "additionalProperties": false
+}

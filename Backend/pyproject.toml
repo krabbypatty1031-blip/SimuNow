@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "simunow-worker"
 version = "0.1.0"
-description = "SimuNow orchestration scaffold; numerical engines are not yet configured"
+description = "SimuNow environment probes and orchestration boundary; numerical pipelines are not implemented"
 requires-python = ">=3.11"
 dependencies = ["pydantic==2.13.4"]
 
@@ -17,3 +17,6 @@ simunow-worker = "simunow_worker.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"simunow_worker.runtime" = ["manifest.json"]

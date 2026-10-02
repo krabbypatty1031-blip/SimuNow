@@ -17,9 +17,14 @@ export SIMUNOW_PYTHON="$contract_python"
 export SIMUNOW_CONTRACT_DIR
 SIMUNOW_CONTRACT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/SimuNow-contracts.XXXXXX")"
 trap 'rm -rf "$SIMUNOW_CONTRACT_DIR"' EXIT
+export SIMUNOW_NATIVE_CONTRACT_DIR="$SIMUNOW_CONTRACT_DIR/native"
+mkdir -p "$SIMUNOW_NATIVE_CONTRACT_DIR"
 "$contract_python" "$project_root/Scripts/generate_domain_models.py" --check
+"$contract_python" "$project_root/Scripts/generate_native_analysis_schemas.py" --check
 "$contract_python" -m simunow_worker.models.schema --check
 "$contract_python" -m unittest discover -s "$project_root/Backend/tests" -v
 "$contract_python" "$project_root/Backend/tests/contract_exchange.py" prepare "$SIMUNOW_CONTRACT_DIR"
 "$project_root/Scripts/check.sh" test
 "$contract_python" "$project_root/Backend/tests/contract_exchange.py" verify "$SIMUNOW_CONTRACT_DIR"
+
+"$contract_python" "$project_root/Scripts/validate_native_analysis_contracts.py" "$SIMUNOW_NATIVE_CONTRACT_DIR"

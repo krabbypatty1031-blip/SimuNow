@@ -16,6 +16,8 @@ public struct SimuNowDocument: FileDocument, Sendable {
 
     public var project: ProjectDocument
     public var metadata: ProjectPackageMetadata
+    /// Transient change token, never written to project metadata. Sidefile readers reload off MainActor.
+    public private(set) var nativeSidefileRevision = UUID()
     public private(set) var preservedEntries: [String: ProjectPackageEntry]
     private let registry: ModelRegistry
     private let limits: ProjectPackageLimits
@@ -174,6 +176,17 @@ public struct SimuNowDocument: FileDocument, Sendable {
         var updated = project
         updated.scenarios[index].inputs.environment.weather = .init(relativePath: "assets/weather/\(name)", sha256: hash)
         return try Self(project: updated, metadata: metadata, preservedEntries: entries, registry: registry, limits: limits)
+    }
+
+    func replacingNativeInputState(project: ProjectDocument, metadata: ProjectPackageMetadata, entries: [String: ProjectPackageEntry]) throws -> Self {
+        var next = try Self(project: project, metadata: metadata, preservedEntries: entries, registry: registry, limits: limits)
+        if entries == preservedEntries { next.nativeSidefileRevision = nativeSidefileRevision }
+        return next
+    }
+
+    func replacingPreservedEntries(_ entries: [String: ProjectPackageEntry]) throws -> Self {
+        if entries == preservedEntries { return self }
+        return try Self(project: project, metadata: metadata, preservedEntries: entries, registry: registry, limits: limits)
     }
 
     private static func contentHash(_ data: Data) -> String {

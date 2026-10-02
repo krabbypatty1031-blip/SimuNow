@@ -13,10 +13,12 @@ public final class WorkspaceStore {
     public private(set) var templateID: String?
     public private(set) var templateVersion: Int?
     public private(set) var revision: UInt64 = 0
+    public private(set) var analysisConfiguration: AnalysisConfigurationStore?
     public private(set) var capturedInput: ScenarioInputSnapshot?
     public var presentedError: String?
     public let modelRegistry: ModelRegistry
     public let projectValidator: ProjectValidator
+    public let localAnalysisClient: any LocalAnalysisSubmitting
     public let simulationClient: any SimulationClient
     private var undoHistory: [WorkspaceHistoryEntry] = []
     private var redoHistory: [WorkspaceHistoryEntry] = []
@@ -24,10 +26,12 @@ public final class WorkspaceStore {
     @ObservationIgnored public var validateDocumentChange: (@MainActor (WorkspaceProjectState) throws -> Void)?
 
     public init(simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
-                modelRegistry: ModelRegistry = .builtIn, projectValidator: ProjectValidator = ProjectValidator()) {
+                modelRegistry: ModelRegistry = .builtIn, projectValidator: ProjectValidator = ProjectValidator(),
+                localAnalysisClient: any LocalAnalysisSubmitting = LocalAnalysisClient.unavailable) {
         self.modelRegistry = modelRegistry
         self.projectValidator = projectValidator
         self.simulationClient = simulationClient
+        self.localAnalysisClient = localAnalysisClient
     }
 
     public var currentScenario: Scenario? {
@@ -63,7 +67,8 @@ public final class WorkspaceStore {
     /// Installs a document read by the document layer. This also accepts repairable
     /// semantic errors; structural decoding has already occurred before this call.
     public func load(_ project: ProjectDocument, baselineScenarioID: UUID? = nil,
-                     templateID: String? = nil, templateVersion: Int? = nil) {
+                     templateID: String? = nil, templateVersion: Int? = nil, analysisConfiguration: AnalysisConfigurationStore? = nil) {
+        self.analysisConfiguration = analysisConfiguration
         self.project = project
         self.baselineScenarioID = baselineScenarioID
         self.templateID = templateID
@@ -110,6 +115,17 @@ public final class WorkspaceStore {
         try commit(next, actionName: actionName)
     }
 
+    public func updateAnalysisConfiguration(_ configuration: AnalysisConfigurationStore, actionName: String = "修改分析配置") throws {
+        guard let project else { throw WorkspaceEditingError.noScenario }
+        var next = state(for: project); next.analysisConfiguration = configuration
+        try commit(next, actionName: actionName)
+    }
+
+    public func replaceProjectAndAnalysis(_ candidate: ProjectDocument, configuration: AnalysisConfigurationStore, actionName: String) throws {
+        var next = state(for: candidate); next.analysisConfiguration = configuration
+        try commit(next, actionName: actionName)
+    }
+
     public func undo() {
         guard let previous = undoHistory.popLast(), let project else { return }
         redoHistory.append(.init(name: previous.name, state: state(for: project)))
@@ -132,14 +148,34 @@ public final class WorkspaceStore {
         return snapshot
     }
 
+    public func prepareLocalAnalysis(method: AnalysisMethod, configuration: AnalysisConfiguration,
+                                     runID: UUID = UUID(), additionalIssues: [ValidationIssue] = []) async throws -> LocalAnalysisRequest {
+        guard let project, let selectedScenarioID else { throw WorkspaceEditingError.noScenario }
+        let registry = modelRegistry
+        let task = Task.detached {
+            try AnalysisInputResolver(registry: registry).request(project: project, scenarioID: selectedScenarioID,
+                method: method, configuration: configuration, runID: runID, additionalIssues: additionalIssues)
+        }
+        return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+    }
+
     private func report(for value: ProjectDocument) -> ValidationReport {
         do { return try projectValidator.validate(value, registry: modelRegistry) }
         catch { return .init(issues: [.init(code: "contract_error", path: "", message: String(describing: error))]) }
     }
     private func state(for value: ProjectDocument) -> WorkspaceProjectState {
-        .init(project: value, baselineScenarioID: baselineScenarioID, templateID: templateID, templateVersion: templateVersion)
+        var configuration = analysisConfiguration?.projectID == value.id ? analysisConfiguration : nil
+        configuration?.entries.removeAll { entry in !value.scenarios.contains { $0.id == entry.scenarioID } }
+        return .init(project: value, baselineScenarioID: baselineScenarioID, templateID: templateID, templateVersion: templateVersion,
+                     analysisConfiguration: configuration)
     }
     private func commit(_ next: WorkspaceProjectState, actionName: String) throws {
+        if let configuration = next.analysisConfiguration {
+            guard configuration.projectID == next.project.id, configuration.entries.allSatisfy({ e in next.project.scenarios.contains { $0.id == e.scenarioID } }) else {
+                throw NativeArtifactError.identityMismatch
+            }
+            _ = try NativeAnalysisCodec(registry: modelRegistry).encodeConfiguration(configuration)
+        }
         if let baseline = next.baselineScenarioID, !next.project.scenarios.contains(where: { $0.id == baseline }) {
             throw WorkspaceEditingError.invalidBaseline
         }
@@ -179,6 +215,7 @@ public final class WorkspaceStore {
         // Only this path publishes edits back to the native document binding.
         onDocumentChange?(value)
         project = value.project
+        analysisConfiguration = value.analysisConfiguration
         baselineScenarioID = value.baselineScenarioID
         templateID = value.templateID
         templateVersion = value.templateVersion
@@ -194,8 +231,10 @@ public struct WorkspaceProjectState: Equatable, Sendable {
     public var baselineScenarioID: UUID?
     public var templateID: String?
     public var templateVersion: Int?
+    public var analysisConfiguration: AnalysisConfigurationStore?
     public init(project: ProjectDocument, baselineScenarioID: UUID? = nil,
-                templateID: String? = nil, templateVersion: Int? = nil) {
+                templateID: String? = nil, templateVersion: Int? = nil, analysisConfiguration: AnalysisConfigurationStore? = nil) {
+        self.analysisConfiguration = analysisConfiguration
         self.project = project; self.baselineScenarioID = baselineScenarioID
         self.templateID = templateID; self.templateVersion = templateVersion
     }

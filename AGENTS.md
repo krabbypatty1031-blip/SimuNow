@@ -2,15 +2,15 @@
 
 ## 项目与优先级
 
-SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与运行分析工具。用统一模型连接 EnergyPlus 能耗与 OpenFOAM 气流，评价位置级舒适、用电和成本。
+SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与运行分析工具。当前主线是 Swift 本地规则与 RealityKit 非 AR 房间查看，帮助理解风向/遮挡，再以明确输入做透明的用电、费用与显热情景估算。外部 EnergyPlus/OpenFOAM 为后续可选复核，消费者首版不依赖 Python/Linux/Docker。
 团队 3–4 人；比赛 48–72 小时；之后按 6–8 周路线完善。首个场景为单房间办公室或教室。
-当前是可编译的 P0 骨架，数值引擎尚未接入。不要把未来计划描述为已实现功能。
+P0/P2 代码已交付；N1 已提供独立本地契约、就绪度、哈希、actor 调度及文档侧文件接口。N2–N5 的实际渲染、规则算法与完整消费体验仍待接入；数值引擎未接入。不要把未来计划或 test executor 描述为已实现产品功能。
 
 ## 开工阅读顺序
 
 1. `README.md`、`Plans/README.md`、`Plans/Delivery/status.md`。
 2. `Plans/References/01-product-scope.md`、`Plans/References/02-architecture.md`。
-3. 本次任务相关的设计、协议、物理计划及 `Plans/Phases/P*.md`。
+3. `Plans/References/10-ai-execution-guide.md`、`11-native-acceptance-cases.md`、本次 `Plans/Phases/N*.md`；已有 P2 和归档 P 阶段按接入需要阅读。
 4. 修改公开接口时读 `Protocols/README.md`；平台能力读 `Plans/Delivery/platform-and-release.md`。
 
 用户当次明确要求优先于仓库建议。仓库采用单任务工作默认值；需要多个 agent 同时改文件时先确认当前会话已有授权，明确文件归属，避免共享文件冲突。
@@ -25,7 +25,7 @@ SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与�
 - `SimuVisualization`：显示接口与场数据适配；不计算热负荷或推荐。
 - `SimuReporting`：报告接口与证据要求；不重算指标。
 - `SimuWorkspace`：共享状态、导航与业务工作流；通过依赖注入访问任务和报告。
-- `Backend`：Python 编排、引擎转换、网格、后处理、质量与候选搜索。
+- `Backend`：开发契约验证与历史可选引擎复核；不成为本地消费者链路运行依赖。
 
 坚持依赖方向：Core 在底层；Workspace 在顶层；平台入口组装适配器。计算引擎与渲染器各自可替换。
 
@@ -52,7 +52,7 @@ Mac 使用工作区与 inspector，iPad 自适应分栏，iPhone 保持导航可
 ## 数据与任务规范
 
 每次运行保存不可变输入快照、run ID、scenario ID、输入哈希、引擎版本、求解设置、网格与质量记录。
-旧任务完成后只进入其所属运行；不覆盖当前方案。任务成功、质量通过、结果新鲜度是独立状态。
+旧任务完成后只进入其所属运行；不覆盖当前方案。任务成功、方法检查、结果依据、新鲜度和保存状态独立。本地 rulePreview/simplifiedEstimate 不冒充旧 L2、CFD 或 physical validated。
 共享 JSON 接口改动同步更新 Swift Codable、Python 解析、schema、迁移说明和相应契约验证。当前 P0 schema 只覆盖 draft / request / receipt，不能当作完整可求解项目。
 二进制场写清坐标、单位、float 格式、endian、轴序、有效掩码与哈希。墙和家具内部无效数据不能按 0 参与统计。
 路径以项目根或项目包为基准；禁止硬编码开发者 Desktop / Downloads 路径。

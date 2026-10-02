@@ -1,5 +1,6 @@
 import SwiftUI
 import SimuCore
+import SimuSimulation
 import UniformTypeIdentifiers
 
 /// Native document binding is the persisted authority. Each window has its own
@@ -26,12 +27,13 @@ public struct WorkspaceDocumentView: View {
     @State private var importNotes: [String] = []
     #endif
 
-    public init(document: Binding<SimuNowDocument>) {
+    public init(document: Binding<SimuNowDocument>, localAnalysisClient: any LocalAnalysisSubmitting = LocalAnalysisClient.unavailable) {
         _document = document
         let value = document.wrappedValue
-        let store = WorkspaceStore()
+        let store = WorkspaceStore(localAnalysisClient: localAnalysisClient)
         store.load(value.project, baselineScenarioID: value.metadata.baselineScenarioID,
-                   templateID: value.metadata.templateID, templateVersion: value.metadata.templateVersion)
+                   templateID: value.metadata.templateID, templateVersion: value.metadata.templateVersion,
+                   analysisConfiguration: value.analysisConfigurationData == nil ? nil : try? value.analysisConfigurationStore())
         _store = State(initialValue: store)
     }
     public var body: some View {
@@ -45,6 +47,7 @@ public struct WorkspaceDocumentView: View {
         }
         .onAppear { connect() }
         .onChange(of: document.project) { _, _ in synchronizeExternalChanges() }
+        .onChange(of: document.analysisConfigurationData) { _, _ in synchronizeExternalChanges() }
         .onChange(of: document.metadata) { _, _ in synchronizeExternalChanges() }
         .fileImporter(isPresented: $importingJSON, allowedContentTypes: [.json]) { result in
             switch result {
@@ -71,7 +74,7 @@ public struct WorkspaceDocumentView: View {
             if pendingExport { pendingExport = false; exportingImport = true }
         }) {
             if let importedDocument {
-                ImportedProjectEditorView(initialDocument: importedDocument, notes: importNotes) { edited in
+                ImportedProjectEditorView(initialDocument: importedDocument, notes: importNotes, localAnalysisClient: store.localAnalysisClient) { edited in
                     self.importedDocument = edited
                     pendingExport = true; editingImport = false
                 }
@@ -90,28 +93,21 @@ public struct WorkspaceDocumentView: View {
         // Capture the native binding alone, avoiding store -> callback -> view -> store.
         let documentBinding = $document
         store.validateDocumentChange = { state in
-            let current = documentBinding.wrappedValue
-            var metadata = current.metadata
-            metadata.baselineScenarioID = state.baselineScenarioID
-            metadata.templateID = state.templateID; metadata.templateVersion = state.templateVersion
-            _ = try SimuNowDocument(project: state.project, metadata: metadata,
-                                    preservedEntries: current.preservedEntries)
+            _ = try documentBinding.wrappedValue.applyingWorkspaceState(state)
         }
         store.onDocumentChange = { state in
-            var next = documentBinding.wrappedValue
-            next.project = state.project
-            next.metadata.baselineScenarioID = state.baselineScenarioID
-            next.metadata.templateID = state.templateID
-            next.metadata.templateVersion = state.templateVersion
-            documentBinding.wrappedValue = next
+            // The synchronous preflight immediately precedes this callback. No asynchronous writer intervenes.
+            if let next = try? documentBinding.wrappedValue.applyingWorkspaceState(state) { documentBinding.wrappedValue = next }
         }
     }
     private func synchronizeExternalChanges() {
         guard store.project != document.project || store.baselineScenarioID != document.metadata.baselineScenarioID ||
-                store.templateID != document.metadata.templateID || store.templateVersion != document.metadata.templateVersion else { return }
+                store.templateID != document.metadata.templateID || store.templateVersion != document.metadata.templateVersion ||
+                store.analysisConfiguration != (document.analysisConfigurationData == nil ? nil : try? document.analysisConfigurationStore()) else { return }
         let selection = store.selectedScenarioID
         store.load(document.project, baselineScenarioID: document.metadata.baselineScenarioID,
-                   templateID: document.metadata.templateID, templateVersion: document.metadata.templateVersion)
+                   templateID: document.metadata.templateID, templateVersion: document.metadata.templateVersion,
+                   analysisConfiguration: document.analysisConfigurationData == nil ? nil : try? document.analysisConfigurationStore())
         if document.project.scenarios.contains(where: { $0.id == selection }) { store.selectedScenarioID = selection }
         notice = "文档收到外部更新，已载入最新输入。正在编辑的旧草稿仍可查看；请关闭并重新打开表单后继续修改。"
         connect()
@@ -164,11 +160,12 @@ public struct WorkspaceDocumentView: View {
 private struct ImportedProjectEditorView: View {
     @State private var document: SimuNowDocument
     let notes: [String]
+    let localAnalysisClient: any LocalAnalysisSubmitting
     let onExport: @MainActor (SimuNowDocument) -> Void
     @SwiftUI.Environment(\.dismiss) private var dismiss
     @State private var confirmDiscard = false
-    init(initialDocument: SimuNowDocument, notes: [String], onExport: @escaping @MainActor (SimuNowDocument) -> Void) {
-        _document = State(initialValue: initialDocument); self.notes = notes; self.onExport = onExport
+    init(initialDocument: SimuNowDocument, notes: [String], localAnalysisClient: any LocalAnalysisSubmitting, onExport: @escaping @MainActor (SimuNowDocument) -> Void) {
+        _document = State(initialValue: initialDocument); self.notes = notes; self.localAnalysisClient = localAnalysisClient; self.onExport = onExport
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -182,7 +179,7 @@ private struct ImportedProjectEditorView: View {
             ForEach(notes, id: \.self) { Text($0).font(.caption).padding(.horizontal) }
             // Type erasure keeps nested import sessions from recursively expanding
             // the concrete SwiftUI body type.
-            AnyView(WorkspaceDocumentView(document: $document))
+            AnyView(WorkspaceDocumentView(document: $document, localAnalysisClient: localAnalysisClient))
         }
         .interactiveDismissDisabled()
         .confirmationDialog("放弃尚未导出的导入项目？", isPresented: $confirmDiscard, titleVisibility: .visible) {

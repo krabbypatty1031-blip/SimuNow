@@ -76,7 +76,7 @@ private let codec = ProjectCodec(registry:.builtIn)
 }
 @Test @MainActor func workspaceAcceptsInjectedModelServices() throws {
     let store = WorkspaceStore(modelRegistry:.builtIn,projectValidator:ProjectValidator())
-    store.project = try codec.decode(fixture())
+    store.load(try codec.decode(fixture()))
     #expect(store.project?.schemaVersion == 2)
     #expect(store.modelRegistry.registrations.count == 3)
 }

@@ -43,5 +43,10 @@ elif sys.argv[1]=='verify':
         original=codec.decode(path.with_name(path.name.replace('.swift-case.','.case.')).read_text())
         assert codec.decode(path.read_text())==original, path
     if len(list(directory.glob('*.swift-case.json')))!=len(semantic_cases()): raise SystemExit('Missing semantic exchange outputs')
+    metadata_path = directory/'package.app-metadata.json'
+    if not metadata_path.exists(): raise SystemExit('Missing Swift package metadata output')
+    metadata_schema = Path(__file__).resolve().parents[2]/'Protocols/Schemas/project-package-metadata.schema.json'
+    Draft202012Validator(json.loads(metadata_schema.read_text()), format_checker=FormatChecker()).validate(json.loads(metadata_path.read_text()))
+    print('Swift App package metadata passed independent Python schema validation.')
     print(f'Cross-language exchange passed: {len(outputs)} projects, snapshots, {len(semantic_cases())} error/compatibility cases.')
 else: raise SystemExit('prepare or verify required')

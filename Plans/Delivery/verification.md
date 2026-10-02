@@ -93,3 +93,30 @@ P1-01 尚未完成：目标版本/路线、manifest、doctor 和测试已完成�
 - 协议：`Protocols/doctor-v1.md`、`Protocols/README.md`、`Protocols/Schemas/{runtime-manifest,doctor-report}.schema.json`。
 - 检查：`Scripts/check_runtime.sh`、`Scripts/check.sh`；`.gitignore` 排除本地 RuntimeLocal。requirements-dev.lock 沿用未改，依赖仅安装到忽略的 Backend/.venv。
 - 交付：`Plans/Delivery/{status,verification,decisions}.md` 增补 P1-01 事实/证据/ADR，保留既有宣传材料记录。
+
+## P2-02…05 最终整合（2026-10-03）
+
+环境沿用 Xcode 27.0 / Swift 6 模式、macOS 27.0 arm64；最低部署仍为 macOS14/iOS17。四个独立 worktree 在共享基点 `ada63b8` 之上实现、自审并分别编译；根工作区整合后执行以下验证。没有启动 VM、安装引擎、推送代码或关闭 App sandbox。生成器现在保留已有 scheme，原 iOS scheme 的用户定制保留。
+
+| 检查 | 结果 | 范围 |
+|---|---|---|
+| `Scripts/check.sh contracts` | 退出 0 | Python 39 项；Swift 83 项（81 Core/Workspace + 2 Extension）；生成漂移、2 项目/快照双向交换及 28 类语义/兼容案例 |
+| 新包 metadata schema | 通过 | Swift 实际编码输出由 Python Draft202012Validator 独立验证；版本、字段配对、UUID、额外字段与 null 拒绝 |
+| 编辑事务与几何 | 通过 | 来源/未知/范围、中间数字不入模型、全部方案碰撞/点位、关联增删、跨方案相同嵌套 ID 的错误不可转移 |
+| 草稿与条件修复 | 通过 | 重复/悬空/边界冲突与原始顺序无损、显式删除/恢复/选择、独立方案、缺失记录不自动补齐、过期草稿拒绝 |
+| 模板、基准与快照 | 通过 | 新身份、版本化假设、覆盖值来源、基准原子变更、完整几何/metadata 撤销、候选值独立、快照不随编辑改变 |
+| 项目包磁盘 I/O | 通过 | 写入关闭重开、未知数值 token/二进制/空目录保留、损坏与未来版本拒绝、非法/失败保存不改原文件、完整预算、符号链接/路径拒绝、天气相对资源哈希 |
+| `Scripts/check.sh mac` | BUILD SUCCEEDED | 最终源代码与文档注册，CODE_SIGNING_ALLOWED=NO |
+| `Scripts/check.sh ios` | BUILD SUCCEEDED | generic iOS Simulator，含原生浏览与独立 JSON 修复/导出会话 |
+| Mac 实际 UI | 部分流程通过 | 空文档、办公室模板、俯视图、对象 AX 列表、方案复制、Cmd-Z / Shift-Cmd-Z；深色当前外观可见 |
+| Mac 原生保存/最近重开 | 通过 | 修正 UTI 同时符合 package/content 后，在独立临时 App 副本中保存、关闭、从最近项目重开；1房间、2方案、基准及模板信息保留，两份 JSON 哈希不变 |
+| iPad 模拟器安装/启动 | 通过 | iOS26.5 iPad Pro 13-inch M5：simctl install + launch 返回 bundle/PID；编译与进程启动分开记录 |
+| iOS实际显示/导入导出、真机、最低系统 | 未完整验证 | 当前 Simulator UI 不可取得，DeviceHub UI 请求超时；没有据此声称交互成功 |
+| VoiceOver、大字号、浅色、多窗口并发/文件提供器 | 未完整操作验收 | 可访问性对象/文字状态、布局和草稿冲突代码已实现；单测与编译不代替实际设备检查 |
+| 引擎/守恒/收敛/能耗/舒适/成本/报告 | 未实现或未验证 | EPW 头检查、输入几何与质量平衡规则不是物理求解证据 |
+
+原生验收包在临时目录，不进入 Git。保存后和重开后 `project.json` SHA-256 都为 `f97df855d93e592d3a3651ebb943695a89da237913d6d42ff0c8878143486106`，metadata 为 `f40f3ad2460d4f3ca0439cd5539f09e84a32b6fad052391b0d3a760589d4066e`。原生通用打开面板在并存不同注册版本时仍出现禁用选择，最近项目重开成功；干净安装/重启后的通用面板与 iOS 浏览器留待平台操作复验。
+
+实际 UI 检查发现缺少 public.content 导致保存禁用，已按 Apple DTS 文档类型说明补齐并验证保存可用。自动审批拒绝关闭原来含未保存验收状态的窗口；没有终止该窗口，改用临时 App 副本（临时 bundle identifier）保留状态并完成保存验证，不修改项目 bundle identifier。
+
+第一次根测试因 SwiftPM nested sandbox 权限失败，允许项目构建/测试后通过；没有关闭沙盒。新增 metadata 交换文件最初匹配了既有 `*.swift.json` 项目 glob，已改成独立命名并完成回归。AppIntents metadata 提示仍为无依赖框架的非阻断提示。日志保存在忽略的 `Artifacts/P2/`，独立 Agent commits 和审查回执供追踪，工作区变更未推送。

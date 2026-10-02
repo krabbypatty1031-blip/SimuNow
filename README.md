@@ -6,8 +6,8 @@ Mac 优先、兼容 iPhone / iPad 的室内空调方案分析 App。通过房间
 
 ## 当前交付
 
-这是 **P0 工程骨架 + P2-01 项目模型基座**：两个原生 App target、六个本地 Swift Package 模块、可导航的空工作区、模型与任务接口、Python worker 边界、协议草案和开发计划。
-项目输入 v2、Swift/Python/schema 契约、校验、迁移与不可变快照已实现，见 [项目模型契约](Protocols/project-model-v2.md)。房间编辑、磁盘保存、扫描、CFD、EnergyPlus、舒适评价、优化及 PDF 报告均为待开发功能。空状态没有真实指标；未配置引擎会明确抛错。
+这是 **P0 工程骨架 + P2 项目模型与编辑器**：两个原生 App target、六个本地 Swift Package 模块、文档工作区、模型与任务接口、Python worker 边界、协议和开发计划。
+项目输入 v2、Swift/Python/schema 契约、矩形房间/门窗/家具/人员/空调编辑、数值与俯视点击放置、办公室/教室模板、独立候选、完整值撤销、输入问题定位、不可变快照及本地项目包已实现，见 [模型契约](Protocols/project-model-v2.md)、[包格式](Protocols/project-package-v1.md) 和 [验证记录](Plans/Delivery/verification.md)。扫描、CFD、EnergyPlus 管线、舒适评价、优化及 PDF 报告仍待开发。输入完整性不代表物理结果；未配置引擎明确不可用。
 
 ## 打开与运行
 
@@ -18,6 +18,7 @@ Mac 优先、兼容 iPhone / iPad 的室内空调方案分析 App。通过房间
 
 最低系统：macOS 14、iOS / iPadOS 17；Swift 6 模式，建议 Xcode 16 或更新版本。本次验证环境见 [验证记录](Plans/Delivery/verification.md)。RealityView 等更高版本 API 在实际接入时用 availability 或版本决策处理。
 本地包无远程 Swift 依赖，打开工程无需下载业务依赖。共享包测试通过 `Scripts/check.sh test` 执行；App schemes 当前未配置独立 UI 测试 target。
+新建文档后从“创建与导入”开始；保存 `.simunow` 包可在两端打开。JSON 导入生成独立新项目，iOS 的导入副本先修复、导出后再从文档浏览器打开。参数可标记未知；来源与假设可查看，计算准备另行检查。
 
 ```bash
 Scripts/check.sh test  # Swift 共享包测试

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.example/schemas/project-package-metadata.schema.json",
+  "title": "SimuNow App package metadata v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["packageVersion"],
+  "properties": {
+    "packageVersion": {"const": 1},
+    "baselineScenarioID": {"type": "string", "format": "uuid"},
+    "templateID": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+    "templateVersion": {"type": "integer", "minimum": 1}
+  },
+  "dependentRequired": {
+    "templateID": ["templateVersion"],
+    "templateVersion": ["templateID"]
+  },
+  "$comment": "App-only bookkeeping, not worker physical input. UTF-8 templateID length <=256 bytes and baseline membership are semantic checks. Optional fields are omitted, not null."
+}

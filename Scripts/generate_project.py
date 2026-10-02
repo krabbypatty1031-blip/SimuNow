@@ -37,6 +37,7 @@ def generate():
     assets = ref("Apps/Shared/Assets.xcassets", "folder.assetcatalog")
     configs = {name: ref(f"Configurations/{name}.xcconfig", "text.xcconfig") for name in ("Shared", "macOS", "iOS")}
     root_refs = list(sources.values()) + [assets] + list(configs.values())
+    root_refs.append(ref("Configurations/Info.plist", "text.plist.xml"))
     root_refs.append(ref("Apps/SimuNowMac/SimuNowMac.entitlements", "text.plist.entitlements"))
     for path in ("README.md", "AGENTS.md"):
         root_refs.append(ref(path, "net.daringfireball.markdown"))
@@ -83,6 +84,9 @@ def generate():
     scheme_dir = project_dir / "xcshareddata/xcschemes"
     scheme_dir.mkdir(parents=True, exist_ok=True)
     for name in ("SimuNowMac", "SimuNowiOS"):
+        # Stable target IDs let existing scheme customizations survive regeneration.
+        if (scheme_dir / f"{name}.xcscheme").exists():
+            continue
         buildable = f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{identifier(name)}" BuildableName="SimuNow.app" BlueprintName="{escape(name)}" ReferencedContainer="container:SimuNow.xcodeproj"/>'
         scheme = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2700" version="1.7">

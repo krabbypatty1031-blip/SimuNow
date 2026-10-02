@@ -4,8 +4,8 @@ import SimuWorkspace
 @main
 struct SimuNowiOSApp: App {
     var body: some Scene {
-        WindowGroup {
-            WorkspaceView(store: WorkspaceStore())
+        DocumentGroup(newDocument: SimuNowDocument.unfinished()) { configuration in
+            WorkspaceDocumentView(document: configuration.$document)
         }
     }
 }

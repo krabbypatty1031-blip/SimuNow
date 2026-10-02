@@ -68,3 +68,15 @@ OpenFOAM 2412/2506/更新版本均存在，选定 2506 的可核实 arm64 镜像
 日期：2026-10-02；任务 P1-01。触发：P0 doctor 硬编码引擎状态无法解释本机环境，也不能把外部命令可执行当作管线完成。备选：覆盖 P0 字段、升级整个项目协议、为 CLI 添加独立环境报告。选择：保留 protocol_version 1 / scaffold / 四级 not_configured，新增 environment.report_version 1；目标配置与发现值分开，状态和提示明确，未知用 null；严格退出作为显式选项。诊断只在用户 CLI 调用，默认退出 0 保留旧行为，blocked 的 strict 退出 2，配置错误 JSON 退出 3。
 
 影响：项目/请求/receipt/Swift Codable 不变；新增独立 snake_case schema 和协议说明。标准库 SystemProbe 的进程执行可注入，有限超时、局部进程树终止、独立 bounded Docker 清理；解析后的指定字段进入报告，原始 stderr/凭据/私人路径不输出。任何引擎 startup 通过也保持 simulation_pipeline=not_implemented、physical_validation=not_performed。证据：doctor 行为/CLI/schema 测试、真实无引擎诊断和 contracts 回归，见 verification.md。
+
+## ADR-012：原生包文档与完整值编辑事务（2026-10-03，已接受）
+
+触发：P2 编辑、保存与候选隔离需要一份持久化权威，避免工作区镜像、文件和 undo 分别修改输入。备选：手动路径保存、平台文档对象、SwiftUI FileDocument。选择：两端 DocumentGroup + Sendable FileDocument，binding 为持久化权威；WorkspaceStore 注入发布与容量预检，完整项目值事务含基准/模板 bookkeeping，最近 60 次会话撤销；选择和输入快照不持久化。Core 物理模型保持 Foundation-only，包元数据在 Workspace，worker 当前只消费 v2 输入而不解析项目包。
+
+影响：原生协调保存不叠加手工原子写；独立导出先完成序列化再原子写。附件作为不透明值保留，天气在会话内追加以支持 undo/redo；未来大场需流式 artifact store。Mac JSON 生成新文档；iOS 缺少同一 newDocument API，以独立导入修复会话导出新包，保持原文档独立。证据：包真实磁盘关闭重开、失败保存原文件不变、未知扩展精确保留、天气哈希与预算边界、整合事务测试；原生保存和最近项目重开，见 verification.md。
+
+## ADR-013：显式假设与逐项修复的 P2 编辑器（2026-10-03，已接受）
+
+触发：导入错误项目需要可修复，又不能让编辑静默猜测物理输入或覆盖其他方案。选择：本地文本草稿 + 显式 Apply/Cancel；新增输入默认未知，未表达 unknown 的 exposure/boundary 配置保持缺失。模板布局与时间段记录内部版本化假设，覆盖项为用户输入；设备性能、热源、气象和费用保持未知。
+
+完整性错误通过代码、方案 UUID、实体 UUID、字段路径和计数比较，逐项修复可保留既有问题但不引入新问题；计算准备只检查所选方案并叠加包资产检查。重复/悬空条件保留原值顺序和来源，显式选择/删除/冲突清理；外部更新或 undo 后过期草稿不提交。共享几何检查所有方案。采用数值编辑与俯视点击、可访问对象列表，拖拽/任意几何/3D 手柄后续推进；风口输入箭头不是 CFD。证据：跨方案错误转移拒绝、无关编辑无损、显式修复、快照独立、投影往返、源值保留测试及双端编译。

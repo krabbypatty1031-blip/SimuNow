@@ -1,11 +1,13 @@
 # 跨端与 worker 协议
 
 P2-01 已实现项目输入 v2 与不可变场景输入快照，详见 [项目契约](project-model-v2.md)。P1-01 新增 [doctor 环境协议](doctor-v1.md) 和 runtime manifest，真实环境探测与 SimuNow 求解管线状态分开；四级管线仍未配置。
+P2-04 新增 [本地项目包 v1](project-package-v1.md)，包元数据属于 App 文档层，不改变 worker 的物理输入协议。
 
 ## 文件
 
 - Schemas/project-document.schema.json：ProjectDocument v2。
 - Schemas/scenario-input-snapshot.schema.json：ScenarioInputSnapshot v2，尚非运行请求。
+- Schemas/project-package-metadata.schema.json：App 项目包 v1 的基准/模板信息。
 - Schemas/project-draft.schema.json：保留 P0 ProjectDraft v1，通过显式迁移进入 v2。
 - Schemas/simulation-request.schema.json、run-receipt.schema.json：保留 P0 任务边界，本轮未改变。
 - Schemas/runtime-manifest.schema.json、doctor-report.schema.json：CLI 目标环境与实际诊断，独立 snake_case 协议；P0 顶层字段兼容。

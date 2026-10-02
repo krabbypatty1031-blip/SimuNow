@@ -2,7 +2,7 @@
 
 ## 当前实现与扩展边界
 
-P0 Swift 模型和 `Protocols/Schemas` 仅覆盖 ProjectDraft、SimulationRequest、RunReceipt。Draft 不包含几何，不能提交数值求解。完整模型在 P2 / P3 扩展并版本化；不要静默复用 draft 做 solver input。
+P0 draft/request/receipt 保留。P2-01 新增 ProjectDocument v2 与 ScenarioInputSnapshot，Swift/Python/JSON Schema、迁移与输入校验已实现，见 [项目模型 v2](../../Protocols/project-model-v2.md)。Draft 不包含几何，通过显式迁移生成未完成项目；场景快照尚不是可执行 RunInput，P3 扩展引擎与求解设置和输入哈希。
 协议文件是数值边界的唯一依据；display USDZ 只做展示，求解器使用经过简化和验证的几何。
 
 ## 项目包
@@ -24,7 +24,7 @@ Project.simunow/
     fields/*.bin                float32 场与掩码
 ```
 
-上面是目标格式，P0 未实现保存/导入。P2 建立迁移、原子写入和损坏检测。
+上面是目标文件包格式。P2-01 仅建立纯 codec/迁移/快照；磁盘原子保存与导入仍为 P2-04。
 
 ## 完整模型设计
 

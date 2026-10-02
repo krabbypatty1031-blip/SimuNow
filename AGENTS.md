@@ -9,7 +9,7 @@ SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与�
 ## 开工阅读顺序
 
 1. `README.md`、`Plans/README.md`、`Plans/Delivery/status.md`。
-2. `Plans/01-product-scope.md`、`Plans/02-architecture.md`。
+2. `Plans/References/01-product-scope.md`、`Plans/References/02-architecture.md`。
 3. 本次任务相关的设计、协议、物理计划及 `Plans/Phases/P*.md`。
 4. 修改公开接口时读 `Protocols/README.md`；平台能力读 `Plans/Delivery/platform-and-release.md`。
 

@@ -7,7 +7,10 @@ name = "simunow-worker"
 version = "0.1.0"
 description = "SimuNow orchestration scaffold; numerical engines are not yet configured"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pydantic==2.13.4"]
+
+[project.optional-dependencies]
+test = ["jsonschema==4.26.0"]
 
 [project.scripts]
 simunow-worker = "simunow_worker.__main__:main"

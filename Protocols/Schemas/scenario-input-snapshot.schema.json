@@ -1,0 +1,2517 @@
+{
+  "$defs": {
+    "AirPort": {
+      "additionalProperties": false,
+      "properties": {
+        "area": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m2___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Area"
+        },
+        "density": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__kg_m3___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Density"
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction3D"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Position3D"
+        },
+        "role": {
+          "enum": [
+            "supply",
+            "return"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m_s___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Speed"
+        },
+        "volumeFlow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m3_s___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Volumeflow"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "position",
+        "direction",
+        "area",
+        "volumeFlow",
+        "speed",
+        "density"
+      ],
+      "title": "AirPort",
+      "type": "object"
+    },
+    "BoxObstacle": {
+      "additionalProperties": false,
+      "properties": {
+        "dimensions": {
+          "$ref": "#/$defs/Dimensions3D"
+        },
+        "origin": {
+          "$ref": "#/$defs/Position3D"
+        }
+      },
+      "required": [
+        "origin",
+        "dimensions"
+      ],
+      "title": "BoxObstacle",
+      "type": "object"
+    },
+    "Control": {
+      "additionalProperties": false,
+      "properties": {
+        "deviceID": {
+          "format": "uuid",
+          "title": "Deviceid",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/DailySchedule"
+        },
+        "sensorPosition": {
+          "$ref": "#/$defs/Position3D"
+        },
+        "setpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__degC___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Setpoint"
+        }
+      },
+      "required": [
+        "id",
+        "deviceID",
+        "setpoint",
+        "sensorPosition",
+        "schedule"
+      ],
+      "title": "Control",
+      "type": "object"
+    },
+    "CostInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "quotes": {
+          "items": {
+            "$ref": "#/$defs/Quote"
+          },
+          "title": "Quotes",
+          "type": "array"
+        },
+        "tariffs": {
+          "items": {
+            "$ref": "#/$defs/TariffInterval"
+          },
+          "title": "Tariffs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tariffs",
+        "quotes"
+      ],
+      "title": "CostInputs",
+      "type": "object"
+    },
+    "DailySchedule": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/ScheduleInterval"
+          },
+          "title": "Intervals",
+          "type": "array"
+        }
+      },
+      "required": [
+        "intervals"
+      ],
+      "title": "DailySchedule",
+      "type": "object"
+    },
+    "Dimensions3D": {
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Depth"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Height"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Width"
+        }
+      },
+      "required": [
+        "width",
+        "depth",
+        "height"
+      ],
+      "title": "Dimensions3D",
+      "type": "object"
+    },
+    "Direction3D": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "z": {
+          "title": "Z",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "Direction3D",
+      "type": "object"
+    },
+    "ElectricalPowerKnown": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "W",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "ElectricalPowerKnown",
+      "type": "object"
+    },
+    "Envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "surfaces": {
+          "items": {
+            "$ref": "#/$defs/SurfaceCondition"
+          },
+          "title": "Surfaces",
+          "type": "array"
+        },
+        "windows": {
+          "items": {
+            "$ref": "#/$defs/WindowCondition"
+          },
+          "title": "Windows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "surfaces",
+        "windows"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "Environment": {
+      "additionalProperties": false,
+      "properties": {
+        "indoorHumidity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Indoorhumidity"
+        },
+        "outdoorHumidity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Outdoorhumidity"
+        },
+        "outdoorTemperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__degC___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Outdoortemperature"
+        },
+        "representativeDate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Representativedate"
+        },
+        "timeZone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        },
+        "weather": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WeatherReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "outdoorTemperature",
+        "outdoorHumidity",
+        "indoorHumidity"
+      ],
+      "title": "Environment",
+      "type": "object"
+    },
+    "EquipmentGain": {
+      "additionalProperties": false,
+      "properties": {
+        "heat": {
+          "$ref": "#/$defs/HeatGain"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Position3D"
+        },
+        "roomID": {
+          "format": "uuid",
+          "title": "Roomid",
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/DailySchedule"
+        }
+      },
+      "required": [
+        "id",
+        "roomID",
+        "position",
+        "heat",
+        "schedule"
+      ],
+      "title": "EquipmentGain",
+      "type": "object"
+    },
+    "EvaluationInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/CostInputs"
+        }
+      },
+      "required": [
+        "cost"
+      ],
+      "title": "EvaluationInputs",
+      "type": "object"
+    },
+    "ExtensionRecord": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.rectangularRoom"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/RectangularRoom"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.box"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/BoxObstacle"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.hvac.singleSplit"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/SingleSplit"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "kind": {
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]+$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "payloadVersion": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Payloadversion",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "payloadVersion",
+        "payload"
+      ],
+      "title": "ExtensionRecord",
+      "type": "object"
+    },
+    "HVACDevice": {
+      "additionalProperties": false,
+      "properties": {
+        "definition": {
+          "$ref": "#/$defs/HvacRecord"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "ports": {
+          "items": {
+            "$ref": "#/$defs/AirPort"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "position": {
+          "$ref": "#/$defs/Position3D"
+        },
+        "roomID": {
+          "format": "uuid",
+          "title": "Roomid",
+          "type": "string"
+        },
+        "supplyTemperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__degC___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Supplytemperature"
+        }
+      },
+      "required": [
+        "id",
+        "roomID",
+        "name",
+        "position",
+        "definition",
+        "ports",
+        "supplyTemperature"
+      ],
+      "title": "HVACDevice",
+      "type": "object"
+    },
+    "HeatGain": {
+      "additionalProperties": false,
+      "properties": {
+        "convectiveFraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Convectivefraction"
+        },
+        "latent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermalPowerKnown"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Latent"
+        },
+        "sensible": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermalPowerKnown"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Sensible"
+        }
+      },
+      "required": [
+        "sensible",
+        "convectiveFraction",
+        "latent"
+      ],
+      "title": "HeatGain",
+      "type": "object"
+    },
+    "HvacRecord": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.rectangularRoom"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": false
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.box"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": false
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.hvac.singleSplit"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/SingleSplit"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "kind": {
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]+$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "payloadVersion": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Payloadversion",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "payloadVersion",
+        "payload"
+      ],
+      "title": "ExtensionRecord",
+      "type": "object"
+    },
+    "Known_Literal_K____": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "W/(m2.K)",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['W/(m2.K)']]",
+      "type": "object"
+    },
+    "Known_Literal__1___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "1",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['1']]",
+      "type": "object"
+    },
+    "Known_Literal__W_m2___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "W/m2",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['W/m2']]",
+      "type": "object"
+    },
+    "Known_Literal__clo___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "clo",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['clo']]",
+      "type": "object"
+    },
+    "Known_Literal__currency___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "currency",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['currency']]",
+      "type": "object"
+    },
+    "Known_Literal__currency_kWh___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "currency/kWh",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['currency/kWh']]",
+      "type": "object"
+    },
+    "Known_Literal__degC___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "degC",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['degC']]",
+      "type": "object"
+    },
+    "Known_Literal__deg___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "deg",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['deg']]",
+      "type": "object"
+    },
+    "Known_Literal__kg_m3___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "kg/m3",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['kg/m3']]",
+      "type": "object"
+    },
+    "Known_Literal__m2___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "m2",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['m2']]",
+      "type": "object"
+    },
+    "Known_Literal__m3_s___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "m3/s",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['m3/s']]",
+      "type": "object"
+    },
+    "Known_Literal__m___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "m",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['m']]",
+      "type": "object"
+    },
+    "Known_Literal__m_s___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "m/s",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['m/s']]",
+      "type": "object"
+    },
+    "Known_Literal__met___": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "met",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "Known[Literal['met']]",
+      "type": "object"
+    },
+    "Obstacle": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "roomID": {
+          "format": "uuid",
+          "title": "Roomid",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/ObstacleRecord"
+        }
+      },
+      "required": [
+        "id",
+        "roomID",
+        "name",
+        "shape"
+      ],
+      "title": "Obstacle",
+      "type": "object"
+    },
+    "ObstacleRecord": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.rectangularRoom"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": false
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.box"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/BoxObstacle"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.hvac.singleSplit"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": false
+        }
+      ],
+      "properties": {
+        "kind": {
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]+$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "payloadVersion": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Payloadversion",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "payloadVersion",
+        "payload"
+      ],
+      "title": "ExtensionRecord",
+      "type": "object"
+    },
+    "Occupant": {
+      "additionalProperties": false,
+      "properties": {
+        "activity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__met___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Activity"
+        },
+        "clothing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__clo___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Clothing"
+        },
+        "heat": {
+          "$ref": "#/$defs/HeatGain"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/DailySchedule"
+        },
+        "seatID": {
+          "format": "uuid",
+          "title": "Seatid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "seatID",
+        "activity",
+        "clothing",
+        "heat",
+        "schedule"
+      ],
+      "title": "Occupant",
+      "type": "object"
+    },
+    "Opening": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Height"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "door",
+            "window"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "offsetU": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Offsetu"
+        },
+        "offsetV": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Offsetv"
+        },
+        "surfaceID": {
+          "format": "uuid",
+          "title": "Surfaceid",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Width"
+        }
+      },
+      "required": [
+        "id",
+        "surfaceID",
+        "kind",
+        "offsetU",
+        "offsetV",
+        "width",
+        "height"
+      ],
+      "title": "Opening",
+      "type": "object"
+    },
+    "OpeningState": {
+      "additionalProperties": false,
+      "properties": {
+        "openFraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Openfraction"
+        },
+        "openingID": {
+          "format": "uuid",
+          "title": "Openingid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "openingID",
+        "openFraction"
+      ],
+      "title": "OpeningState",
+      "type": "object"
+    },
+    "Position3D": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        },
+        "z": {
+          "title": "Z",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "Position3D",
+      "type": "object"
+    },
+    "ProjectGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "obstacles": {
+          "items": {
+            "$ref": "#/$defs/Obstacle"
+          },
+          "title": "Obstacles",
+          "type": "array"
+        },
+        "rooms": {
+          "items": {
+            "$ref": "#/$defs/Room"
+          },
+          "title": "Rooms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rooms",
+        "obstacles"
+      ],
+      "title": "ProjectGeometry",
+      "type": "object"
+    },
+    "Quote": {
+      "additionalProperties": false,
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__currency___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Amount"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "amount"
+      ],
+      "title": "Quote",
+      "type": "object"
+    },
+    "RectangularRoom": {
+      "additionalProperties": false,
+      "properties": {
+        "dimensions": {
+          "$ref": "#/$defs/Dimensions3D"
+        }
+      },
+      "required": [
+        "dimensions"
+      ],
+      "title": "RectangularRoom",
+      "type": "object"
+    },
+    "Room": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "northAngle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__deg___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Northangle"
+        },
+        "openings": {
+          "items": {
+            "$ref": "#/$defs/Opening"
+          },
+          "title": "Openings",
+          "type": "array"
+        },
+        "shape": {
+          "$ref": "#/$defs/RoomRecord"
+        },
+        "surfaces": {
+          "items": {
+            "$ref": "#/$defs/Surface"
+          },
+          "title": "Surfaces",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "shape",
+        "northAngle",
+        "surfaces",
+        "openings"
+      ],
+      "title": "Room",
+      "type": "object"
+    },
+    "RoomRecord": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.rectangularRoom"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/RectangularRoom"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.geometry.box"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": false
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "simunow.hvac.singleSplit"
+              },
+              "payloadVersion": {
+                "const": 1
+              }
+            },
+            "required": [
+              "kind",
+              "payloadVersion"
+            ]
+          },
+          "then": false
+        }
+      ],
+      "properties": {
+        "kind": {
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]+$",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "title": "Payload",
+          "type": "object"
+        },
+        "payloadVersion": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Payloadversion",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "payloadVersion",
+        "payload"
+      ],
+      "title": "ExtensionRecord",
+      "type": "object"
+    },
+    "RoomVentilation": {
+      "additionalProperties": false,
+      "properties": {
+        "density": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__kg_m3___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Density"
+        },
+        "exfiltration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m3_s___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Exfiltration"
+        },
+        "exhaustAir": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m3_s___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Exhaustair"
+        },
+        "infiltration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m3_s___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Infiltration"
+        },
+        "openings": {
+          "items": {
+            "$ref": "#/$defs/OpeningState"
+          },
+          "title": "Openings",
+          "type": "array"
+        },
+        "outdoorAir": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__m3_s___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Outdoorair"
+        },
+        "roomID": {
+          "format": "uuid",
+          "title": "Roomid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "roomID",
+        "outdoorAir",
+        "exhaustAir",
+        "infiltration",
+        "exfiltration",
+        "density",
+        "openings"
+      ],
+      "title": "RoomVentilation",
+      "type": "object"
+    },
+    "SamplePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Position3D"
+        }
+      },
+      "required": [
+        "id",
+        "position"
+      ],
+      "title": "SamplePoint",
+      "type": "object"
+    },
+    "ScenarioInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "controls": {
+          "items": {
+            "$ref": "#/$defs/Control"
+          },
+          "title": "Controls",
+          "type": "array"
+        },
+        "envelope": {
+          "$ref": "#/$defs/Envelope"
+        },
+        "environment": {
+          "$ref": "#/$defs/Environment"
+        },
+        "hvac": {
+          "items": {
+            "$ref": "#/$defs/HVACDevice"
+          },
+          "title": "Hvac",
+          "type": "array"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage"
+        },
+        "ventilation": {
+          "items": {
+            "$ref": "#/$defs/RoomVentilation"
+          },
+          "title": "Ventilation",
+          "type": "array"
+        }
+      },
+      "required": [
+        "usage",
+        "hvac",
+        "controls",
+        "envelope",
+        "ventilation",
+        "environment"
+      ],
+      "title": "ScenarioInputs",
+      "type": "object"
+    },
+    "ScheduleInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "endMinute": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "title": "Endminute",
+          "type": "integer"
+        },
+        "fraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Fraction"
+        },
+        "startMinute": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "title": "Startminute",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "startMinute",
+        "endMinute",
+        "fraction"
+      ],
+      "title": "ScheduleInterval",
+      "type": "object"
+    },
+    "Seat": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Position3D"
+        },
+        "roomID": {
+          "format": "uuid",
+          "title": "Roomid",
+          "type": "string"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/SamplePoint"
+          },
+          "title": "Samples",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "roomID",
+        "name",
+        "position",
+        "samples"
+      ],
+      "title": "Seat",
+      "type": "object"
+    },
+    "SingleSplit": {
+      "additionalProperties": false,
+      "properties": {
+        "coolingCapacity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThermalPowerKnown"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Coolingcapacity"
+        },
+        "cop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Cop"
+        },
+        "electricalPower": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElectricalPowerKnown"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Electricalpower"
+        }
+      },
+      "required": [
+        "coolingCapacity",
+        "electricalPower",
+        "cop"
+      ],
+      "title": "SingleSplit",
+      "type": "object"
+    },
+    "SourceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "scan",
+            "measured",
+            "manufacturer",
+            "user",
+            "preset",
+            "assumed"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SourceRecord",
+      "type": "object"
+    },
+    "Surface": {
+      "additionalProperties": false,
+      "properties": {
+        "face": {
+          "enum": [
+            "xMin",
+            "xMax",
+            "yMin",
+            "yMax",
+            "floor",
+            "ceiling"
+          ],
+          "title": "Face",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "face"
+      ],
+      "title": "Surface",
+      "type": "object"
+    },
+    "SurfaceCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "boundary": {
+          "$ref": "#/$defs/ThermalBoundary"
+        },
+        "exposure": {
+          "enum": [
+            "outdoors",
+            "adiabatic"
+          ],
+          "title": "Exposure",
+          "type": "string"
+        },
+        "surfaceID": {
+          "format": "uuid",
+          "title": "Surfaceid",
+          "type": "string"
+        },
+        "uValue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal_K____"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Uvalue"
+        }
+      },
+      "required": [
+        "surfaceID",
+        "exposure",
+        "uValue",
+        "boundary"
+      ],
+      "title": "SurfaceCondition",
+      "type": "object"
+    },
+    "TariffInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "endMinute": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "title": "Endminute",
+          "type": "integer"
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__currency_kWh___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Rate"
+        },
+        "startMinute": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "title": "Startminute",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "startMinute",
+        "endMinute",
+        "rate"
+      ],
+      "title": "TariffInterval",
+      "type": "object"
+    },
+    "ThermalBoundary": {
+      "additionalProperties": false,
+      "properties": {
+        "heatFlux": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__W_m2___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heatflux"
+        },
+        "mode": {
+          "enum": [
+            "temperature",
+            "heatFlux",
+            "fromL1"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__degC___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "ThermalBoundary",
+      "type": "object"
+    },
+    "ThermalPowerKnown": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "state": {
+          "const": "known",
+          "title": "State",
+          "type": "string"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "unit": {
+          "const": "W",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "value",
+        "unit",
+        "source"
+      ],
+      "title": "ThermalPowerKnown",
+      "type": "object"
+    },
+    "UncertaintyBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "lower": {
+          "title": "Lower",
+          "type": "number"
+        },
+        "meaning": {
+          "title": "Meaning",
+          "type": "string"
+        },
+        "upper": {
+          "title": "Upper",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lower",
+        "upper",
+        "meaning"
+      ],
+      "title": "UncertaintyBounds",
+      "type": "object"
+    },
+    "Unknown": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "state": {
+          "const": "unknown",
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "title": "Unknown",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "equipment": {
+          "items": {
+            "$ref": "#/$defs/EquipmentGain"
+          },
+          "title": "Equipment",
+          "type": "array"
+        },
+        "occupants": {
+          "items": {
+            "$ref": "#/$defs/Occupant"
+          },
+          "title": "Occupants",
+          "type": "array"
+        },
+        "seats": {
+          "items": {
+            "$ref": "#/$defs/Seat"
+          },
+          "title": "Seats",
+          "type": "array"
+        }
+      },
+      "required": [
+        "seats",
+        "occupants",
+        "equipment"
+      ],
+      "title": "Usage",
+      "type": "object"
+    },
+    "WeatherReference": {
+      "additionalProperties": false,
+      "properties": {
+        "relativePath": {
+          "title": "Relativepath",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relativePath",
+        "sha256"
+      ],
+      "title": "WeatherReference",
+      "type": "object"
+    },
+    "WindowCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "openingID": {
+          "format": "uuid",
+          "title": "Openingid",
+          "type": "string"
+        },
+        "shadingFactor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Shadingfactor"
+        },
+        "shgc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal__1___"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Shgc"
+        },
+        "uValue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Known_Literal_K____"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ],
+          "title": "Uvalue"
+        }
+      },
+      "required": [
+        "openingID",
+        "uValue",
+        "shgc",
+        "shadingFactor"
+      ],
+      "title": "WindowCondition",
+      "type": "object"
+    }
+  },
+  "$id": "urn:simunow:p2:ScenarioInputSnapshot:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "coordinateSystem": {
+      "const": "rightHandedZUp",
+      "title": "Coordinatesystem",
+      "type": "string"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/EvaluationInputs"
+    },
+    "geometry": {
+      "$ref": "#/$defs/ProjectGeometry"
+    },
+    "inputs": {
+      "$ref": "#/$defs/ScenarioInputs"
+    },
+    "lengthUnit": {
+      "const": "m",
+      "title": "Lengthunit",
+      "type": "string"
+    },
+    "projectID": {
+      "format": "uuid",
+      "title": "Projectid",
+      "type": "string"
+    },
+    "scenarioID": {
+      "format": "uuid",
+      "title": "Scenarioid",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 2,
+      "title": "Schemaversion",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectID",
+    "scenarioID",
+    "lengthUnit",
+    "coordinateSystem",
+    "geometry",
+    "inputs",
+    "evaluation"
+  ],
+  "title": "ScenarioInputSnapshot",
+  "type": "object"
+}

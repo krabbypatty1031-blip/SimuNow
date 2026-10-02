@@ -21,7 +21,7 @@ public enum SpaceType: String, Codable, CaseIterable, Sendable {
     case office, classroom, home, publicSpace
 }
 
-/// P0 envelope only. Geometry, HVAC and occupancy are specified in Plans/04-data-contracts.md.
+/// P0 envelope only. Geometry, HVAC and occupancy are specified in Plans/References/04-data-contracts.md.
 /// A draft is not a runnable physical model.
 public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
     public let schemaVersion: Int

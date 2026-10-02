@@ -7,10 +7,15 @@ import SimuSimulation
 @Observable
 public final class WorkspaceStore {
     public var selection: WorkspaceDestination? = .workspace
-    public var project: ProjectDraft?
+    public var project: ProjectDocument?
+    public let modelRegistry: ModelRegistry
+    public let projectValidator: ProjectValidator
     public let simulationClient: any SimulationClient
 
-    public init(simulationClient: any SimulationClient = UnconfiguredSimulationClient()) {
+    public init(simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
+                modelRegistry: ModelRegistry = .builtIn, projectValidator: ProjectValidator = ProjectValidator()) {
+        self.modelRegistry = modelRegistry
+        self.projectValidator = projectValidator
         self.simulationClient = simulationClient
     }
 }

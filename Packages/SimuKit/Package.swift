@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "SimuDesignSystem", targets: ["SimuDesignSystem"])
     ],
     targets: [
-        .target(name: "SimuCore"),
+        .target(name: "SimuCore", resources: [.process("Resources")]),
         .target(name: "SimuSimulation", dependencies: ["SimuCore"]),
         .target(name: "SimuDesignSystem"),
         .target(name: "SimuVisualization", dependencies: ["SimuCore", "SimuDesignSystem"]),
@@ -21,6 +21,7 @@ let package = Package(
         .target(name: "SimuWorkspace", dependencies: [
             "SimuCore", "SimuSimulation", "SimuVisualization", "SimuReporting", "SimuDesignSystem"
         ]),
-        .testTarget(name: "SimuCoreTests", dependencies: ["SimuCore", "SimuSimulation"])
+        .testTarget(name: "SimuCoreTests", dependencies: ["SimuCore", "SimuSimulation", "SimuVisualization", "SimuWorkspace"]),
+        .testTarget(name: "SimuExtensionTests", dependencies: ["SimuCore"])
     ]
 )

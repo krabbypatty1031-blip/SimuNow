@@ -9,6 +9,7 @@ xcuserdata/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+/test/
 .env
 Artifacts/
 *.simunow/

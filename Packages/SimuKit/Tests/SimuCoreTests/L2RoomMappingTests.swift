@@ -13,8 +13,8 @@ import SimuCore
     #expect(room.supplyTemperatureC != room.setpointC)
     #expect(room.supplySpeedMs == 1.2)
     #expect(room.occupantCount == 8)
-    #expect(room.seats.count == 4)
-    #expect(room.occupantCount != Double(room.seats.count))
+    #expect(room.seats.count == 8)
+    #expect(room.occupantCount == Double(room.seats.count))
     #expect(room.seatHeightM == 1.1)
 }
 
@@ -30,14 +30,13 @@ import SimuCore
     #expect(abs(room.recirculatedAirM3s - 0.088) < 1e-9)
 }
 
-@Test func changingOccupantCountChangesPeopleNotSeatCount() throws {
+@Test func changingOccupantCountKeepsPeopleAndSeatsEqual() throws {
     var draft = try ProjectTemplates.bundled(named: "office").project
-    let baseline = try L2RoomMapping.map(draft: draft)
     #expect(draft.applyOccupantCount(3, source: .user).isEmpty)
     let changed = try L2RoomMapping.map(draft: draft)
     #expect(changed.occupantCount == 3)
-    #expect(changed.seats.count == baseline.seats.count)
-    #expect(changed.occupantCount != Double(changed.seats.count))
+    #expect(changed.seats.count == 3)
+    #expect(changed.occupantCount == Double(changed.seats.count))
     // ADR-012: per-person sensible heat is 57 W; latent (13) stays L1-only.
     #expect(changed.occupantSensibleW == 3 * 57)
 }

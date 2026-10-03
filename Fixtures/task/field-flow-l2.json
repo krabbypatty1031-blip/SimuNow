@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "kind": "velocity_overlay",
+  "quantity": "air_velocity",
+  "unit": "m/s",
+  "coordinateSystem": "rightHandedZUp",
+  "sampleMethod": "nearest_cell",
+  "streamlineMethod": "rk2_nearest_cell",
+  "zM": 1.1,
+  "glyphs": [
+    { "x": 1.5, "y": 1.5, "z": 1.1, "ux": 0.20, "uy": 0.0, "uz": 0.0, "mag": 0.20 },
+    { "x": 3.0, "y": 3.0, "z": 1.1, "ux": 0.16, "uy": 0.0, "uz": -0.02, "mag": 0.161245 }
+  ],
+  "lines": [
+    {
+      "id": "SL1",
+      "points": [
+        { "x": 0.20, "y": 3.0, "z": 2.57, "mag": 0.20 },
+        { "x": 1.40, "y": 3.0, "z": 2.50, "mag": 0.18 },
+        { "x": 2.60, "y": 3.0, "z": 2.30, "mag": 0.12 }
+      ]
+    }
+  ],
+  "stats": {
+    "glyphCount": 2,
+    "lineCount": 1,
+    "minMag": 0.12,
+    "maxMag": 0.20
+  },
+  "inputHash": "fixture-field-flow",
+  "quality": "passed"
+}

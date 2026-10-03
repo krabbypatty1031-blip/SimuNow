@@ -154,7 +154,32 @@ actor RecordingL1Client: L1TaskClient {
     store.applyLocalEngine(repositoryRoot: repo, enginesRoot: engines)
     #expect(store.l1Client.isConfigured)
     #expect(store.canSubmitL1)
+    #expect(store.engineFolderName == engines.lastPathComponent)
+    #expect(store.engineStatus.contains(engines.lastPathComponent))
     #expect(!store.engineStatus.contains("/Users/"))
+}
+
+@MainActor
+@Test func applyLocalEngineMissingBinaryReportsFolderWithoutHomePath() throws {
+    let repo = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let engines = FileManager.default.temporaryDirectory
+        .appendingPathComponent("simunow-empty-engines-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: engines, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: engines) }
+    let store = WorkspaceStore()
+    store.applyLocalEngine(repositoryRoot: repo, enginesRoot: engines)
+    #expect(!store.l1Client.isConfigured)
+    #expect(store.engineFolderName == engines.lastPathComponent)
+    #expect(store.engineStatus.contains(engines.lastPathComponent))
+    #expect(store.engineStatus.contains("没有能耗计算程序"))
+    #expect(!store.engineStatus.contains("还不能估算。请选择计算文件夹。"))
+    #expect(!store.engineStatus.contains("/Users/"))
+    #expect(!UserFacingCopy.containsForbiddenDefaultToken(store.engineStatus))
 }
 #endif
 

@@ -44,7 +44,7 @@ import SimuSimulation
     #expect(restored.hvac?.setpointC.value == 26)
     #expect(restored.hvac?.supplyTemperatureC.value == 16)
     #expect(restored.hvac?.setpointC.value != restored.hvac?.supplyTemperatureC.value)
-    #expect(restored.occupancy?.seats.map(\.id) == ["S1", "S2", "S3", "S4"])
+    #expect(restored.occupancy?.seats.map(\.id) == ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"])
 }
 
 @Test func windowAndSupplyPatchesUseWallSpanNotFullWall() throws {
@@ -130,7 +130,11 @@ private func makeOfficeDraft() -> ProjectDraft {
             Seat(id: "S1", position: Position3D(x: 1.5, y: 1.5, z: 1.1), source: .preset),
             Seat(id: "S2", position: Position3D(x: 1.5, y: 4.5, z: 1.1), source: .preset),
             Seat(id: "S3", position: Position3D(x: 4.5, y: 1.5, z: 1.1), source: .preset),
-            Seat(id: "S4", position: Position3D(x: 4.5, y: 4.5, z: 1.1), source: .preset)
+            Seat(id: "S4", position: Position3D(x: 4.5, y: 4.5, z: 1.1), source: .preset),
+            Seat(id: "S5", position: Position3D(x: 3.0, y: 1.5, z: 1.1), source: .preset),
+            Seat(id: "S6", position: Position3D(x: 3.0, y: 4.5, z: 1.1), source: .preset),
+            Seat(id: "S7", position: Position3D(x: 1.5, y: 3.0, z: 1.1), source: .preset),
+            Seat(id: "S8", position: Position3D(x: 4.5, y: 3.0, z: 1.1), source: .preset)
         ]
     )
     let hvac = HVACModel(

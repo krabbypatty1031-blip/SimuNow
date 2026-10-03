@@ -27,8 +27,8 @@ class L2RoomMappingTests(unittest.TestCase):
         self.assertEqual(room["setpoint_c"]["value"], 26)
         self.assertNotEqual(room["supply"]["t_c"]["value"], room["setpoint_c"]["value"])
         self.assertEqual(room["gains"]["n_people"]["value"], 8)
-        self.assertEqual(len(room["seats"]), 4)
-        self.assertNotEqual(room["gains"]["n_people"]["value"], len(room["seats"]))
+        self.assertEqual(len(room["seats"]), 8)
+        self.assertEqual(room["gains"]["n_people"]["value"], len(room["seats"]))
         self.assertEqual(room["seat_height_m"]["value"], 1.1)
 
     def test_office_omits_furniture_envelope_and_quality_pass(self):
@@ -45,7 +45,7 @@ class L2RoomMappingTests(unittest.TestCase):
         draft["occupancy"]["occupantCount"]["value"] = 3
         room = project_to_l2_room(draft)
         self.assertEqual(room["gains"]["n_people"]["value"], 3)
-        self.assertEqual(len(room["seats"]), 4)
+        self.assertEqual(len(room["seats"]), 8)
         # ADR-012: people_w is per-person SENSIBLE heat (57 W office template).
         self.assertEqual(room["gains"]["people_w"]["value"], 57)
 

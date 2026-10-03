@@ -53,10 +53,14 @@
 | RoomPlan/实测/代理/批量 | 本期不做（用户决定 2026-10-03） | P6/P7 延后至赛后第 3–8 周路线，阶段计划文档保留不改目标 |
 | UX 用户向界面第一轮 | 已通（呈现层，非 3D） | `UserFacingCopy` + 四页/检查器/PDF/视口人话。`Scripts/check.sh test`：SimuCoreTests 170 + SimuVisualizationTests 11。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。提交按钮在「用电与舒适」。哈希/UUID 只进 PDF「详细编号」。3D 未做（ADR-016）。手测八条清单待 Debug 点一遍 |
 | UX 展示两位小数 | 已通 | 用户看见的数字走 `UserFacingCopy.displayNumber`（两位）。存值与会计半入（10.33112 kWh / 12.397 HKD）未改。检查器输入最多两位。`Scripts/check.sh test`：SimuCoreTests 171 + SimuVisualizationTests 11；`mac` / `ios` BUILD SUCCEEDED |
+| 3D 视口方案 A | 已通（只读 RealityKit + 示意网格） | macOS 15 / iOS 18 走 `RoomRealityView`：拖转/捏合；壁挂室内机/回风格栅、带框窗门、示意桌、椅+坐着的人；质量通过才画坐姿高度温度切片。检查器增删窗/门/家具/座位/空调后视口立刻重建。办公室模板仍无家具盒（`omitted: furniture_boxes`），不编造桌子。macOS 14 / iOS 17 仍是 Canvas。无点选、无三维拖柄。`Scripts/check.sh test`：SimuCoreTests 172 + SimuVisualizationTests 28。`mac` / `ios` BUILD SUCCEEDED。钉版数字未改。App Debug 三维手测待用户点 |
+| 人数与座位一致 | 已通（编辑层） | 加座位加一人，删座位减一人（至少留 1），改人数会增删座位。办公室仍 8 人发热，座位补到 8；教室 24 人 / 24 座。每人显热仍 57 W，钉版 L1/L2 数字未重跑。旧 `project-v2-office.json` 仍是 8 人 4 座，加载会提示不一致。`Scripts/check.sh test`：SimuCoreTests 177 + SimuVisualizationTests 28。 |
+| 三维气流叠加 | 已通（质量门控） | 质量通过才写 `field-flow.json`：坐姿高度速度箭头 + 从求解进口积出的稳态流线。箭头长度是显示放大，不是真实位移，也不是开机降温。旧 L2 run 没有该文件时只显示温度切片。钉版 L1/L2 数字未重跑。`Scripts/check.sh test`：SimuCoreTests 181 + SimuVisualizationTests 31。 |
+| 计算文件夹选择反馈 | 已通（检查器） | 「计算准备」移到项目区下方并默认展开。选完后顶部「计算」显示结果与文件夹名（仅 basename）。取消写「没有选择文件夹」；不合格文件夹说明缺能耗程序/副本，不再复用未选时的闲置句。路径不进界面。 |
 
 ## 下一步
 
-用户向界面第一轮已落地（[UX-user-facing-ui](../Phases/UX-user-facing-ui/UX-user-facing-ui.md)）。**下一工作包是 ADR-016 的 RealityKit 3D**，必须复用同一套 `UserFacingCopy`，不能把 `z0` / `L1` 画回界面。证据 PDF 的数字来自固定 run，叙述器可选；无密钥仍可导出。质量失败或使用条件不同不能当有效建议导出。这一天电费不是全年电费，改造费仍是「待报价」，没有回收期。合适的座位不是实测满意率，无场不写 0%。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
+方案 A 三维视口已落地（[3D-realitykit-viewport](../Phases/3D-realitykit-viewport/3D-realitykit-viewport.md)），示意网格与质量门控气流已接到现有草稿对象。下一步是 App Debug 手测三维：拖转、捏合、有场才上色、重跑 L2 后看到箭头/流线、增删窗/人/空调后视口更新、对比两列同朝向。不做点选/三维拖柄，除非另开方案 B/C。证据 PDF 的数字来自固定 run，叙述器可选；无密钥仍可导出。质量失败或使用条件不同不能当有效建议导出。这一天电费不是全年电费，改造费仍是「待报价」，没有回收期。合适的座位不是实测满意率，无场不写 0%。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
 
 ## P5 阶段结论
 

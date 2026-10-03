@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from field_flow import write_flow
 from field_slice import write_slice
 from foam_io import latest_time, parse_scalar_field, parse_vector_field
 from quality import inlet_conduction_w, mass_energy_from_fluxes
@@ -356,6 +357,19 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
             input_hash=digest,
             quality_pass=quality["pass"],
             temperature=temperature,
+            cx=cx,
+            cy=cy,
+            cz=cz,
+        )
+        # Same quality gate as the temperature slice. Failed fields get no
+        # invented arrows; glyph spacing never changes seat |U|.
+        write_flow(
+            run_dir,
+            room,
+            z_m=float(room["seats"][0]["z_m"]),
+            input_hash=digest,
+            quality_pass=quality["pass"],
+            velocity=velocity,
             cx=cx,
             cy=cy,
             cz=cz,

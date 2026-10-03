@@ -122,10 +122,12 @@ import Testing
         size: Position3D(x: 1.2, y: 0.7, z: 0.75)
     )
     _ = draft.applySeat(id: "S1", position: Position3D(x: 1.5, y: 1.5, z: 1.1), source: .user)
+    _ = draft.applySeat(id: "S2", position: Position3D(x: 2.5, y: 2.5, z: 1.1), source: .user)
     draft.removeObstacle(id: "F1")
-    draft.removeSeat(id: "S1")
+    _ = draft.removeSeat(id: "S1")
     #expect(draft.geometry?.obstacles.isEmpty == true)
-    #expect(draft.occupancy?.seats.isEmpty == true)
+    #expect(draft.occupancy?.seats.map(\.id) == ["S2"])
+    #expect(draft.occupancy?.occupantCount.value == 1)
 }
 
 @Test func nextPrefixedIDSkipsExistingRatherThanOverwriting() {

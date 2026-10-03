@@ -24,8 +24,25 @@ public struct WallPatchScene: Equatable, Sendable {
     }
 }
 
-/// Seat marker in computation metres (Z-up, seat head height). Drawn as a
-/// sample point; it is not a second heat source and not a comfort verdict.
+/// Furniture box in computation metres (Z-up). Same origin/size as the
+/// draft obstacle; the stored id stays on the model.
+public struct FurnitureScene: Equatable, Identifiable, Sendable {
+    public var id: String
+    public var origin: Position3D
+    public var size: Position3D
+    public var displayName: String
+
+    public init(id: String, origin: Position3D, size: Position3D, displayName: String) {
+        self.id = id
+        self.origin = origin
+        self.size = size
+        self.displayName = displayName
+    }
+}
+
+/// Seat marker in computation metres (Z-up, seat head height). The 3D view
+/// draws a chair and seated figure here; it is not a second heat source
+/// and not a comfort verdict.
 public struct SeatScene: Equatable, Identifiable, Sendable {
     public var id: String
     public var position: Position3D
@@ -51,6 +68,7 @@ public struct RoomScene: Equatable, Sendable {
     public var doors: [WallPatchScene]
     public var supply: WallPatchScene?
     public var returnAir: WallPatchScene?
+    public var furniture: [FurnitureScene]
     public var seats: [SeatScene]
     /// Same order as `seats`. Used by VoiceOver and on-canvas labels.
     public var seatDisplayNames: [String] { seats.map(\.displayName) }
@@ -68,6 +86,14 @@ public struct RoomScene: Equatable, Sendable {
         doors = geometry.openings.filter { $0.kind == .door }.map(Self.patch)
         supply = draft.hvac.map { Self.patch($0.supply) }
         returnAir = draft.hvac.map { Self.patch($0.returnTerminal) }
+        furniture = geometry.obstacles.enumerated().map { index, box in
+            FurnitureScene(
+                id: box.id,
+                origin: box.origin,
+                size: box.size,
+                displayName: UserFacingCopy.furnitureTitle(index: index)
+            )
+        }
         let draftSeats = draft.occupancy?.seats ?? []
         seats = draftSeats.map { seat in
             SeatScene(
@@ -145,6 +171,9 @@ public struct RoomScene: Equatable, Sendable {
         }
         if !doors.isEmpty {
             parts.append("\(doors.count) 扇门")
+        }
+        if !furniture.isEmpty {
+            parts.append("\(furniture.count) 件家具")
         }
         if supply != nil {
             parts.append(UserFacingCopy.terminalTitle(isSupply: true))

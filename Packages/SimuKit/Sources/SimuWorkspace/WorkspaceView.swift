@@ -102,7 +102,7 @@ public struct WorkspaceView: View {
             emptyProjectPane
         } else {
             // The slice only exists for a quality-passed L2 run; nil draws no fake color.
-            SimulationViewport(draft: store.project, field: store.lastFieldSlice)
+            SimulationViewport(draft: store.project, field: store.lastFieldSlice, flow: store.lastFlowOverlay)
         }
         #else
         NavigationStack {
@@ -110,7 +110,7 @@ public struct WorkspaceView: View {
                 if store.project == nil {
                     emptyProjectPane
                 } else {
-                    SimulationViewport(draft: store.project, field: store.lastFieldSlice)
+                    SimulationViewport(draft: store.project, field: store.lastFieldSlice, flow: store.lastFlowOverlay)
                 }
                 NavigationLink("编辑房间") {
                     RoomEditorForm(store: store)
@@ -189,6 +189,16 @@ public struct WorkspaceView: View {
                         LabeledContent("温度范围", value: sliceRangeText(slice))
                     } else {
                         Text("还没有通过检查的温度图。未通过的数据不当有效结果。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let flow = store.lastFlowOverlay, let maxMag = flow.stats.maxMag {
+                        LabeledContent("气流范围", value: flowRangeText(flow, maxMag: maxMag))
+                        Text("箭头和流线来自通过检查的稳态速度场。箭头已放大，不是真实位移，也不是开机降温。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if store.lastFieldSlice != nil {
+                        Text("这次结果还没有气流图。重新估算后才会画箭头和流线。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -327,6 +337,7 @@ public struct WorkspaceView: View {
             SimulationViewport(
                 draft: record.draft,
                 field: record.slice,
+                flow: record.flow,
                 sharedPalette: sharedComparisonPalette,
                 yaw: sharedYaw
             )
@@ -383,6 +394,10 @@ public struct WorkspaceView: View {
             return "未知"
         }
         return UserFacingCopy.displayRange(minC, maxC, unit: "°C")
+    }
+
+    private func flowRangeText(_ flow: FlowOverlay, maxMag: Double) -> String {
+        UserFacingCopy.displayRange(flow.stats.minMag ?? 0, maxMag, unit: "m/s")
     }
 
     private func temperatureText(_ value: Double?, unit: String) -> String {

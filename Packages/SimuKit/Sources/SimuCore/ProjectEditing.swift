@@ -210,8 +210,17 @@ extension ProjectDraft {
             equipmentW: PhysicalQuantity(value: 0, unit: "W", source: .user),
             seats: []
         )
+        let isNew = !occupancy.seats.contains { $0.id == seat.id }
         occupancy.seats.removeAll { $0.id == seat.id }
         occupancy.seats.append(seat)
+        // A new seat is a new person. Moving an existing seat keeps the count.
+        if isNew {
+            occupancy.occupantCount = PhysicalQuantity(
+                value: Double(occupancy.seats.count),
+                unit: "1",
+                source: seat.source
+            )
+        }
         self.occupancy = occupancy
         return allFieldIssues()
     }
@@ -221,16 +230,26 @@ extension ProjectDraft {
         upsertSeat(Seat(id: id, position: position, source: source))
     }
 
-    /// Headcount is a thermal source count, not the number of seat sample points.
+    /// Headcount and seat count stay equal. Extra seats are placed in the room; extras are dropped from the end.
     @discardableResult
     public mutating func applyOccupantCount(_ value: Double, source: ParameterSource) -> [FieldIssue] {
-        guard value > 0 else {
-            return [FieldIssue(path: "occupancy.occupantCount", message: "人数必须为正")]
+        guard value >= 1, value == value.rounded() else {
+            return [FieldIssue(path: "occupancy.occupantCount", message: "人数必须为正整数")]
         }
         guard var occupancy else {
             return [FieldIssue(path: "occupancy", message: "请先从模板创建人员分区")]
         }
-        occupancy.occupantCount = PhysicalQuantity(value: value, unit: "1", source: source)
+        let target = Int(value)
+        var seats = occupancy.seats
+        if seats.count > target {
+            seats = Array(seats.prefix(target))
+        }
+        while seats.count < target {
+            let id = ProjectDraft.nextPrefixedID(prefix: "S", existing: seats.map(\.id))
+            seats.append(Seat(id: id, position: Self.nextSeatPosition(in: geometry, existing: seats), source: source))
+        }
+        occupancy.seats = seats
+        occupancy.occupantCount = PhysicalQuantity(value: Double(target), unit: "1", source: source)
         self.occupancy = occupancy
         return allFieldIssues()
     }
@@ -260,8 +279,21 @@ extension ProjectDraft {
         return allFieldIssues()
     }
 
-    public mutating func removeSeat(id: String) {
-        occupancy?.seats.removeAll { $0.id == id }
+    @discardableResult
+    public mutating func removeSeat(id: String) -> [FieldIssue] {
+        guard var occupancy else { return allFieldIssues() }
+        guard occupancy.seats.contains(where: { $0.id == id }) else { return allFieldIssues() }
+        if occupancy.seats.count <= 1 {
+            return [FieldIssue(path: "occupancy.seats.\(id)", message: "至少保留一个座位")] + allFieldIssues()
+        }
+        occupancy.seats.removeAll { $0.id == id }
+        occupancy.occupantCount = PhysicalQuantity(
+            value: Double(occupancy.seats.count),
+            unit: "1",
+            source: .user
+        )
+        self.occupancy = occupancy
+        return allFieldIssues()
     }
 
     @discardableResult
@@ -283,6 +315,11 @@ extension ProjectDraft {
             cop: PhysicalQuantity(value: 3, unit: "1", source: .assumed)
         )
         return allFieldIssues()
+    }
+
+    /// Drops the split AC. Seats and openings stay; the inspector can install again.
+    public mutating func removeHVAC() {
+        hvac = nil
     }
 
     @discardableResult
@@ -373,15 +410,57 @@ extension ProjectDraft {
     }
 
     public func seatIssues() -> [FieldIssue] {
-        guard let geometry else {
-            return occupancy?.seats.map { FieldIssue(path: "occupancy.seats.\($0.id)", message: "请先填写房间尺寸") } ?? []
+        var issues: [FieldIssue] = []
+        if let occupancy {
+            let people = occupancy.occupantCount.value
+            let seats = occupancy.seats.count
+            if people != Double(seats) {
+                issues.append(FieldIssue(path: "occupancy.occupantCount", message: "人数必须与座位数相同"))
+            }
         }
-        return (occupancy?.seats ?? []).compactMap { seat in
+        guard let geometry else {
+            issues.append(contentsOf: occupancy?.seats.map { FieldIssue(path: "occupancy.seats.\($0.id)", message: "请先填写房间尺寸") } ?? [])
+            return issues
+        }
+        issues.append(contentsOf: (occupancy?.seats ?? []).compactMap { seat in
             guard geometry.containsSeat(seat) else {
                 return FieldIssue(path: "occupancy.seats.\(seat.id)", message: "座位采样点必须在流体域内")
             }
             return nil
+        })
+        return issues
+    }
+
+    /// Place a new seat inside the room, away from existing sample points.
+    private static func nextSeatPosition(in geometry: RoomGeometry?, existing: [Seat]) -> Position3D {
+        let sizeX = geometry?.sizeX.value ?? 6
+        let sizeY = geometry?.sizeY.value ?? 6
+        let margin = 1.0
+        let step = 1.2
+        var x = margin
+        var y = margin
+        func occupied(_ x: Double, _ y: Double) -> Bool {
+            existing.contains { hypot($0.position.x - x, $0.position.y - y) < 0.35 }
         }
+        var attempts = 0
+        while occupied(x, y) && attempts < 200 {
+            x += step
+            if x > sizeX - margin {
+                x = margin
+                y += step
+            }
+            if y > sizeY - margin {
+                x = margin + Double(existing.count % 7) * 0.55
+                y = margin + Double((existing.count / 7) % 7) * 0.55
+                break
+            }
+            attempts += 1
+        }
+        return Position3D(
+            x: min(max(x, 0.3), max(sizeX - 0.3, 0.3)),
+            y: min(max(y, 0.3), max(sizeY - 0.3, 0.3)),
+            z: 1.1
+        )
     }
 
     public func hvacIssues() -> [FieldIssue] {

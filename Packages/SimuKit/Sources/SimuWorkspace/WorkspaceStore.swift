@@ -34,6 +34,8 @@ public final class WorkspaceStore {
     /// Seat-height temperature slice from the latest quality-passed L2 run.
     /// Quality-failed runs produce nil, never a fabricated field.
     public var lastFieldSlice: FieldSlice?
+    /// Steady velocity glyphs and streamlines from the same quality-passed run.
+    public var lastFlowOverlay: FlowOverlay?
     public var lastBoundary: L2Boundary?
     public var runEvents: [SimulationEvent] = []
     public var runMessage: String?
@@ -41,6 +43,10 @@ public final class WorkspaceStore {
     public var engineStatus = "还不能估算。请在「计算准备」里选择计算文件夹。"
     public var pendingRepositoryRoot: URL?
     public var pendingEnginesRoot: URL?
+    /// Folder basename only. Full paths stay out of the inspector.
+    public var engineFolderName: String? {
+        pendingEnginesRoot?.lastPathComponent
+    }
 
     public init(
         simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
@@ -157,14 +163,20 @@ public final class WorkspaceStore {
     }
 
     public func removeSeat(id: String) {
-        project?.removeSeat(id: id)
-        fieldIssues = project?.allFieldIssues() ?? []
+        guard var draft = project else { return }
+        fieldIssues = draft.removeSeat(id: id)
+        project = draft
     }
 
     public func installDefaultSplitAC() {
         var draft = project ?? ProjectDraft(name: "未命名房间")
         fieldIssues = draft.installDefaultSplitAC()
         project = draft
+    }
+
+    public func removeHVAC() {
+        project?.removeHVAC()
+        fieldIssues = project?.allFieldIssues() ?? []
     }
 
     public func applySupplyTerminal(
@@ -379,6 +391,7 @@ public final class WorkspaceStore {
             lastL2Result = try await l2Client.loadResult(runID: receipt.identity.runID)
             // The slice only exists for a quality-passed field; nil is honest.
             lastFieldSlice = try await l2Client.loadFieldSlice(runID: receipt.identity.runID)
+            lastFlowOverlay = try await l2Client.loadFlowOverlay(runID: receipt.identity.runID)
             if receipt.state == .failed {
                 runMessage = "座位冷热还看不出来，不会写成 0 度。"
             }
@@ -515,6 +528,7 @@ public final class WorkspaceStore {
             quality: result.quality,
             metrics: result.metrics,
             slice: lastL2Result == nil ? nil : lastFieldSlice,
+            flow: lastL2Result == nil ? nil : lastFlowOverlay,
             basis: basis,
             draft: project,
             dayCost: frozenDayCost(project: project),
@@ -660,7 +674,10 @@ public final class WorkspaceStore {
         guard let url = ProjectLocationPicker.requestDirectoryURL(
             message: "选择含计算程序的文件夹。App 已自带时不必选。",
             prompt: "选择程序副本"
-        ) else { return }
+        ) else {
+            engineStatus = "没有选择程序副本。"
+            return
+        }
         pendingRepositoryRoot = url
         if let engines = pendingEnginesRoot {
             applyEnginesOnly(engines)
@@ -673,15 +690,20 @@ public final class WorkspaceStore {
         guard let url = ProjectLocationPicker.requestDirectoryURL(
             message: "选择计算文件夹，只需选一次。",
             prompt: "选择计算文件夹"
-        ) else { return }
+        ) else {
+            // Cancel used to return with the idle sentence unchanged.
+            engineStatus = "没有选择文件夹。"
+            return
+        }
         applyEnginesOnly(url)
     }
 
     /// Stage worker into the app container, then point L1 at the staged tree plus engines.
     public func applyEnginesOnly(_ enginesRoot: URL, runtimeRoot: URL? = nil) {
         pendingEnginesRoot = enginesRoot
+        let name = enginesRoot.lastPathComponent
         guard let source = workerSourceRoot() else {
-            engineStatus = "已选计算文件夹，还缺程序副本。"
+            engineStatus = "已选「\(name)」，还缺程序副本。"
             return
         }
         do {
@@ -699,7 +721,8 @@ public final class WorkspaceStore {
         } catch {
             l1Client = UnconfiguredL1TaskClient()
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = error.localizedDescription
+            // Staging errors can mention filenames; never echo a home path.
+            engineStatus = "已选「\(name)」，程序副本复制失败。请再选一次。"
         }
     }
 
@@ -723,16 +746,41 @@ public final class WorkspaceStore {
             runRoot: runRoot
         )
         l2Client = l2
+        let name = enginesRoot.lastPathComponent
         if client.isConfigured && l2.isConfigured {
-            engineStatus = "可以估算用电，也可以查看座位冷热。"
+            engineStatus = "已选「\(name)」，可以估算用电，也可以查看座位冷热。"
         } else if client.isConfigured {
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = "可以估算这一天用电。座位冷热还需要气流计算文件夹。"
+            engineStatus = "已选「\(name)」，可以估算这一天用电。座位冷热还需要气流计算程序。"
         } else {
             l1Client = UnconfiguredL1TaskClient()
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = "还不能估算。请选择计算文件夹。"
+            engineStatus = Self.engineNotReadyMessage(
+                folderName: name,
+                repositoryRoot: repositoryRoot,
+                enginesRoot: enginesRoot
+            )
         }
+    }
+
+    /// Say what the picked folder is missing. Do not repeat the idle prompt.
+    private static func engineNotReadyMessage(
+        folderName: String,
+        repositoryRoot: URL,
+        enginesRoot: URL
+    ) -> String {
+        let energyPlus = LocalEngineProbe.energyPlusURL(in: enginesRoot)
+        let worker = LocalEngineProbe.workerURL(in: repositoryRoot)
+        if !FileManager.default.fileExists(atPath: energyPlus.path) {
+            return "已选「\(folderName)」，里面没有能耗计算程序。"
+        }
+        if !LocalEngineProbe.hasExecuteBit(at: energyPlus.path) {
+            return "已选「\(folderName)」，能耗计算程序还不能运行。"
+        }
+        if !FileManager.default.fileExists(atPath: worker.path) {
+            return "已选「\(folderName)」，还缺程序副本。"
+        }
+        return "已选「\(folderName)」，还不能估算。"
     }
 
     private func workerSourceRoot() -> URL? {
@@ -796,6 +844,7 @@ public final class WorkspaceStore {
         lastL1Result = nil
         lastL2Result = nil
         lastFieldSlice = nil
+        lastFlowOverlay = nil
         lastBoundary = nil
         runEvents = []
         runMessage = nil

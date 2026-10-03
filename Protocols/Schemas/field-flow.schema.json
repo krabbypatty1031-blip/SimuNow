@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p4:field-flow:1",
+  "title": "field-flow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "kind", "quantity", "unit", "coordinateSystem",
+    "sampleMethod", "streamlineMethod", "zM", "glyphs", "lines",
+    "stats", "inputHash", "quality"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "velocity_overlay" },
+    "quantity": { "type": "string", "const": "air_velocity" },
+    "unit": { "type": "string", "const": "m/s" },
+    "coordinateSystem": { "type": "string", "const": "rightHandedZUp" },
+    "sampleMethod": { "type": "string", "const": "nearest_cell" },
+    "streamlineMethod": { "type": "string", "const": "rk2_nearest_cell" },
+    "zM": { "type": "number", "description": "Glyph plane height, metres, computation frame." },
+    "glyphs": {
+      "type": "array",
+      "description": "Seat-height velocity samples. Display length is chosen by the App; values are physical m/s.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["x", "y", "z", "ux", "uy", "uz", "mag"],
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" },
+          "ux": { "type": "number" },
+          "uy": { "type": "number" },
+          "uz": { "type": "number" },
+          "mag": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "lines": {
+      "type": "array",
+      "description": "RK2 polylines that terminate at solids. Steady field only; not a cool-down animation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "points"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y", "z", "mag"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" },
+                "mag": { "type": "number", "minimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["glyphCount", "lineCount", "minMag", "maxMag"],
+      "properties": {
+        "glyphCount": { "type": "integer", "minimum": 0 },
+        "lineCount": { "type": "integer", "minimum": 0 },
+        "minMag": { "type": ["number", "null"] },
+        "maxMag": { "type": ["number", "null"] }
+      }
+    },
+    "inputHash": { "type": "string", "minLength": 1, "description": "Hash of the P1 room input this field solved from." },
+    "quality": { "enum": ["passed"] }
+  }
+}

@@ -5,7 +5,7 @@ import SimuCore
 /// field's own valid-cell statistics, so two candidates with the same range
 /// show comparable colours; each run states its range in the legend instead
 /// of quietly renormalizing (P4-06 pins the shared range).
-public struct SlicePalette: Sendable {
+public struct SlicePalette: Equatable, Sendable {
     /// Coldest valid cell in the field, degrees Celsius.
     public var minC: Double
     /// Warmest valid cell in the field, degrees Celsius.
@@ -14,6 +14,22 @@ public struct SlicePalette: Sendable {
     public init(minC: Double, maxC: Double) {
         self.minC = minC
         self.maxC = maxC
+    }
+
+    /// Shared comparison range wins; otherwise the field's own passed
+    /// statistics. A failed or missing field never produces a palette, so
+    /// no colour is drawn from an invalid slice.
+    public static func resolved(field: FieldSlice?, shared: SlicePalette?) -> SlicePalette? {
+        guard let field, field.quality == "passed" else {
+            return nil
+        }
+        if let shared {
+            return shared
+        }
+        guard let minC = field.stats.minC, let maxC = field.stats.maxC else {
+            return nil
+        }
+        return SlicePalette(minC: minC, maxC: maxC)
     }
 
     /// Hue in [0, 2/3]: blue (2/3) at `minC` through cyan/green/yellow to

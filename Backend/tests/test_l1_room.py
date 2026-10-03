@@ -26,8 +26,8 @@ class L1RoomMappingTests(unittest.TestCase):
         self.assertEqual(room["gains"]["n_people"]["value"], 8)
         self.assertEqual(room["schedule"]["occupancy"]["start"], "08:00")
         self.assertEqual(room["schedule"]["occupancy"]["end"], "18:00")
-        self.assertEqual(len(OFFICE["occupancy"]["seats"]), 4)
-        self.assertNotEqual(room["gains"]["n_people"]["value"], len(OFFICE["occupancy"]["seats"]))
+        self.assertEqual(len(OFFICE["occupancy"]["seats"]), 8)
+        self.assertEqual(room["gains"]["n_people"]["value"], len(OFFICE["occupancy"]["seats"]))
 
     def test_incomplete_draft_is_rejected(self):
         with self.assertRaises(ValueError):

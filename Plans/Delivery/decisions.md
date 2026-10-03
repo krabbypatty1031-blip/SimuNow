@@ -147,14 +147,16 @@
 影响：P5-04 先做证据包与无模型 PDF，再接可选叙述器。P5-05 离线演示验收的是证据 PDF，不是 API 连通。具体供应商/baseURL 实现时写入本地配置，不写死公钥。
 验证：P5-04 已测。`ReportEvidence` 数字等于候选 `seat_pass_ratio` 与代表日费用；无 `SIMUNOW_REPORT_API_KEY` 时 `narrate` 返回 nil 且 PDF 仍写出；夹具「节电 37%」整段被拒为「叙述未采用（含证据外数字）」。假密钥不出现在 PDF、project JSON 或叙述日志。见 `RecommendationTests`、`ReportEvidenceTests`、`NarratorGuardTests`、`Backend.tests.test_recommend`。
 
-## ADR-016：3D 视口候选路线选 RealityKit，spike 先行验证（已接受，spike 待验证）
+## ADR-016：3D 视口选 RealityKit 方案 A（只读查看，已接受并落地）
 
 日期：2026-10-03。
-背景：用户要求调研 3D/更佳展示方式（信息以用户为核心），并确认 Apple 官方 RealityKit 能否加入当前项目。查证（developer.apple.com/documentation/realitykit）：RealityKit 官方覆盖 iOS/iPadOS/macOS/tvOS/visionOS；`RealityView`（SwiftUI 入口，`init(make:update:)`，make 闭包 `@MainActor @Sendable async`）首发版本恰为 macOS 14 / iOS 17——与 `Packages/SimuKit` 的 `platforms: [.macOS(.v14), .iOS(.v17)]` **逐位对齐，无需提升最低部署版本**；自定义几何走 `MeshDescriptor`（positions/triangleIndices/UV）→ `MeshResource.generate(from:)` → `ModelComponent`；`UnlitMaterial` 不受光照影响，正适合「色=温度」的数据色板。已知差距：**无线基元**（无 line/polyline 原语），房间线框需细 Box 实体拼 12 条盒边（数量小，性能无忧）。
-备选：(a) 维持 Canvas 2D 等距投影——已满足 P4-05 验收，但无旋转自由度、纵向剖面表现力弱；(b) SceneKit——有线渲染原语且版本更老，但 Apple 现代投入在 RealityKit，处于维护态；(c) Metal 直绘——控制力最强但 3–4 人团队成本不值；(d) RealityKit。
-选择：(d)。定位为**渲染器候选路线，不挤占 P5 阶段门**；先做半天–1 天 spike 验证再转正式视口项。架构落点：`SimuVisualization`（双平台可用，import 无需 `#if os`）；遵守「渲染器可替换」——保留现有 Canvas 2D `RoomWireframeView` 为默认/降级路径，RealityKit 3D 视口为并列实现，不删旧的。显示红线不随渲染器变化：质量门禁不过不画任何彩色、invalid 格中性灰、稳态场不做暗示时间演化的动画、对比页色标仍走 `SlicePalette` 同源逻辑与联合范围。用户为核心的增强（座位徽章优先、纵向剖面切片）与渲染器解耦，按前述讨论排 P5 增强。P6 协同：RoomPlan 采集同用 RealityKit，提前积累（P6 本期不做，能力不浪费）。
-影响：spike 需验证三项——(1) 切片上色路径（UV + `TextureResource` 纹理 vs per-vertex color buffer，后者本次查证未确认可用性）；(2) `RealityView` 非 visionOS 场景的相机交互成熟度；(3) Swift 6 严格并发下 Entity 非 Sendable 的边界（实体操作全部收在 `@MainActor` make/update 闭包内，与仓库「UI 状态 MainActor」一致）。沙盒无涉：系统框架、无 Process/exec，与 ADR-011 的引擎 exec 例外无关。
-验证：待 spike——`SimuVisualization` 内最小 `RealityView`（6×6×2.8 盒线框细 Box × 12 + 一张切片纹理平面 + 4 座位球），`Scripts/check.sh mac` / `ios` 双端 BUILD SUCCEEDED + 视觉手测；spike 结论回填本条（通过→排期正式视口升级与 `field_slice.py` 纵向剖面提取；不通过→回 Canvas 增强路线，仅记差距）。
+背景：用户要求调研 3D/更佳展示方式（信息以用户为核心）。查证现行 SDK（Xcode 27 / macOS 27 SDK）：`RealityView` 与 `RealityViewCameraContent.camera = .virtual` 的可用性是 **macOS 15 / iOS 18**，不是初稿写的 14/17。工程最低版本仍是 macOS 14 / iOS 17；旧系统走 Canvas `RoomWireframeView`。
+备选：(a) 维持 Canvas 2D；(b) SceneKit；(c) Metal 直绘；(d) RealityKit。交互又分方案 A 只读查看、B 点选、C 三维拖柄。
+选择：(d) + 方案 A。用户 2026-10-03 明确「先按照方案 A 来做」。不做点选、不做 3D 拖柄。架构落点：`SimuVisualization`；Canvas 保留为降级。显示红线不随渲染器变化：质量未通过不画彩色、invalid 格中性灰、稳态场不做时间动画、对比页共用 `SlicePalette` 与 yaw。座位名走 `UserFacingCopy`，不把 `z0` / `L1` 画回界面。
+影响：三项 spike 结论——(1) 切片上色走 `SliceTextureBuilder` CGImage → `TextureResource(image:withName:options:)` + `UnlitMaterial(texture:)`，色=温度；(2) 不用系统 `.orbit` 控件，以免对比页共享 yaw 被各自相机拆开；`ViewportOrbit` 转房间根节点（yaw/pitch/zoom）；(3) Entity 非 Sendable，实体操作全部收在 `@MainActor` `RoomEntityBuilder`。沙盒无涉：系统框架、无 Process/exec。
+验证：2026-10-03 落地。`Scripts/check.sh test`：SimuCoreTests 171 + SimuVisualizationTests 23。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。App Debug 三维手测仍待用户点：拖转、捏合、有场才上色、对比两列同朝向。
+
+**实施补录（2026-10-03，示意三维）**：用户要求模板里的空调、窗、人有可辨认的三维外形，且可随时增删，同时保留温度切片。显示层用 `RoomSchematicMeshes`（壁挂室内机、回风格栅、带框窗门、示意桌、椅+坐姿人偶）；网格尺寸是辨认约定，不改载荷/风量/采样点。办公室模板仍 `obstacles: []`（`omitted: furniture_boxes`），不编造桌子。检查器原有增删窗/门/家具/座位保留；补 `removeHVAC`。`RoomDisplayLayout.buildID` 含贴片与座位坐标，移动或删除会重建 RealityView。切片仍走质量门控 `SliceTextureBuilder`。验证：SimuCoreTests 172 + SimuVisualizationTests 28；`mac` / `ios` BUILD SUCCEEDED。钉版数字未改。仍无点选/三维拖柄。
 
 ## ADR-017：用户向界面第一轮只做呈现，3D 后置（已接受）
 
@@ -162,13 +164,13 @@
 背景：P5 链路已通，但四页与检查器直接展示 `L1`/`z0`/`inputHash`/`PMV`。需要先让非技术人员能对比方案。
 选择：检查器保持总表、加折叠（房间 / 使用 / 空调）；视口只改图例、空状态、座位人话名；提交计算放到「用电与舒适」。点选、拖拽、补画门家具、RealityKit 3D 不进本轮。呈现集中在 `UserFacingCopy`，不改 schema、哈希、质量门。
 影响：第一轮可按 [UX-user-facing-ui](../Phases/UX-user-facing-ui/UX-user-facing-ui.md) 实施。ADR-016 的 RealityKit spike 明确排在本轮完成之后，且必须复用同一套用户文案，不能把求解变量画回界面。
-验证：2026-10-03 落地。`Scripts/check.sh test`：SimuCoreTests 170 + SimuVisualizationTests 11 全绿。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。呈现层 `UserFacingCopy`；检查器默认房间/使用/空调；提交在「用电与舒适」；PDF 正文「对比说明」，哈希在「详细编号」。App Debug 手测仍待用户点一遍八条清单。3D 仍按 ADR-016 后置。
+验证：2026-10-03 落地。`Scripts/check.sh test`：SimuCoreTests 170 + SimuVisualizationTests 11 全绿。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。呈现层 `UserFacingCopy`；检查器默认房间/使用/空调；提交在「用电与舒适」；PDF 正文「对比说明」，哈希在「详细编号」。App Debug 手测仍待用户点一遍八条清单。3D 按 ADR-016 方案 A 另开工作包，本轮不做点选/拖柄。
 
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。
 - 叙述器供应商与 `baseURL` / 模型名：实现 P5-04 时用 OpenAI 兼容接口本地配置，不进仓库。
 - P7：代理/远程/发布渠道。
-- ADR-016 spike 三项验证结果（切片上色路径、相机交互、Swift 6 并发边界）。排期：UX 第一轮完成之后。
+- 方案 B/C（点选座位、三维拖柄）是否做：方案 A 已通后另议。
 
 每条新增决策记录触发原因、备选、选择、影响、验证证据与日期。

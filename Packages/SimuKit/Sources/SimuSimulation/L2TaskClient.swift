@@ -11,6 +11,9 @@ public protocol L2TaskClient: Sendable {
     /// Quality-passed runs write a seat-height temperature slice; quality
     /// failed runs write none, and loading returns nil instead of a fake field.
     func loadFieldSlice(runID: UUID) async throws -> FieldSlice?
+    /// Quality-passed runs may also write glyphs and streamlines. Missing
+    /// file or failed quality returns nil; nothing is sketched in.
+    func loadFlowOverlay(runID: UUID) async throws -> FlowOverlay?
     func loadEvents(runID: UUID) async throws -> [SimulationEvent]
 }
 
@@ -33,6 +36,10 @@ public struct UnconfiguredL2TaskClient: L2TaskClient {
     }
 
     public func loadFieldSlice(runID: UUID) async throws -> FieldSlice? {
+        nil
+    }
+
+    public func loadFlowOverlay(runID: UUID) async throws -> FlowOverlay? {
         nil
     }
 

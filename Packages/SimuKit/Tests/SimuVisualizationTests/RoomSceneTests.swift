@@ -18,8 +18,8 @@ import SimuVisualization
     #expect(scene.doors.isEmpty)
     #expect(scene.supply != nil)
     #expect(scene.returnAir != nil)
-    #expect(scene.seats.count == 4)
-    #expect(scene.seats.map(\.id) == ["S1", "S2", "S3", "S4"])
+    #expect(scene.seats.count == 8)
+    #expect(scene.seats.map(\.id) == ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"])
 }
 
 @Test func roomSceneMapsWallPatchLocalSpansOntoFaces() throws {
@@ -49,6 +49,40 @@ import SimuVisualization
         #expect(seat.position.x > 0 && seat.position.x < scene.sizeXM)
         #expect(seat.position.y > 0 && seat.position.y < scene.sizeYM)
     }
+}
+
+@Test func roomSceneDropsTerminalsWhenHVACIsRemoved() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    draft.removeHVAC()
+    let scene = try #require(RoomScene(draft: draft))
+    #expect(scene.supply == nil)
+    #expect(scene.returnAir == nil)
+    #expect(scene.windows.count == 1)
+    #expect(scene.seats.count == 8)
+}
+
+@Test func officeTemplateHasNoFurnitureUntilTheUserAddsABox() throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let scene = try #require(RoomScene(draft: draft))
+    #expect(scene.furniture.isEmpty)
+    #expect(!scene.accessibilitySummary.contains("家具"))
+}
+
+@Test func roomSceneCarriesDraftFurnitureInComputationMetres() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    draft.geometry?.obstacles = [
+        ObstacleBox(id: "desk-1", origin: Position3D(x: 1, y: 2, z: 0), size: Position3D(x: 1.2, y: 0.6, z: 0.75)),
+    ]
+    let scene = try #require(RoomScene(draft: draft))
+    #expect(scene.furniture.count == 1)
+    let box = try #require(scene.furniture.first)
+    #expect(box.id == "desk-1")
+    #expect(box.origin == Position3D(x: 1, y: 2, z: 0))
+    #expect(box.size == Position3D(x: 1.2, y: 0.6, z: 0.75))
+    #expect(box.displayName == UserFacingCopy.furnitureTitle(index: 0))
+    #expect(scene.accessibilitySummary.contains("1 件家具"))
+    #expect(!scene.accessibilitySummary.contains("desk-1"))
+    #expect(!scene.accessibilitySummary.contains("z0"))
 }
 
 @Test func incompleteModelProducesNoRoomScene() throws {

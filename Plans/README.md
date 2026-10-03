@@ -12,7 +12,7 @@
 | 4 | [数据与文件契约](04-data-contracts.md) | 各模块交换什么数据 |
 | 5 | [物理计算与决策](05-computation-and-decision.md) | 气流、能耗、舒适、成本如何求 |
 | 6 | [排期与任务索引](06-roadmap-and-backlog.md) | 关键路径、时间、责任和依赖 |
-| 7 | [阶段工作包](Phases/) | 每阶段可执行任务、技术、验收与降级。P5 之后先做 [用户向界面](Phases/UX-user-facing-ui/UX-user-facing-ui.md) |
+| 7 | [阶段工作包](Phases/) | 每阶段可执行任务、技术、验收与降级。P5 之后：[用户向界面](Phases/UX-user-facing-ui/UX-user-facing-ui.md) → [3D 视口方案 A](Phases/3D-realitykit-viewport/3D-realitykit-viewport.md) |
 | 8 | [验证计划](Delivery/validation.md) | 工程和物理可信度如何证明 |
 | 9 | [平台与交付](Delivery/platform-and-release.md) | 两端兼容、运行时、打包与发布 |
 | 10 | [风险](Delivery/risks.md)、[决策](Delivery/decisions.md) | 不确定性与取舍 |
@@ -32,7 +32,7 @@ P0 工程骨架（当前）
                                       ↓
                                   UX 用户向界面（呈现，不改物理）
                                       ↓
-                                  3D 视口（ADR-016，UX 之后）
+                                  3D 视口方案 A（ADR-016，只读 RealityKit）
                                       ↓
                                   P6 iOS 采集与现场校准
                                       ↓

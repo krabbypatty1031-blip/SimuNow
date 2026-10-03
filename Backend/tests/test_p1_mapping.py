@@ -30,7 +30,7 @@ class P1MappingTests(unittest.TestCase):
         self.assertEqual(mapped["window"]["s1_m"], 3.75)
         self.assertEqual(mapped["gains"]["lighting_w"], 180)
         self.assertEqual(mapped["seats"][0]["x_m"], 1.5)
-        self.assertEqual(mapped["seat_ids"], ["S1", "S2", "S3", "S4"])
+        self.assertEqual(mapped["seat_ids"], ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"])
         self.assertIn("l1.ua_opaque_w_k", mapped["omitted"])
         self.assertIn("weather_file", mapped["omitted"])
         self.assertNotIn("quality.pass", mapped)

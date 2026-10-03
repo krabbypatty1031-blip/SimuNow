@@ -8,6 +8,7 @@ import SimuCore
 public struct RoomWireframeView: View {
     private let scene: RoomScene
     private let field: FieldSlice?
+    private let flow: FlowOverlay?
     /// Shared comparison palette (P4-06): candidates render against one
     /// physical range instead of renormalising individually. nil keeps the
     /// slice's own range, which is the single-run behaviour.
@@ -18,9 +19,16 @@ public struct RoomWireframeView: View {
     @State private var internalYaw: Double = -0.6
     @State private var dragStartYaw: Double?
 
-    public init(scene: RoomScene, field: FieldSlice? = nil, sharedPalette: SlicePalette? = nil, yaw: Binding<Double>? = nil) {
+    public init(
+        scene: RoomScene,
+        field: FieldSlice? = nil,
+        flow: FlowOverlay? = nil,
+        sharedPalette: SlicePalette? = nil,
+        yaw: Binding<Double>? = nil
+    ) {
         self.scene = scene
         self.field = field
+        self.flow = flow
         self.sharedPalette = sharedPalette
         self.externalYaw = yaw
     }
@@ -37,8 +45,8 @@ public struct RoomWireframeView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .overlay(alignment: .bottom) {
-                if let field, let palette {
-                    legend(for: palette)
+                if palette != nil || flow != nil {
+                    ViewportLegend(palette: palette, flow: flow)
                         .padding(.bottom, 12)
                 }
             }
@@ -59,17 +67,7 @@ public struct RoomWireframeView: View {
     }
 
     private var palette: SlicePalette? {
-        // A shared palette wins so candidates compare on one physical range;
-        // otherwise the slice's own quality-passed range is used.
-        if let sharedPalette {
-            return sharedPalette
-        }
-        // Colour exists only for a quality-passed field with valid stats.
-        guard let field, field.quality == "passed",
-              let minC = field.stats.minC, let maxC = field.stats.maxC else {
-            return nil
-        }
-        return SlicePalette(minC: minC, maxC: maxC)
+        SlicePalette.resolved(field: field, shared: sharedPalette)
     }
 
     private var accessibilityText: String {
@@ -77,33 +75,10 @@ public struct RoomWireframeView: View {
         if let field, let minC = field.stats.minC, let maxC = field.stats.maxC {
             text += "，坐姿高度温度切片 \(UserFacingCopy.displayNumber(minC)) 到 \(UserFacingCopy.displayNumber(maxC)) 摄氏度（质量通过）"
         }
-        return text
-    }
-
-    /// Legend shows the physical range with the unit; the range is evidence.
-    private func legend(for palette: SlicePalette) -> some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            palette.color(forC: palette.minC),
-                            palette.color(forC: palette.minC + (palette.maxC - palette.minC) * 0.5),
-                            palette.color(forC: palette.maxC),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 120, height: 10)
-            Text(palette.legendText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        if let flow, let maxMag = flow.stats.maxMag {
+            text += "，稳态气流箭头和流线，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，箭头已放大，不是开机降温"
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityLabel(Text("温度色标 \(palette.legendText)"))
+        return text
     }
 
     /// All geometry is projected first, then fitted with one uniform scale so
@@ -124,8 +99,11 @@ public struct RoomWireframeView: View {
         for seat in scene.seats {
             allPoints.append(projection.screenPoint(seat.position))
         }
-        if let field, let palette {
+        if let field, palette != nil {
             allPoints.append(contentsOf: slicePoints(field, projection: projection))
+        }
+        if let flow {
+            allPoints.append(contentsOf: flowPoints(flow, projection: projection))
         }
         guard let fit = Self.fitTransform(points: allPoints, in: canvasSize) else {
             return
@@ -163,6 +141,10 @@ public struct RoomWireframeView: View {
             context.stroke(path, with: .color(.primary.opacity(0.75)), lineWidth: 1.5)
         }
 
+        if let flow {
+            drawFlow(flow, projection: projection, fit: fit, in: &context)
+        }
+
         // Seat markers: sample points, drawn on top so they stay visible.
         for seat in scene.seats {
             let center = Self.apply(projection.screenPoint(seat.position), transform: fit)
@@ -193,6 +175,46 @@ public struct RoomWireframeView: View {
             }
         }
         return points
+    }
+
+    private func flowPoints(_ flow: FlowOverlay, projection: IsometricProjection) -> [CGPoint] {
+        var points: [CGPoint] = flow.glyphs.map { projection.screenPoint($0.position) }
+        for line in flow.lines {
+            points.append(contentsOf: line.points.map { projection.screenPoint($0.position) })
+        }
+        return points
+    }
+
+    private func drawFlow(
+        _ flow: FlowOverlay,
+        projection: IsometricProjection,
+        fit: (scale: CGFloat, offset: CGSize),
+        in context: inout GraphicsContext
+    ) {
+        let maxMag = flow.stats.maxMag ?? flow.glyphs.map(\.mag).max() ?? 0.01
+        for line in flow.lines {
+            guard line.points.count >= 2 else { continue }
+            var path = Path()
+            path.move(to: Self.apply(projection.screenPoint(line.points[0].position), transform: fit))
+            for point in line.points.dropFirst() {
+                path.addLine(to: Self.apply(projection.screenPoint(point.position), transform: fit))
+            }
+            context.stroke(path, with: .color(.cyan.opacity(0.85)), lineWidth: 1.6)
+        }
+        for glyph in flow.glyphs {
+            let start = Self.apply(projection.screenPoint(glyph.position), transform: fit)
+            let displayMetres = Double(RoomDisplayLayout.glyphDisplayLength(mag: glyph.mag, maxMag: maxMag))
+            let tip = Position3D(
+                x: glyph.x + glyph.ux / max(glyph.mag, 1e-6) * displayMetres,
+                y: glyph.y + glyph.uy / max(glyph.mag, 1e-6) * displayMetres,
+                z: glyph.z + glyph.uz / max(glyph.mag, 1e-6) * displayMetres
+            )
+            let end = Self.apply(projection.screenPoint(tip), transform: fit)
+            var path = Path()
+            path.move(to: start)
+            path.addLine(to: end)
+            context.stroke(path, with: .color(.cyan), lineWidth: 1.8)
+        }
     }
 
     private func drawSlice(

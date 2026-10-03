@@ -38,7 +38,8 @@ public enum WorkerTreeStaging {
         "quality.py",
         "sample_seats.py",
         "foam_io.py",
-        "field_slice.py"
+        "field_slice.py",
+        "field_flow.py"
     ]
 
     /// Copy only the Python worker and P1 helpers. Engines are never staged:

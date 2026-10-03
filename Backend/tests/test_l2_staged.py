@@ -1,6 +1,6 @@
 """In-app L2 must run from the staged worker tree the App copies.
 
-The App stages Backend/src/simunow_worker plus nine test/p1 helpers plus
+The App stages Backend/src/simunow_worker plus ten test/p1 helpers plus
 test/engines/openfoam.sh into its container runtime. This test rebuilds that
 layout and runs `python -m simunow_worker run-l2` as a subprocess, the same
 way LocalProcessL2Client does, so a missing staged script or a mismatched
@@ -33,6 +33,7 @@ P1_SCRIPTS = [
     "sample_seats.py",
     "foam_io.py",
     "field_slice.py",
+    "field_flow.py",
 ]
 
 

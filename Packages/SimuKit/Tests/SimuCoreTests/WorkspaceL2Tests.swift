@@ -11,6 +11,7 @@ actor RecordingL2Client: L2TaskClient {
     var nextState: RunState = .succeeded
     var cannedResult: SimulationResult?
     var cannedSlice: FieldSlice?
+    var cannedFlow: FlowOverlay?
     var cancelled = Set<UUID>()
     var lastSnapshot: Data?
     var servedIdentity: RunIdentity?
@@ -44,14 +45,24 @@ actor RecordingL2Client: L2TaskClient {
         cannedSlice
     }
 
+    func loadFlowOverlay(runID: UUID) async throws -> FlowOverlay? {
+        cannedFlow
+    }
+
     func loadEvents(runID: UUID) async throws -> [SimulationEvent] {
         []
     }
 
-    func prepare(result: SimulationResult, state: RunState = .succeeded, slice: FieldSlice? = nil) {
+    func prepare(
+        result: SimulationResult,
+        state: RunState = .succeeded,
+        slice: FieldSlice? = nil,
+        flow: FlowOverlay? = nil
+    ) {
         cannedResult = result
         nextState = state
         cannedSlice = slice
+        cannedFlow = flow
     }
 }
 
@@ -65,6 +76,7 @@ actor RecordingL2Client: L2TaskClient {
     #expect(store.activeRun == nil)
     #expect(store.lastResult == nil)
     #expect(store.lastFieldSlice == nil)
+    #expect(store.lastFlowOverlay == nil)
     #expect(store.project?.occupancy?.occupantCount.value == 8)
 }
 
@@ -100,8 +112,25 @@ actor RecordingL2Client: L2TaskClient {
         stats: FieldSlice.SliceStats(validCount: 4, minC: 25.0, maxC: 25.3),
         inputHash: "pending"
     )
+    let flow = FlowOverlay(
+        zM: 1.1,
+        glyphs: [
+            FlowOverlay.Glyph(x: 1.5, y: 1.5, z: 1.1, ux: 0.2, uy: 0, uz: 0, mag: 0.2)
+        ],
+        lines: [
+            FlowOverlay.Streamline(
+                id: "SL1",
+                points: [
+                    FlowOverlay.StreamlinePoint(x: 0.2, y: 3, z: 1.1, mag: 0.2),
+                    FlowOverlay.StreamlinePoint(x: 1.4, y: 3, z: 1.1, mag: 0.18)
+                ]
+            )
+        ],
+        stats: FlowOverlay.FlowStats(glyphCount: 1, lineCount: 1, minMag: 0.18, maxMag: 0.2),
+        inputHash: "pending"
+    )
     let client = RecordingL2Client()
-    await client.prepare(result: result, slice: slice)
+    await client.prepare(result: result, slice: slice, flow: flow)
     let store = WorkspaceStore(l2Client: client)
     store.loadOfficeTemplate()
     #expect(store.canSubmitL2)
@@ -111,6 +140,7 @@ actor RecordingL2Client: L2TaskClient {
     #expect(store.lastResult?.metric(named: "seat_pmv_min")?.omitted == true)
     #expect(store.lastFieldSlice?.zM == 1.1)
     #expect(store.lastFieldSlice?.stats.maxC == 25.3)
+    #expect(store.lastFlowOverlay?.glyphs.count == 1)
     #expect(store.resultFreshness == .current)
     store.applyOccupantCount(10)
     #expect(store.resultFreshness == .stale)
@@ -168,7 +198,8 @@ actor RecordingL2Client: L2TaskClient {
     #expect(store.activeRun?.state == .failed)
     #expect(store.lastResult?.metric(named: "seat_t_c_min")?.omitted == true)
     #expect(store.lastResult?.metric(named: "seat_t_c_min")?.value == nil)
-    // Quality failed runs write no slice; the store must not display one.
+    // Quality failed runs write no slice or flow; the store must not display one.
     #expect(store.lastFieldSlice == nil)
+    #expect(store.lastFlowOverlay == nil)
     #expect(store.project?.occupancy?.occupantCount.value == 8)
 }

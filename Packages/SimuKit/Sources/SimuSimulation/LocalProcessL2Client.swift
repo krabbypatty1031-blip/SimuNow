@@ -70,6 +70,15 @@ public actor LocalProcessL2Client: L2TaskClient {
         return try JSONDecoder().decode(FieldSlice.self, from: Data(contentsOf: url))
     }
 
+    /// Quality-failed runs have no flow file; return nil, never sketched arrows.
+    public func loadFlowOverlay(runID: UUID) async throws -> FlowOverlay? {
+        let url = runRoot
+            .appendingPathComponent(runID.uuidString, isDirectory: true)
+            .appendingPathComponent("field-flow.json")
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try JSONDecoder().decode(FlowOverlay.self, from: Data(contentsOf: url))
+    }
+
     public func loadEvents(runID: UUID) async throws -> [SimulationEvent] {
         try await inner.loadEvents(runID: runID)
     }

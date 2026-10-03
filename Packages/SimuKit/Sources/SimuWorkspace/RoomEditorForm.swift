@@ -25,6 +25,8 @@ public struct RoomEditorForm: View {
     @State private var tariffCurrency = "HKD"
     @State private var tariffSource: ParameterSource = .assumed
     @State private var tariffReference = "比赛演示假设，非真实电价"
+    /// Keep 计算准备 open after a folder pick so the result is not off-screen.
+    @State private var prepExpanded = true
 
     public init(store: WorkspaceStore) {
         self.store = store
@@ -47,6 +49,12 @@ public struct RoomEditorForm: View {
                         .font(.footnote)
                         .accessibilityLabel("项目包错误 \(error)")
                 }
+                LabeledContent("计算", value: store.engineStatus)
+                    .accessibilityLabel("计算 \(store.engineStatus)")
+                if let name = store.engineFolderName {
+                    LabeledContent("计算文件夹", value: name)
+                        .accessibilityLabel("计算文件夹 \(name)")
+                }
             }
             if store.project == nil {
                 Section("开始") {
@@ -63,6 +71,7 @@ public struct RoomEditorForm: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            enginePrepSection
             Section("房间") {
                 sizeField("长度", value: $sizeX, pathHint: "geometry.sizeX")
                 sizeField("宽度", value: $sizeY, pathHint: "geometry.sizeY")
@@ -132,10 +141,13 @@ public struct RoomEditorForm: View {
                         addObstacle()
                     }
                     .accessibilityLabel("添加家具，位置与尺寸单位米")
+                    Text("增删窗、门、家具后，三维视口会立刻更新。家具外形是示意桌，目前不进气流网格。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             Section("使用") {
-                Text("人数是发热的人数，不是座位数。时段是选定的一天，不是全年。")
+                Text("人数和座位必须相同。加座位会加一个人，改人数会增删座位。时段是选定的一天，不是全年。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 TextField("人数", value: $occupantCount, format: InspectorNumberFormat.integer)
@@ -152,7 +164,7 @@ public struct RoomEditorForm: View {
                     store.applyOccupiedHours(start: occupiedStart, end: occupiedEnd)
                 }
                 .accessibilityLabel("应用使用时间")
-                Text("座位是检查点，用来看坐在这里舒不舒服，不是多一个发热的人。")
+                Text("每个座位是一个人，也是舒适检查点。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 ForEach(store.project?.occupancy?.seats ?? []) { seat in
@@ -170,6 +182,9 @@ public struct RoomEditorForm: View {
                     addSeat()
                 }
                 .accessibilityLabel("添加座位检查点，坐标单位米")
+                Text("每个座位在三维里画成椅子和坐着的人。删座位会同时少一个人。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section("空调") {
                 Button("安装默认分体空调") {
@@ -203,6 +218,13 @@ public struct RoomEditorForm: View {
                         onApplyAirflow: { store.applySupplyAirflowM3s($0) },
                         onRecompute: { store.recomputeSupplyAirflowFromSpeedAndArea() }
                     )
+                    Button("移除空调", role: .destructive) {
+                        store.removeHVAC()
+                    }
+                    .accessibilityLabel("移除分体空调，三维视口不再画室内机")
+                    Text("出风口画成壁挂室内机，回风口画成格栅。外形是示意，不是实测尺寸。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 ForEach(store.fieldIssues.filter { $0.path.hasPrefix("hvac") }) { issue in
                     Text(issue.message)
@@ -270,37 +292,6 @@ public struct RoomEditorForm: View {
                     }
                 }
             }
-            DisclosureGroup("计算准备") {
-                Text(store.engineStatus)
-                    .font(.footnote)
-                    .accessibilityLabel(store.engineStatus)
-                #if os(macOS)
-                Text("计算程序会复制到本机工作区。只需选择计算文件夹，不要把路径写进项目。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("选择计算文件夹") {
-                    store.chooseEnginesRoot()
-                }
-                .accessibilityLabel("选择计算文件夹")
-                Button("选择程序副本（备用）") {
-                    store.chooseRepositoryRoot()
-                }
-                .accessibilityLabel("选择程序副本，仅当应用资源缺失时")
-                #else
-                Text("这台设备上还不能在本地估算。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                #endif
-                if let message = store.runMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .accessibilityLabel(message)
-                }
-                Text(store.reportStatusLine ?? "加入通过检查的方案后，到「带走结论」导出对比说明。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(store.reportStatusLine ?? "对比说明导出提示")
-            }
         }
         .formStyle(.grouped)
         // Inspector is already on screen before a template loads, so onAppear alone leaves 0 / 0 / 0.
@@ -324,6 +315,51 @@ public struct RoomEditorForm: View {
         }
         .onChange(of: store.project?.occupancy?.schedule?.start) { _, _ in
             refreshFromStore()
+        }
+    }
+
+    @ViewBuilder
+    private var enginePrepSection: some View {
+        DisclosureGroup("计算准备", isExpanded: $prepExpanded) {
+            Text(store.engineStatus)
+                .font(.footnote)
+                .accessibilityLabel(store.engineStatus)
+            if let name = store.engineFolderName {
+                Text("当前文件夹：\(name)")
+                    .font(.footnote)
+                    .accessibilityLabel("当前文件夹 \(name)")
+            }
+            #if os(macOS)
+            Text("计算程序会复制到本机工作区。只需选择计算文件夹，不要把路径写进项目。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Button(store.engineFolderName == nil ? "选择计算文件夹" : "重新选择计算文件夹") {
+                store.chooseEnginesRoot()
+                prepExpanded = true
+            }
+            .accessibilityLabel(store.engineFolderName == nil ? "选择计算文件夹" : "重新选择计算文件夹")
+            Button("选择程序副本（备用）") {
+                store.chooseRepositoryRoot()
+                prepExpanded = true
+            }
+            .accessibilityLabel("选择程序副本，仅当应用资源缺失时")
+            #else
+            Text("这台设备上还不能在本地估算。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            #endif
+            if let message = store.runMessage {
+                Text(message)
+                    .font(.footnote)
+                    .accessibilityLabel(message)
+            }
+            Text(store.reportStatusLine ?? "加入通过检查的方案后，到「带走结论」导出对比说明。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(store.reportStatusLine ?? "对比说明导出提示")
+        }
+        .onChange(of: store.engineStatus) { _, _ in
+            prepExpanded = true
         }
     }
 

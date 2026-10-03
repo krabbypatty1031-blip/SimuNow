@@ -118,4 +118,34 @@ private func repoRoot() -> URL {
     // No run directory -> nil, never a fabricated slice.
     #expect(try await client.loadFieldSlice(runID: UUID()) == nil)
 }
+
+@Test func localL2ClientLoadsWrittenFlowOverlay() async throws {
+    let fm = FileManager.default
+    let runRoot = fm.temporaryDirectory.appendingPathComponent("simunow-l2flow-\(UUID().uuidString)", isDirectory: true)
+    let runID = UUID()
+    let runDir = runRoot.appendingPathComponent(runID.uuidString, isDirectory: true)
+    try fm.createDirectory(at: runDir, withIntermediateDirectories: true)
+    let fixture = repoRoot()
+        .appendingPathComponent("Fixtures/task/field-flow-l2.json")
+    try fm.copyItem(at: fixture, to: runDir.appendingPathComponent("field-flow.json"))
+
+    let runtime = fm.temporaryDirectory.appendingPathComponent("simunow-l2flowcfg-\(UUID().uuidString)", isDirectory: true)
+    try fm.createDirectory(
+        at: runtime.appendingPathComponent("Backend/src/simunow_worker", isDirectory: true),
+        withIntermediateDirectories: true
+    )
+    try Data("# stub worker\n".utf8).write(
+        to: runtime.appendingPathComponent("Backend/src/simunow_worker/__main__.py")
+    )
+    let engines = runtime.appendingPathComponent("test/engines")
+    try fm.createDirectory(at: engines, withIntermediateDirectories: true)
+
+    let client = LocalProcessL2Client(repositoryRoot: runtime, enginesRoot: engines, runRoot: runRoot)
+    let flow = try await client.loadFlowOverlay(runID: runID)
+    #expect(flow != nil)
+    #expect(flow?.quality == "passed")
+    #expect(flow?.glyphs.count == 2)
+    #expect(flow?.lines.count == 1)
+    #expect(try await client.loadFlowOverlay(runID: UUID()) == nil)
+}
 #endif

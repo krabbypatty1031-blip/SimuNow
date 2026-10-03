@@ -22,6 +22,7 @@ __pycache__/
 !/test/p1/sample_seats.py
 !/test/p1/foam_io.py
 !/test/p1/field_slice.py
+!/test/p1/field_flow.py
 .env
 Artifacts/
 *.simunow/

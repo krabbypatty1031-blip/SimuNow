@@ -145,6 +145,50 @@ import Testing
     let issues = draft.applyOccupantCount(0, source: .user)
     #expect(issues.contains { $0.path == "occupancy.occupantCount" })
     #expect(draft.occupancy?.occupantCount.value == 8)
+    #expect(draft.occupancy?.seats.count == 8)
+}
+
+@Test func addingASeatIncrementsOccupantCount() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    #expect(draft.occupancy?.occupantCount.value == Double(draft.occupancy?.seats.count ?? -1))
+    let issues = draft.applySeat(id: "S9", position: Position3D(x: 3, y: 3, z: 1.1), source: .user)
+    #expect(issues.isEmpty)
+    #expect(draft.occupancy?.seats.count == 9)
+    #expect(draft.occupancy?.occupantCount.value == 9)
+}
+
+@Test func movingASeatDoesNotChangeOccupantCount() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    let issues = draft.applySeat(id: "S1", position: Position3D(x: 2, y: 2, z: 1.1), source: .user)
+    #expect(issues.isEmpty)
+    #expect(draft.occupancy?.seats.count == 8)
+    #expect(draft.occupancy?.occupantCount.value == 8)
+}
+
+@Test func applyOccupantCountAddsAndRemovesSeatsToMatch() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    #expect(draft.applyOccupantCount(3, source: .user).isEmpty)
+    #expect(draft.occupancy?.occupantCount.value == 3)
+    #expect(draft.occupancy?.seats.count == 3)
+    #expect(draft.applyOccupantCount(5, source: .user).isEmpty)
+    #expect(draft.occupancy?.occupantCount.value == 5)
+    #expect(draft.occupancy?.seats.count == 5)
+}
+
+@Test func removingTheLastSeatIsRefused() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    #expect(draft.applyOccupantCount(1, source: .user).isEmpty)
+    let remaining = try #require(draft.occupancy?.seats.first?.id)
+    let issues = draft.removeSeat(id: remaining)
+    #expect(issues.contains { $0.path == "occupancy.seats.\(remaining)" })
+    #expect(draft.occupancy?.seats.count == 1)
+    #expect(draft.occupancy?.occupantCount.value == 1)
+}
+
+@Test func mismatchedPeopleAndSeatsAreAFieldIssue() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    draft.occupancy?.occupantCount.value = 3
+    #expect(draft.seatIssues().contains { $0.path == "occupancy.occupantCount" })
 }
 
 @Test func applyOccupiedHoursWritesPeopleAndHVACWindows() throws {
@@ -163,4 +207,19 @@ import Testing
     #expect(issues.contains { $0.path == "occupancy.schedule" })
     #expect(draft.occupancy?.schedule?.start == "08:00")
     #expect(draft.occupancy?.schedule?.end == "18:00")
+}
+
+@Test func removingHVACClearsTheSplitACWithoutTouchingSeatsOrOpenings() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    #expect(draft.hvac != nil)
+    let seatCount = draft.occupancy?.seats.count
+    let openingIDs = draft.geometry?.openings.map(\.id)
+    draft.removeHVAC()
+    #expect(draft.hvac == nil)
+    #expect(draft.occupancy?.seats.count == seatCount)
+    #expect(draft.geometry?.openings.map(\.id) == openingIDs)
+    // The same install path the inspector uses must put a split AC back.
+    _ = draft.installDefaultSplitAC()
+    #expect(draft.hvac?.kind == .splitAC)
+    #expect(draft.hvac?.supply.id == "SUP1")
 }

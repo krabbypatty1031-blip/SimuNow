@@ -14,6 +14,8 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
     public var metrics: [ResultMetric]
     /// Seat-height slice from the pinned run; absent when quality failed.
     public var slice: FieldSlice?
+    /// Steady flow overlay from the same pinned run; absent when quality failed.
+    public var flow: FlowOverlay?
     /// Frozen run-time basis (people, hours, setpoints, supply temperature).
     public var basis: ComparisonBasis
     /// Geometry snapshot at pin time; the comparison viewport draws this,
@@ -34,6 +36,7 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         quality: QualityState,
         metrics: [ResultMetric],
         slice: FieldSlice? = nil,
+        flow: FlowOverlay? = nil,
         basis: ComparisonBasis,
         draft: ProjectDraft,
         dayCost: RepresentativeDayCost = .omitted(reason: "无 L1，代表日电费省略"),
@@ -45,6 +48,7 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         self.quality = quality
         self.metrics = metrics
         self.slice = slice
+        self.flow = flow
         self.basis = basis
         self.draft = draft
         self.dayCost = dayCost

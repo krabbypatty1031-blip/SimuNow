@@ -75,7 +75,11 @@ enum BundledTemplateJSON {
         { "id": "S1", "position": { "x": 1.5, "y": 1.5, "z": 1.1 }, "source": "preset" },
         { "id": "S2", "position": { "x": 1.5, "y": 4.5, "z": 1.1 }, "source": "preset" },
         { "id": "S3", "position": { "x": 4.5, "y": 1.5, "z": 1.1 }, "source": "preset" },
-        { "id": "S4", "position": { "x": 4.5, "y": 4.5, "z": 1.1 }, "source": "preset" }
+        { "id": "S4", "position": { "x": 4.5, "y": 4.5, "z": 1.1 }, "source": "preset" },
+        { "id": "S5", "position": { "x": 3.0, "y": 1.5, "z": 1.1 }, "source": "preset" },
+        { "id": "S6", "position": { "x": 3.0, "y": 4.5, "z": 1.1 }, "source": "preset" },
+        { "id": "S7", "position": { "x": 1.5, "y": 3.0, "z": 1.1 }, "source": "preset" },
+        { "id": "S8", "position": { "x": 4.5, "y": 3.0, "z": 1.1 }, "source": "preset" }
       ],
       "comfort": {
         "mrtC": { "value": 26.0, "unit": "C", "source": "assumed", "reference": "假设等于区设定，不是辐射求解" },
@@ -196,7 +200,19 @@ enum BundledTemplateJSON {
         { "id": "S9", "position": { "x": 6.0, "y": 1.2, "z": 1.1 }, "source": "preset" },
         { "id": "S10", "position": { "x": 6.0, "y": 2.4, "z": 1.1 }, "source": "preset" },
         { "id": "S11", "position": { "x": 6.0, "y": 3.6, "z": 1.1 }, "source": "preset" },
-        { "id": "S12", "position": { "x": 6.0, "y": 4.8, "z": 1.1 }, "source": "preset" }
+        { "id": "S12", "position": { "x": 6.0, "y": 4.8, "z": 1.1 }, "source": "preset" },
+        { "id": "S13", "position": { "x": 1.0, "y": 1.2, "z": 1.1 }, "source": "preset" },
+        { "id": "S14", "position": { "x": 1.0, "y": 2.4, "z": 1.1 }, "source": "preset" },
+        { "id": "S15", "position": { "x": 1.0, "y": 3.6, "z": 1.1 }, "source": "preset" },
+        { "id": "S16", "position": { "x": 1.0, "y": 4.8, "z": 1.1 }, "source": "preset" },
+        { "id": "S17", "position": { "x": 3.0, "y": 1.2, "z": 1.1 }, "source": "preset" },
+        { "id": "S18", "position": { "x": 3.0, "y": 2.4, "z": 1.1 }, "source": "preset" },
+        { "id": "S19", "position": { "x": 3.0, "y": 3.6, "z": 1.1 }, "source": "preset" },
+        { "id": "S20", "position": { "x": 3.0, "y": 4.8, "z": 1.1 }, "source": "preset" },
+        { "id": "S21", "position": { "x": 5.0, "y": 1.2, "z": 1.1 }, "source": "preset" },
+        { "id": "S22", "position": { "x": 5.0, "y": 2.4, "z": 1.1 }, "source": "preset" },
+        { "id": "S23", "position": { "x": 5.0, "y": 3.6, "z": 1.1 }, "source": "preset" },
+        { "id": "S24", "position": { "x": 5.0, "y": 4.8, "z": 1.1 }, "source": "preset" }
       ],
       "comfort": {
         "mrtC": { "value": 26.0, "unit": "C", "source": "assumed", "reference": "假设等于区设定，不是辐射求解" },

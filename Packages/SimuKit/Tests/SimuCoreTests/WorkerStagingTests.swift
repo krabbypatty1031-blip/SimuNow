@@ -139,6 +139,10 @@ private func repoRoot() -> URL {
     store.applyEnginesOnly(source, runtimeRoot: runtime)
     #expect(store.l1Client.isConfigured)
     #expect(store.canSubmitL1)
+    #expect(store.engineFolderName == source.lastPathComponent)
+    #expect(store.engineStatus.contains(source.lastPathComponent))
+    #expect(store.engineStatus.contains("可以估算这一天用电"))
+    #expect(!store.engineStatus.contains("/Users/"))
     #expect(WorkerTreeStaging.isWorkerPresent(in: runtime))
 }
 #endif

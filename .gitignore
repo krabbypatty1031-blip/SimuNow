@@ -30,4 +30,8 @@ Artifacts/
 *.vtk
 *.vtu
 *.bin
+# Local hand-test archives must not enter git (2026-10-03: a 498 MB test.zip
+# was swept in by git add -A and blocked the push at GitHub's 100 MB limit).
+/test.zip
+*.zip
 !Fixtures/**

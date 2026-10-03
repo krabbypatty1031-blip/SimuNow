@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p5:report-evidence:1",
+  "title": "report-evidence",
+  "description": "Frozen L1/L2 numbers for a report. Narration must not add figures that are absent here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "candidates", "cards", "tariffReference", "comfortAssumptions"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "tariffReference": { "type": "string", "minLength": 1 },
+    "comfortAssumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "unit"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": ["number", "null"] },
+          "unit": { "type": "string" },
+          "reference": { "type": "string" }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "runID", "scenarioID", "inputHash", "quality", "seatBandLowC", "seatBandHighC", "seatPassRatioOmitted"],
+        "properties": {
+          "name": { "type": "string" },
+          "runID": { "type": "string", "format": "uuid" },
+          "scenarioID": { "type": "string", "format": "uuid" },
+          "inputHash": { "type": "string", "minLength": 1 },
+          "quality": { "enum": ["notEvaluated", "passed", "failed"] },
+          "l1RunID": { "type": "string", "format": "uuid" },
+          "seatBandLowC": { "type": "number" },
+          "seatBandHighC": { "type": "number" },
+          "seatPassRatio": { "type": ["number", "null"] },
+          "seatPassRatioOmitted": { "type": "boolean" },
+          "seatTMinC": { "type": ["number", "null"] },
+          "dayEnergyKWh": { "type": ["number", "null"] },
+          "dayCost": { "type": ["number", "null"] },
+          "currency": { "type": "string" },
+          "supplyZ0M": { "type": "number" },
+          "supplyZ1M": { "type": "number" }
+        }
+      }
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "title", "detail", "citedRunIDs", "qualityPassed", "assumptions"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "enum": ["explanation", "operation", "comfort", "retrofit"] },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "citedRunIDs": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "qualityPassed": { "type": "boolean" },
+          "assumptions": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "quoteStatus": { "type": "string" },
+          "payback": { "type": "string" }
+        }
+      }
+    }
+  }
+}

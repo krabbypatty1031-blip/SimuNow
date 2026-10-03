@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import SimuCore
 import SimuDesignSystem
+import SimuReporting
 import SimuVisualization
 
 public struct WorkspaceView: View {
@@ -88,7 +89,7 @@ public struct WorkspaceView: View {
         case .runs:
             runsDetail
         case .reports:
-            EmptyStateView("暂无报告", symbol: "doc.text", message: "通过质量检查的结果可用于生成建议报告。")
+            reportDetail
         }
     }
 
@@ -304,6 +305,12 @@ public struct WorkspaceView: View {
                 Text(record.name)
                     .font(.headline)
                 Spacer()
+                if store.highlightedRunID == record.identity.runID
+                    || store.highlightedRunID == record.l1Identity?.runID {
+                    Text("报告引用此 run")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Button(role: .destructive) {
                     store.removeCandidate(runID: record.identity.runID)
                 } label: {
@@ -411,6 +418,80 @@ public struct WorkspaceView: View {
     private func flowText(_ value: Double?) -> String {
         guard let value else { return "无" }
         return "\(value) m³/s"
+    }
+
+    /// Pinned evidence only. No candidates keeps the empty state, and the export
+    /// control stays hidden until there is a pack to cite.
+    @ViewBuilder
+    private var reportDetail: some View {
+        if let evidence = store.reportEvidence {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(evidence.tariffReference)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("电价说明 \(evidence.tariffReference)")
+                    ForEach(evidence.cards) { card in
+                        reportCard(card)
+                    }
+                    #if os(macOS)
+                    Button("导出证据 PDF") {
+                        Task { await exportEvidencePDF() }
+                    }
+                    .accessibilityLabel("导出证据 PDF")
+                    #else
+                    Text("证据 PDF 在 Mac 上导出。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    #endif
+                }
+                .padding()
+            }
+        } else {
+            EmptyStateView("暂无报告", symbol: "doc.text", message: "通过质量检查的结果可用于生成建议报告。")
+        }
+    }
+
+    private func reportCard(_ card: RecommendationCard) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(card.kind.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(card.title)
+                .font(.headline)
+            Text(card.detail)
+                .font(.body)
+            if let quote = card.quoteStatus {
+                Text(quote)
+                    .font(.subheadline)
+            }
+            ForEach(card.citedRunIDs, id: \.self) { runID in
+                Button(runID.uuidString) {
+                    store.focusCitedRun(runID)
+                }
+                .font(.caption.monospaced())
+                .accessibilityLabel("打开 run \(runID.uuidString)")
+            }
+            if !card.assumptions.isEmpty {
+                Text(card.assumptions.joined(separator: "\n"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(card.kind.label) \(card.title)")
+    }
+
+    private func exportEvidencePDF() async {
+        guard let url = ProjectLocationPicker.requestEvidencePDFURL() else { return }
+        do {
+            try await store.writeEvidencePDF(to: url)
+        } catch {
+            store.packageError = "证据 PDF 导出失败"
+        }
     }
 
     /// Visible start actions; the title-bar 模板 menu is easy to miss on macOS split views.

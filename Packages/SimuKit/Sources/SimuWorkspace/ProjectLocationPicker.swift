@@ -2,6 +2,7 @@ import Foundation
 import SimuCore
 #if os(macOS)
 import AppKit
+import UniformTypeIdentifiers
 #endif
 
 /// Platform file panels. Core I/O never sees these URLs as model fields.
@@ -34,6 +35,24 @@ enum ProjectLocationPicker {
         panel.message = "打开 .simunow 包或其中的 project.json"
         guard panel.runModal() == .OK else { return nil }
         return panel.url
+        #else
+        return nil
+        #endif
+    }
+
+    static func requestEvidencePDFURL() -> URL? {
+        #if os(macOS)
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "证据报告.pdf"
+        panel.prompt = "导出"
+        panel.message = "导出证据 PDF。表内数字来自已固定的 run，不随当前草稿重算。"
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        if url.pathExtension.lowercased() == "pdf" {
+            return url
+        }
+        return url.appendingPathExtension("pdf")
         #else
         return nil
         #endif

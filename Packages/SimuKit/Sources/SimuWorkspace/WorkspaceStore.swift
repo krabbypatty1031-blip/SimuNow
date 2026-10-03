@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SimuCore
+import SimuReporting
 import SimuSimulation
 
 @MainActor
@@ -399,6 +400,34 @@ public final class WorkspaceStore {
     /// Pinned, frozen scenario results for the comparison page. The record is
     /// a copy; later edits never mutate it.
     public var candidateRuns: [CandidateRun] = []
+
+    /// Report built from pinned runs only. Nil when nothing is pinned, so the
+    /// page stays an empty state instead of quoting the live draft.
+    public var highlightedRunID: UUID?
+    /// Optional. When nil, export still writes the evidence PDF.
+    public var reportNarrator: (any ReportNarrator)?
+
+    /// Narrate when a narrator or `SIMUNOW_REPORT_BASE_URL` is configured.
+    /// Missing key or a failed request still writes the evidence tables.
+    public func writeEvidencePDF(to url: URL) async throws {
+        guard let evidence = reportEvidence else {
+            throw EvidencePDFError.writeFailed
+        }
+        let narrator = reportNarrator ?? OpenAICompatibleNarrator.configuredFromEnvironment()
+        let narration = await narrator?.narrate(evidence)
+        try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
+    }
+
+    public var reportEvidence: ReportEvidence? {
+        guard !candidateRuns.isEmpty else { return nil }
+        return ReportEvidence.build(from: candidateRuns)
+    }
+
+    /// Card run IDs jump back to the comparison page, which still shows the frozen record.
+    public func focusCitedRun(_ runID: UUID) {
+        highlightedRunID = runID
+        selection = .scenarios
+    }
 
     /// The run pin freezes: the current L2 when one exists, otherwise the
     /// current finished L1. Pinning never clears the other slot.

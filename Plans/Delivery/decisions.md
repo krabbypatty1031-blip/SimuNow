@@ -145,7 +145,7 @@
 - **拒绝**：模型重算指标；模型声称合规/全局最优/实测满意率；把 View 状态当报告源。
 
 影响：P5-04 先做证据包与无模型 PDF，再接可选叙述器。P5-05 离线演示验收的是证据 PDF，不是 API 连通。具体供应商/baseURL 实现时写入本地配置，不写死公钥。
-验证：待 P5-04 测试（证据包数字 = 候选指标；无密钥仍能导出 PDF；注入证据外数字的叙述被拒）。
+验证：P5-04 已测。`ReportEvidence` 数字等于候选 `seat_pass_ratio` 与代表日费用；无 `SIMUNOW_REPORT_API_KEY` 时 `narrate` 返回 nil 且 PDF 仍写出；夹具「节电 37%」整段被拒为「叙述未采用（含证据外数字）」。假密钥不出现在 PDF、project JSON 或叙述日志。见 `RecommendationTests`、`ReportEvidenceTests`、`NarratorGuardTests`、`Backend.tests.test_recommend`。
 
 ## 待决定
 

@@ -40,24 +40,24 @@
 
 ### P5-04a 结构化建议
 
-- [ ] 两个同口径 L2 候选：送风高度不同 → 至少一张 `comfort` 卡，引用两个 L2 run ID
-- [ ] 无质量通过场 → 只有不可行解释，没有「推荐方案 A」
-- [ ] 改造卡在无报价时写待报价，字段 `payback` 不存在或 omitted
+- [x] 两个同口径 L2 候选：送风高度不同 → 至少一张 `comfort` 卡，引用两个 L2 run ID
+- [x] 无质量通过场 → 只有不可行解释，没有「推荐方案 A」
+- [x] 改造卡在无报价时写待报价，字段 `payback` 不存在或 omitted
 
 通过：卡上能点回 run。失败：无 run ID 的定性推荐。
 
 ### P5-04b 证据包与 PDF
 
-- [ ] `ReportEvidence` Codable 与 schema 一致；数字来自候选，不来自 View
-- [ ] 无叙述器时 `EvidencePDFAssembler` 写出含表格与假设的 PDF
-- [ ] 改当前草稿后，已生成报告仍引用原 run ID（冻结）
+- [x] `ReportEvidence` Codable 与 schema 一致；数字来自候选，不来自 View
+- [x] 无叙述器时 `EvidencePDFAssembler` 写出含表格与假设的 PDF
+- [x] 改当前草稿后，已生成报告仍引用原 run ID（冻结）
 
 通过：PDF 打开可见 run ID 与「演示假设，非真实电价」。失败：PDF 数字与证据包不一致。
 
 ### P5-04c 叙述器守卫
 
-- [ ] 未设置 API 键 → `narrate` 返回 nil，PDF 仍成功
-- [ ] 测试夹具：模型散文写入「节电 37%」而证据无此数 → 该段拒绝
-- [ ] 密钥不出现在 PDF、日志、project.json
+- [x] 未设置 API 键 → `narrate` 返回 nil，PDF 仍成功
+- [x] 测试夹具：模型散文写入「节电 37%」而证据无此数 → 该段拒绝
+- [x] 密钥不出现在 PDF、日志、project.json
 
 通过：假数字进不了报告。失败：把模型输出原样印进 PDF。

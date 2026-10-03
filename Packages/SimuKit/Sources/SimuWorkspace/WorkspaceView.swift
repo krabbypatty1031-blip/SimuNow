@@ -536,6 +536,10 @@ public struct WorkspaceView: View {
             try await store.writeEvidencePDF(to: url)
         } catch EvidencePDFError.notExportable {
             store.reportMessage = WorkspaceStore.blockedExportStatus
+        } catch EvidencePDFError.generatorUnavailable {
+            if store.reportMessage == nil {
+                store.reportMessage = WorkspaceStore.missingDeepSeekStatus
+            }
         } catch EvidencePDFError.unsupportedPlatform {
             store.packageError = "对比说明仅在 Mac 上导出"
         } catch {

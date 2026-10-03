@@ -7,31 +7,20 @@ import SimuReporting
 import PDFKit
 #endif
 
-/// No key means no narration. The evidence PDF is still written.
-@Test func missingAPIKeyReturnsNilAndPDFStillWrites() async throws {
+/// No key means no report and no network call.
+@Test func missingAPIKeyReturnsNilAndDoesNotWriteAStandIn() async throws {
     let evidence = try narratorEvidence()
     let probe = Probe()
-    let narrator = OpenAICompatibleNarrator(
-        baseURL: URL(string: "https://example.invalid")!,
+    let client = DeepSeekReportClient(
         keyProvider: { nil },
         transport: { _ in
             await probe.mark()
             throw URLError(.cancelled)
         }
     )
-    let narration = await narrator.narrate(evidence)
-    #expect(narration == nil)
+    let report = await client.generate(evidence)
+    #expect(report == nil)
     #expect(await probe.wasCalled() == false)
-
-    #if os(macOS)
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("simunow-nokey-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
-    defer { try? FileManager.default.removeItem(at: url) }
-    let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains(evidence.tariffReference))
-    #expect(text.contains(evidence.candidates[0].runID.uuidString))
-    #endif
 }
 
 /// A paragraph that introduces 37 is dropped. A paragraph that only repeats listed figures stays.
@@ -41,26 +30,29 @@ import PDFKit
     #expect(!encoded.contains("37"))
     let listed = String(format: "%g", evidence.candidates[0].seatBandLowC)
     let prefix = String(evidence.candidates[0].runID.uuidString.prefix(8))
-    let narration = ReportNarration(
-        headline: "送风高度不同",
-        cardProse: [
-            "comfort": "座位带下限 \(listed) °C，见证据表。",
-            "run": "引用 \(prefix)。",
-            "bad": "相对基准节电 37%。",
+    let report = GeneratedReport(
+        title: "送风高度不同",
+        summary: "座位带下限 \(listed) °C，见计算依据。",
+        sections: [
+            ReportSection(heading: "comfort", body: "座位带下限 \(listed) °C，见计算依据。"),
+            ReportSection(heading: "run", body: "引用 \(prefix)。"),
+            ReportSection(heading: "bad", body: "相对基准节电 37%。"),
         ],
         caveats: ["稳态场不表示开机降温时间。"]
     )
-    let filtered = NarrationGuard.filter(narration, evidence: evidence)
-    #expect(filtered.cardProse["bad"] == "叙述未采用（含证据外数字）")
-    #expect(filtered.cardProse["comfort"] == narration.cardProse["comfort"])
-    #expect(filtered.cardProse["run"] == narration.cardProse["run"])
-    #expect(filtered.headline == narration.headline)
-    #expect(filtered.caveats == narration.caveats)
+    let filtered = NarrationGuard.filter(report, evidence: evidence)
+    #expect(filtered.sections.first { $0.heading == NarrationGuard.rejection } == nil)
+    #expect(filtered.sections.first { $0.body == "相对基准节电 37%。" } == nil)
+    #expect(filtered.sections.contains { $0.body == NarrationGuard.rejection })
+    #expect(filtered.sections.contains { $0.body.contains(listed) })
+    #expect(filtered.sections.contains { $0.body.contains(prefix) })
+    #expect(filtered.title == report.title)
+    #expect(filtered.caveats == report.caveats)
 
     #if os(macOS)
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-guard-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
+    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
     #expect(text.contains("叙述未采用（含证据外数字）"))
@@ -69,25 +61,62 @@ import PDFKit
     #endif
 }
 
-/// The API key stays out of the PDF, the project JSON, and narrator logs.
-@Test func apiKeyDoesNotLeakIntoPDFProjectOrLog() async throws {
+/// Two-decimal display used in the UI is allowed because that is how the rest of the app writes numbers.
+@Test func twoDecimalDisplayOfListedCostIsAllowed() throws {
+    let evidence = try narratorEvidence()
+    let cost = try #require(evidence.candidates[0].dayCost)
+    let shown = UserFacingCopy.displayNumber(cost)
+    #expect(shown != String(format: "%g", cost))
+    let report = GeneratedReport(
+        title: "这一天费用",
+        summary: "这一天费用 \(shown) HKD。",
+        sections: [],
+        caveats: []
+    )
+    let filtered = NarrationGuard.filter(report, evidence: evidence)
+    #expect(filtered.summary == report.summary)
+}
+
+/// The official DeepSeek path, model, and JSON object mode are used. The API key stays out of the PDF.
+@Test func deepSeekRequestUsesOfficialHostAndKeepsKeyOutOfArtifacts() async throws {
     let secret = "sk-test-simunow-not-a-real-key"
     let evidence = try narratorEvidence()
+    let expected = GeneratedReport(
+        title: "办公室送风对比",
+        summary: "这次对比了低送风口和默认送风口。",
+        sections: [
+            ReportSection(heading: "座位是否合适", body: "合适的座位 \(UserFacingCopy.displayNumber(1))。"),
+        ],
+        caveats: ["这一天费用不是全年电费。"]
+    )
     let lines = OSAllocatedUnfairLock(initialState: [String]())
     let requests = OSAllocatedUnfairLock(initialState: [URLRequest]())
-    let narrator = OpenAICompatibleNarrator(
-        baseURL: URL(string: "https://reports.example.invalid/base")!,
+    let client = DeepSeekReportClient(
         keyProvider: { secret },
         log: { line in lines.withLock { $0.append(line) } },
         transport: { request in
             requests.withLock { $0.append(request) }
-            throw URLError(.cannotConnectToHost)
+            let payload = String(decoding: try JSONEncoder().encode(expected), as: UTF8.self)
+            let envelope: [String: Any] = ["choices": [["message": ["content": payload]]]]
+            let data = try JSONSerialization.data(withJSONObject: envelope)
+            let response = HTTPURLResponse(
+                url: request.url ?? DeepSeekReportClient.officialBaseURL,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (data, response)
         }
     )
-    let narration = await narrator.narrate(evidence)
-    #expect(narration == nil)
-    let path = requests.withLock { $0.first?.url?.path }
-    #expect(path == "/base/v1/chat/completions")
+    let report = try #require(await client.generate(evidence))
+    #expect(report.title == expected.title)
+
+    let request = try #require(requests.withLock { $0.first })
+    #expect(request.url?.absoluteString == "https://api.deepseek.com/chat/completions")
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer \(secret)")
+    let body = try JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any]
+    #expect(body?["model"] as? String == "deepseek-chat")
+    #expect((body?["response_format"] as? [String: Any])?["type"] as? String == "json_object")
     let logText = lines.withLock { $0.joined(separator: "\n") }
     #expect(!logText.contains(secret))
 
@@ -99,10 +128,14 @@ import PDFKit
     #if os(macOS)
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-key-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
+    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let bytes = try Data(contentsOf: url)
     #expect(bytes.range(of: Data(secret.utf8)) == nil)
+    let text = try #require(PDFDocument(url: url)?.string)
+    #expect(text.contains("办公室送风对比"))
+    #expect(text.contains("DeepSeek"))
+    #expect(text.contains("计算依据"))
     #endif
 }
 

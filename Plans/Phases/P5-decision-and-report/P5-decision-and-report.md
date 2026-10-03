@@ -10,12 +10,12 @@
 
 - 成人办公舒适默认写入草稿：clo 0.5、met 1.2、RH 50%、MRT=26 °C（假设等于设定，不是辐射场）。
 - 代表日电费用演示电价 1.2 HKD/kWh，必须标明「比赛演示假设，非真实电价」。
-- PDF：代码生成 `ReportEvidence` 出全部数字；模型 API 只写叙述；无 API 仍导出证据 PDF。
+- PDF：冻结 `ReportEvidence` 出全部数字；DeepSeek 官方 API 写可读正文（ADR-019）；无密钥不能导出。
 
 ## 功能、设计与技术
 
-决策变量与口径守卫、L2 达标比例与最差座位、电价分层、三类建议卡、证据包 PDF、可选 OpenAI 兼容叙述器。
-报告只引用冻结 run。排版用 Mac PDFKit。不从 View 重算。不引入 SciPy 搜索。
+决策变量与口径守卫、L2 达标比例与最差座位、电价分层、三类建议卡、证据包、DeepSeek 官方 API 生成对比说明。
+报告只引用冻结 run。排版用 Mac Core Graphics / Core Text。不从 View 重算。不引入 SciPy 搜索。
 
 ## 工作项
 
@@ -24,8 +24,8 @@
 | P5-01 | 可改项、舒适默认、口径筛选 | 模板含舒适四键；L0 不做筛选 |
 | P5-02 | L2 可行性、达标比例、最差座位 | 无可行方案有解释；不叫实测满意率 |
 | P5-03 | 演示电价与代表日费用 | 缺数据 omitted；无年费/回收期 |
-| P5-04 | 三类建议 + 证据 PDF + 可选叙述器 | 每结论有 run ID；模型不改数字 |
-| P5-05 | 离线演示与失败路径 | 无 API 也能出证据 PDF |
+| P5-04 | 三类建议 + DeepSeek 对比说明 | 每结论有 run ID；模型不改数字 |
+| P5-05 | 失败路径与导出门槛 | 无 API 不能导出；质量失败不能导出 |
 
 ## 推荐规则
 
@@ -34,8 +34,8 @@
 
 ## 验收与降级
 
-一个基准+两个候选有有效比较、建议和基础 PDF；改输入后报告仍指向原 run。
-叙述器失败退到证据-only PDF。界面不得宣称全局最优。
+一个基准+两个候选有有效比较、建议和 DeepSeek 对比说明；改输入后报告仍指向原 run。
+DeepSeek 失败不写替身 PDF。界面不得宣称全局最优。
 
 ## 子任务索引
 
@@ -44,7 +44,7 @@
 | P5-01 | [P5-01-variables.md](P5-01-variables.md) | 舒适默认进草稿；筛选不越级 |
 | P5-02 | [P5-02-feasibility.md](P5-02-feasibility.md) | 达标是模型覆盖率 |
 | P5-03 | [P5-03-cost.md](P5-03-cost.md) | 演示电价；待报价不填 0 |
-| P5-04 | [P5-04-recommend-pdf.md](P5-04-recommend-pdf.md) | 建议+证据 PDF；模型只叙述 |
+| P5-04 | [P5-04-recommend-pdf.md](P5-04-recommend-pdf.md) | 建议+DeepSeek 对比说明；模型只叙述 |
 | P5-05 | [P5-05-demo.md](P5-05-demo.md) | 离线能复现 |
 
 总清单：[P5-checklist.md](P5-checklist.md)。未勾选不得把 P5 标为完成。

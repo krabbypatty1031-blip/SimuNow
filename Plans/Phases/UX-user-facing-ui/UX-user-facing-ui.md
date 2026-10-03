@@ -181,7 +181,7 @@ Add a user-facing copy map so views never print model paths.
 ### Task 2: 导航、空状态、按钮与任务句
 
 **Files:**
-- Modify: `Packages/SimuKit/Sources/SimuWorkspace/WorkspaceStore.swift`（`WorkspaceDestination.title`、`engineStatus`、`runMessage`、`evidenceExportLabel`、`blockedExportStatus`、`evidenceOnlyNarratorStatus`）
+- Modify: `Packages/SimuKit/Sources/SimuWorkspace/WorkspaceStore.swift`（`WorkspaceDestination.title`、`engineStatus`、`runMessage`、`evidenceExportLabel`、`blockedExportStatus`、`missingDeepSeekStatus`）
 - Modify: `Packages/SimuKit/Sources/SimuWorkspace/WorkspaceView.swift`（空状态、工具栏保持「打开 / 保存 / 模板」）
 - Modify: `Packages/SimuKit/Tests/SimuCoreTests/WorkspaceReportTests.swift`（导出按钮文案）
 - Modify: `Packages/SimuKit/Tests/SimuCoreTests/WorkspaceL1Tests.swift`（若断言旧 `engineStatus` 字面量）

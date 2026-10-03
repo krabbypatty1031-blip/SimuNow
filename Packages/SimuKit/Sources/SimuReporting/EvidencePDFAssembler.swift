@@ -6,32 +6,34 @@ import CoreText
 #endif
 
 public enum EvidencePDFError: Error, Equatable {
-    /// iOS has no PDFKit writer in this phase. Callers must not invent a stand-in document.
+    /// iOS has no PDF writer in this phase. Callers must not invent a stand-in document.
     case unsupportedPlatform
     /// Quality failed, no feasible seats, or mixed basis. The page may explain; it must not write a recommendation PDF.
     case notExportable
+    /// DeepSeek is missing, refused, or returned nothing usable.
+    case generatorUnavailable
     case writeFailed
 }
 
-/// Draws an evidence pack. Narration is optional and is filtered before it is drawn.
+/// Draws a DeepSeek-written report plus a local evidence appendix.
 public enum EvidencePDFAssembler {
     public static func write(
         evidence: ReportEvidence,
-        narration: ReportNarration?,
+        report: GeneratedReport,
         to url: URL
     ) throws {
         #if os(macOS)
-        let guarded = narration.map { NarrationGuard.filter($0, evidence: evidence) }
-        try writePDF(render(evidence: evidence, narration: guarded), to: url)
+        let guarded = NarrationGuard.filter(report, evidence: evidence)
+        try writePDF(report: guarded, evidence: evidence, to: url)
         #else
         throw EvidencePDFError.unsupportedPlatform
         #endif
     }
 
-    /// Plain-text body. Every figure is formatted from an evidence field.
-    static func render(evidence: ReportEvidence, narration: ReportNarration?) -> String {
+    /// Local appendix. Every figure is formatted from an evidence field.
+    static func appendix(evidence: ReportEvidence) -> String {
         var lines: [String] = []
-        lines.append("对比说明")
+        lines.append("计算依据")
         lines.append("电价说明：\(evidence.tariffReference)")
         let bandLow = evidence.candidates.first?.seatBandLowC ?? SeatFeasibility.airLowC
         let bandHigh = evidence.candidates.first?.seatBandHighC ?? SeatFeasibility.airHighC
@@ -79,17 +81,6 @@ public enum EvidencePDFAssembler {
                 lines.append(assumption)
             }
         }
-        if let narration {
-            lines.append("说明文字")
-            lines.append(narration.headline)
-            for (key, prose) in narration.cardProse.sorted(by: { $0.key < $1.key }) {
-                lines.append(key)
-                lines.append(prose)
-            }
-            for caveat in narration.caveats {
-                lines.append(caveat)
-            }
-        }
         lines.append("详细编号")
         for run in evidence.candidates {
             lines.append(run.name)
@@ -106,27 +97,86 @@ public enum EvidencePDFAssembler {
     }
 
     #if os(macOS)
-    private static func writePDF(_ text: String, to url: URL) throws {
+    private static func writePDF(
+        report: GeneratedReport,
+        evidence: ReportEvidence,
+        to url: URL
+    ) throws {
         let data = NSMutableData()
         var media = CGRect(x: 0, y: 0, width: 612, height: 792)
         guard let consumer = CGDataConsumer(data: data as CFMutableData),
               let context = CGContext(consumer: consumer, mediaBox: &media, nil) else {
             throw EvidencePDFError.writeFailed
         }
-        let font = CTFontCreateWithName("PingFangSC-Regular" as CFString, 9, nil)
-        let lines = text.components(separatedBy: "\n")
-        let margin: CGFloat = 36
-        let lineHeight: CGFloat = 14
+        let titleFont = CTFontCreateWithName("PingFangSC-Medium" as CFString, 18, nil)
+        let headingFont = CTFontCreateWithName("PingFangSC-Medium" as CFString, 13, nil)
+        let bodyFont = CTFontCreateWithName("PingFangSC-Regular" as CFString, 11, nil)
+        let captionFont = CTFontCreateWithName("PingFangSC-Regular" as CFString, 9, nil)
+        let margin: CGFloat = 48
+        let width = media.width - margin * 2
         var y = media.height - margin
-        context.beginPDFPage(nil)
-        for line in lines {
-            if y < margin {
-                context.endPDFPage()
-                context.beginPDFPage(nil)
-                y = media.height - margin
+
+        func newPage() {
+            context.endPDFPage()
+            context.beginPDFPage(nil)
+            y = media.height - margin
+        }
+
+        func ensure(_ height: CGFloat) {
+            if y - height < margin {
+                newPage()
             }
-            draw(line, at: CGPoint(x: margin, y: y), font: font, context: context)
-            y -= lineHeight
+        }
+
+        func drawWrapped(_ text: String, font: CTFont, lineHeight: CGFloat) {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.black,
+            ]
+            let attributed = NSAttributedString(string: trimmed, attributes: attributes)
+            let typesetter = CTTypesetterCreateWithAttributedString(attributed)
+            var start = 0
+            let count = attributed.length
+            while start < count {
+                ensure(lineHeight)
+                let breakIndex = CTTypesetterSuggestLineBreak(typesetter, start, Double(width))
+                let length = max(breakIndex, 1)
+                let line = CTTypesetterCreateLine(typesetter, CFRange(location: start, length: length))
+                context.saveGState()
+                context.textMatrix = .identity
+                context.translateBy(x: margin, y: y)
+                CTLineDraw(line, context)
+                context.restoreGState()
+                y -= lineHeight
+                start += length
+            }
+            y -= 6
+        }
+
+        context.beginPDFPage(nil)
+        drawWrapped(report.title, font: titleFont, lineHeight: 24)
+        drawWrapped(
+            "以下正文由 DeepSeek 根据计算结果整理；数字以计算依据为准。",
+            font: captionFont,
+            lineHeight: 13
+        )
+        drawWrapped(report.summary, font: bodyFont, lineHeight: 16)
+        for section in report.sections {
+            drawWrapped(section.heading, font: headingFont, lineHeight: 18)
+            drawWrapped(section.body, font: bodyFont, lineHeight: 16)
+        }
+        if !report.caveats.isEmpty {
+            drawWrapped("还需要知道", font: headingFont, lineHeight: 18)
+            for caveat in report.caveats {
+                drawWrapped(caveat, font: bodyFont, lineHeight: 16)
+            }
+        }
+        for line in appendix(evidence: evidence).components(separatedBy: "\n") {
+            let isHeading = line == "计算依据" || line == "方案" || line == "查看依据与限制" || line == "详细编号"
+                || line == "用电" || line == "座位舒适" || line == "改造" || line == "说明"
+            drawWrapped(line, font: isHeading ? headingFont : captionFont, lineHeight: isHeading ? 18 : 13)
         }
         context.endPDFPage()
         context.closePDF()
@@ -135,20 +185,6 @@ public enum EvidencePDFAssembler {
         } catch {
             throw EvidencePDFError.writeFailed
         }
-    }
-
-    private static func draw(_ line: String, at point: CGPoint, font: CTFont, context: CGContext) {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.black,
-        ]
-        let attributed = NSAttributedString(string: line, attributes: attributes)
-        let ctLine = CTLineCreateWithAttributedString(attributed)
-        context.saveGState()
-        context.textMatrix = .identity
-        context.translateBy(x: point.x, y: point.y)
-        CTLineDraw(ctLine, context)
-        context.restoreGState()
     }
     #endif
 }

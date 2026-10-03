@@ -70,18 +70,31 @@ import PDFKit
 }
 
 #if os(macOS)
-/// Tables and assumptions come from the evidence object. A nil narrator still writes a PDF.
-@Test func evidencePDFWithoutNarratorContainsTableAndAssumptions() throws {
+/// DeepSeek body plus a local appendix. Hashes stay behind 详细编号.
+@Test func evidencePDFKeepsAppendixAndHidesHashesFromTheBody() throws {
     let pair = try evidencePair()
     let evidence = ReportEvidence.build(from: [pair.low, pair.high])
+    let report = GeneratedReport(
+        title: "办公室送风对比",
+        summary: "这次对比了\(pair.low.name)和\(pair.high.name)。",
+        sections: [
+            ReportSection(
+                heading: "座位是否合适",
+                body: "合适的座位 \(UserFacingCopy.displayNumber(1))。"
+            ),
+        ],
+        caveats: ["这一天费用不是全年电费。"]
+    )
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-evidence-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, narration: nil, to: url)
+    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("对比说明"))
+    #expect(text.contains("办公室送风对比"))
+    #expect(text.contains("DeepSeek"))
     #expect(text.contains(pair.low.name))
     #expect(text.contains(pair.high.name))
+    #expect(text.contains("计算依据"))
     #expect(text.contains("详细编号"))
     let body = String(text.split(separator: "详细编号", maxSplits: 1).first ?? "")
     #expect(!body.contains("inputHash"))

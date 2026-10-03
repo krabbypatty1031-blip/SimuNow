@@ -103,6 +103,7 @@ private func repoRoot() -> URL {
         format: nil
     ) as? [String: Any]
     #expect(plist?["com.apple.security.app-sandbox"] as? Bool == true)
+    #expect(plist?["com.apple.security.network.client"] as? Bool == true)
     #expect(plist?["com.apple.security.temporary-exception.sbpl"] == nil)
     #expect(plist?["com.apple.security.cs.disable-library-validation"] == nil)
 }

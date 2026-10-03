@@ -883,7 +883,7 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
         case .workspace: "布置房间"
         case .scenarios: "方案对比"
         case .runs: "用电与舒适"
-        case .reports: "带走结论"
+        case .reports: "导出报告"
         }
     }
 

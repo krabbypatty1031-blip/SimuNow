@@ -462,7 +462,7 @@ public struct WorkspaceView: View {
                 .padding()
             }
         } else {
-            EmptyStateView("带走结论", symbol: "doc.text", message: "加入通过检查的方案后，这里给出结论。没有方案时不能导出。")
+            EmptyStateView("导出报告", symbol: "doc.text", message: "加入通过检查的方案后，这里给出结论。没有方案时不能导出。")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

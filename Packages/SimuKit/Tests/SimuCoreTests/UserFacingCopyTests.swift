@@ -86,7 +86,7 @@ import SimuWorkspace
     #expect(WorkspaceDestination.workspace.title == "布置房间")
     #expect(WorkspaceDestination.runs.title == "用电与舒适")
     #expect(WorkspaceDestination.scenarios.title == "方案对比")
-    #expect(WorkspaceDestination.reports.title == "带走结论")
+    #expect(WorkspaceDestination.reports.title == "导出报告")
     for destination in WorkspaceDestination.allCases {
         #expect(!UserFacingCopy.containsForbiddenDefaultToken(destination.title))
     }

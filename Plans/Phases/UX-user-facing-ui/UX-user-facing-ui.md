@@ -195,7 +195,7 @@ Add a user-facing copy map so views never print model paths.
 | `.workspace` | 布置房间 |
 | `.runs` | 用电与舒适 |
 | `.scenarios` | 方案对比 |
-| `.reports` | 带走结论 |
+| `.reports` | 导出报告 |
 | `submitL1` 按钮 | 估算这一天用电 |
 | `submitL2` 按钮 | 查看座位冷热分布 |
 | `pinCurrentAsCandidate` | 加入对比 |
@@ -212,7 +212,7 @@ Add a user-facing copy map so views never print model paths.
     #expect(WorkspaceDestination.workspace.title == "布置房间")
     #expect(WorkspaceDestination.runs.title == "用电与舒适")
     #expect(WorkspaceDestination.scenarios.title == "方案对比")
-    #expect(WorkspaceDestination.reports.title == "带走结论")
+    #expect(WorkspaceDestination.reports.title == "导出报告")
     for destination in WorkspaceDestination.allCases {
         #expect(!UserFacingCopy.containsForbiddenDefaultToken(destination.title))
     }
@@ -238,7 +238,7 @@ Expected: FAIL，标题仍是「房间工作区」等。
 case .workspace: "布置房间"
 case .scenarios: "方案对比"
 case .runs: "用电与舒适"
-case .reports: "带走结论"
+case .reports: "导出报告"
 ```
 
 空状态（`WorkspaceView`）：
@@ -647,7 +647,7 @@ Scripts/check.sh ios
 
 - [ ] **Step 3: Hand-check list（Debug，沿用现有办公室模板）**
 
-1. 左侧是「布置房间 / 用电与舒适 / 方案对比 / 带走结论」
+1. 左侧是「布置房间 / 用电与舒适 / 方案对比 / 导出报告」
 2. 检查器打开先看到房间、使用、空调；要滚才看到电价/假设/计算准备
 3. 门窗标签是「右墙的窗」，墙面是「左墙」不是 `xMin`
 4. 「用电与舒适」能估用电、看座位冷热、加入对比

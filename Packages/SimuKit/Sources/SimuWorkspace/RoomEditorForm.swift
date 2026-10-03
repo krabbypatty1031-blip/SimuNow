@@ -353,7 +353,7 @@ public struct RoomEditorForm: View {
                     .font(.footnote)
                     .accessibilityLabel(message)
             }
-            Text(store.reportStatusLine ?? "加入通过检查的方案后，到「带走结论」导出对比说明。")
+            Text(store.reportStatusLine ?? "加入通过检查的方案后，到「导出报告」导出对比说明。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel(store.reportStatusLine ?? "对比说明导出提示")

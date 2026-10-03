@@ -265,5 +265,92 @@ class L2RoomMappingTests(unittest.TestCase):
             self.assertNotIn("buoyantBoussinesqSimpleFoam", mesh)
 
 
+class FurnitureMappingTests(unittest.TestCase):
+    """2026-10-04: dragged furniture must survive the whole chain to L1/L2.
+
+    The App writes obstacles as origin/size/kind boxes (the drag placement
+    shape); the mapper must hand the case writer contract AABBs the loader
+    accepts, so a drop in the editor becomes blocked cells in the L2 case.
+    """
+
+    @staticmethod
+    def _furnished_draft() -> dict:
+        draft = deepcopy(OFFICE)
+        draft["geometry"]["obstacles"] = [
+            {
+                "id": "F1",
+                "kind": "desk",
+                "origin": {"x": 1.0, "y": 1.2, "z": 0.0},
+                "size": {"x": 1.2, "y": 0.7, "z": 0.75},
+            },
+            {
+                "id": "F2",
+                "kind": "screen",
+                "origin": {"x": 3.4, "y": 3.3, "z": 0.0},
+                "size": {"x": 0.5, "y": 0.5, "z": 0.9},
+            },
+        ]
+        return draft
+
+    def test_obstacles_map_to_contract_aabbs_with_disclosure(self):
+        room = project_to_l2_room(self._furnished_draft())
+        self.assertEqual(len(room["obstacles"]), 2)
+        first = room["obstacles"][0]
+        self.assertEqual(first["id"], "F1")
+        self.assertEqual(first["kind"], "desk")
+        self.assertEqual(first["x0_m"]["value"], 1.0)
+        self.assertEqual(first["y0_m"]["value"], 1.2)
+        self.assertEqual(first["z0_m"]["value"], 0.0)
+        self.assertEqual(first["x1_m"]["value"], 2.2)
+        self.assertEqual(first["y1_m"]["value"], 1.9)
+        self.assertEqual(first["z1_m"]["value"], 0.75)
+        self.assertIn(
+            "furniture boxes enter the L2 case as blocked cells (boxToCell/subsetMesh)",
+            room["assumptions"],
+        )
+        self.assertIn(
+            "furniture kind (desk/chair/cabinet/screen) is a display label; the solver sees one blocked box per piece",
+            room["assumptions"],
+        )
+        self.assertNotIn("omitted: furniture_boxes", room["assumptions"])
+
+    def test_furniture_moves_the_input_hash(self):
+        from room_input import input_hash
+
+        baseline = project_to_l2_room(OFFICE)
+        furnished = project_to_l2_room(self._furnished_draft())
+        self.assertNotEqual(input_hash(baseline), input_hash(furnished))
+        # Same box, one metre over: moving a desk is a different room.
+        moved = self._furnished_draft()
+        moved["geometry"]["obstacles"][0]["origin"]["x"] = 2.0
+        self.assertNotEqual(input_hash(furnished), input_hash(project_to_l2_room(moved)))
+
+    def test_furnished_mapping_feeds_loader_and_case_writer(self):
+        from room_input import load_room
+        from write_openfoam_room import write_openfoam_room
+
+        room = project_to_l2_room(self._furnished_draft())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # The mapped room must be loadable as-is: the disclosure the
+            # loader demands is exactly the one the mapper emits.
+            room_path = root / "room.json"
+            room_path.write_text(json.dumps(room), encoding="utf-8")
+            loaded = load_room(room_path)
+            self.assertEqual(len(loaded["obstacles"]), 2)
+            case = write_openfoam_room(loaded, root / "case")
+            toposet = (case / "system" / "topoSetDict").read_text(encoding="utf-8")
+            self.assertIn("boxToCell", toposet)
+            self.assertIn("(1.000000 0.000000 1.200000)", toposet)
+            self.assertIn("(3.900000 0.900000 3.800000)", toposet)
+
+    def test_obstacle_leaving_the_room_is_rejected(self):
+        draft = self._furnished_draft()
+        draft["geometry"]["obstacles"][0]["size"]["x"] = 9.0
+        with self.assertRaises(ValueError) as caught:
+            project_to_l2_room(draft)
+        self.assertIn("leaves the room box", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

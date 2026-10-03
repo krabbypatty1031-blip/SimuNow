@@ -207,11 +207,30 @@ public struct ObstacleBox: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var origin: Position3D
     public var size: Position3D
+    /// What the user placed (user request 2026-10-04). Drives the schematic
+    /// drawing and default footprint; older project files carry no kind and
+    /// decode as the original desk box.
+    public var kind: FurnitureKind
 
-    public init(id: String, origin: Position3D, size: Position3D) {
+    public init(id: String, origin: Position3D, size: Position3D, kind: FurnitureKind = .desk) {
         self.id = id
         self.origin = origin
         self.size = size
+        self.kind = kind
+    }
+
+    /// Old project JSON has no `kind`; decode falls back to `.desk` so
+    /// pre-kind files keep loading with their original desk boxes.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        origin = try container.decode(Position3D.self, forKey: .origin)
+        size = try container.decode(Position3D.self, forKey: .size)
+        kind = try container.decodeIfPresent(FurnitureKind.self, forKey: .kind) ?? .desk
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, origin, size, kind
     }
 }
 

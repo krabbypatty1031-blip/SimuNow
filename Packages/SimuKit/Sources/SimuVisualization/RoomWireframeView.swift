@@ -122,6 +122,10 @@ public struct RoomWireframeView: View {
         for window in scene.windows {
             allPoints.append(contentsOf: projection.patchCorners(window, in: scene))
         }
+        // Furniture footprints join the fit so a big desk cannot spill out.
+        for box in scene.furniture {
+            allPoints.append(contentsOf: furnitureCorners(box, projection: projection))
+        }
         for seat in scene.seats {
             allPoints.append(projection.screenPoint(seat.position))
         }
@@ -167,6 +171,15 @@ public struct RoomWireframeView: View {
             context.stroke(path, with: .color(.primary.opacity(0.75)), lineWidth: 1.5)
         }
 
+        // Furniture footprints (user request 2026-10-04): one filled top-face
+        // per box, tinted by kind. Schematic only — the blocked volume lives
+        // in the L2 case, not here.
+        for box in scene.furniture {
+            let path = Self.closedPath(furnitureCorners(box, projection: projection), transform: fit)
+            context.fill(path, with: .color(furnitureColor(box.kind).opacity(0.35)))
+            context.stroke(path, with: .color(furnitureColor(box.kind)), lineWidth: 1.5)
+        }
+
         if let flow {
             drawFlow(flow, projection: projection, fit: fit, phase: phase, in: &context)
         }
@@ -189,6 +202,31 @@ public struct RoomWireframeView: View {
     /// plain seat name so no temperature is invented.
     private func seatSample(for seat: SeatScene) -> SeatSample? {
         seatSamples?.first(where: { $0.id == seat.id })
+    }
+
+    /// Top-face corners of a furniture box at its own height, projected.
+    private func furnitureCorners(_ box: FurnitureScene, projection: IsometricProjection) -> [CGPoint] {
+        let x0 = box.origin.x
+        let x1 = box.origin.x + box.size.x
+        let y0 = box.origin.y
+        let y1 = box.origin.y + box.size.y
+        let z = box.origin.z + box.size.z
+        return [
+            Position3D(x: x0, y: y0, z: z),
+            Position3D(x: x1, y: y0, z: z),
+            Position3D(x: x1, y: y1, z: z),
+            Position3D(x: x0, y: y1, z: z),
+        ].map(projection.screenPoint)
+    }
+
+    /// Kind tint so a chair reads differently from a cabinet; display only.
+    private func furnitureColor(_ kind: FurnitureKind) -> Color {
+        switch kind {
+        case .desk: .brown
+        case .chair: .blue
+        case .cabinet: .orange
+        case .screen: .gray
+        }
     }
 
     /// Every slice cell centre, projected (used for fitting the view).

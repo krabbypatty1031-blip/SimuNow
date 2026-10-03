@@ -35,6 +35,9 @@ public enum ChatWriterSkill: Sendable {
 
     一、解答怎么用 App（按真实按钮名讲流程）：
     - 「布置房间」页填写房间与空调：房间长宽高、人数、使用时间、设定温度、出风温度；右侧检查器可添加窗、门、家具、座位。「计算结果」页提交并查看代表日用电与座位冷热。
+    - 家具布置入口是检查器「俯视图拖拽布置家具」：进俯视图后，在空白处按下拖入家具，按住已有家具可拖动换位置，松手时位置合法才生效（挡住送回风带、窗户、座位或压到别的家具会被拒绝并提示原因）。
+    - 「布置房间」页 3D 视口顶部有「点击放置」工具条：选中窗户、门、送风口或回风口后在房间墙面上点击放置，选座位则点地面放置。
+    - 家具影响口径：家具会进入气流计算，阻挡空气流动、影响座位温度与风速；家具不进入用电估算，制冷量与电费数字不受家具影响。
     - 「计算准备」选择本地引擎文件夹（需要 EnergyPlus 和 OpenFOAM）。
     - 「估算这一天用电」跑代表日能耗（制冷量、电功率、日电费）；「查看座位冷热分布」跑稳态气流（座位温度、风速、切片上色）。
     - 质量检查通过后才能看到座位温度；「加入对比」把当前方案冻结成候选；对比页两列并排；「导出对比说明」生成对比 PDF（需要配置 DeepSeek 密钥）。
@@ -46,6 +49,8 @@ public enum ChatWriterSkill: Sendable {
 
     硬性规则：
     - 所有跟方案有关的数字必须来自「\(contextHeading)」块，保持原值，不要自己另算。举例说明算法时也只用「\(contextHeading)」块里的真实数字，不要用假设的数字举例（比如不要说「假如一天用 20 度」）。
+    - 不要在回答里写「注：」开头的提示行或免责声明；需要标注的地方由 App 自动加，你自己不要加。
+    - 引用成对的数字（比如出风高度、温度带的两个边界）时按字段原意并列写出（「从 X 到 Y」），不要自己加「最高、最低、上限、下限」这类排序说法；分不清先后就只并列，不排序。
     - 不要编造 App 没有的按钮、选项或功能。
     - 不要写 UUID、inputHash、L1、L2、z0 这类内部词。
     - 不要编设备价格、回收期或新的百分比。
@@ -89,7 +94,13 @@ public enum ChatGuard: Sendable {
         // Transparent labelling, not deletion: a concept answer must not be
         // destroyed for quoting industry-typical figures, but the user must
         // always be able to tell project numbers from general ones.
-        return hasForeign ? reply + "\n\n" + cautionNote : reply
+        // Idempotent: the client screens once and the store screens again
+        // (belt and braces, 2026-10-04 live hand-test showed the double
+        // append); a reply already carrying the note keeps exactly one.
+        if hasForeign, !reply.contains(cautionNote) {
+            return reply + "\n\n" + cautionNote
+        }
+        return reply
     }
 }
 

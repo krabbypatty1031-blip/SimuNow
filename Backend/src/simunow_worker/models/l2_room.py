@@ -1,7 +1,9 @@
 """Map a P2 ProjectDraft onto the P1 room JSON that write_openfoam_room understands.
 
 Does not invent envelope UA, wall temperatures, or quality.pass.
-Furniture stays omitted until the P1 loader accepts boxes.
+Furniture boxes reach the L2 case as blocked cells since 2026-10-04; the
+kind (desk/chair/cabinet/screen) is a display label only and never changes
+the solver input.
 """
 
 from __future__ import annotations
@@ -60,6 +62,46 @@ def _windows(geometry: dict) -> list[dict]:
 def _window_area_m2(windows: list[dict]) -> float:
     """Total glazed area over all windows."""
     return sum(patch_area_m2(item) for item in windows)
+
+
+def _obstacles(geometry: dict) -> list[dict]:
+    """Validated furniture AABBs in contract metres (2026-10-04).
+
+    The App's placement rules already refuse boxes that leave the room or
+    overlap furniture/seats/terminal bands/windows; this mapper still
+    validates the room bounds so a hand-edited or migrated project is an
+    honest failed task, never a case with furniture hanging off the mesh.
+    """
+    size = (
+        geometry["sizeX"]["value"],
+        geometry["sizeY"]["value"],
+        geometry["sizeZ"]["value"],
+    )
+    boxes = []
+    for index, item in enumerate(geometry.get("obstacles") or []):
+        origin = item.get("origin") or {}
+        box_size = item.get("size") or {}
+        x0, y0, z0 = float(origin["x"]), float(origin["y"]), float(origin["z"])
+        sx, sy, sz = float(box_size["x"]), float(box_size["y"]), float(box_size["z"])
+        x1, y1, z1 = x0 + sx, y0 + sy, z0 + sz
+        if not (0 <= x0 < x1 <= size[0] + 1e-9 and 0 <= y0 < y1 <= size[1] + 1e-9 and 0 <= z0 < z1 <= size[2] + 1e-9):
+            raise ValueError(
+                f"obstacle {item.get('id', index)} leaves the room box "
+                f"0..{size[0]:g} x 0..{size[1]:g} x 0..{size[2]:g} m"
+            )
+        boxes.append(
+            {
+                "id": str(item.get("id", f"F{index + 1}")),
+                "kind": str(item.get("kind", "desk")),
+                "x0": x0,
+                "y0": y0,
+                "z0": z0,
+                "x1": x1,
+                "y1": y1,
+                "z1": z1,
+            }
+        )
+    return boxes
 
 
 # Walls a window may sit on. xMin/xMax run along y; yMin/yMax along x.
@@ -181,6 +223,7 @@ def project_to_l2_room(draft: dict) -> dict:
     # per-window watts sum to the same total W through any merge.
     window_rects = _window_rects(windows, size, hvac)
     window_area = _window_area_m2(windows)
+    obstacles = _obstacles(geometry)
     seats = occupancy.get("seats", [])
     seat_z = seats[0]["position"]["z"] if seats else 1.1
     outdoor = hvac["outdoorAirM3s"]["value"]
@@ -200,9 +243,17 @@ def project_to_l2_room(draft: dict) -> dict:
             "gravity_foam_m_s2": [0, -9.81, 0],
         },
         "assumptions": [
-            "omitted: furniture_boxes",
+            # Furnished rooms carry the blocked-cell disclosure instead of the
+            # old omission; empty rooms keep the omission (nothing to block).
+            *( ["furniture boxes enter the L2 case as blocked cells (boxToCell/subsetMesh)"] if obstacles
+                else ["omitted: furniture_boxes"] ),
+            *( ["furniture kind (desk/chair/cabinet/screen) is a display label; the solver sees one blocked box per piece"] if obstacles
+                else ["P1 first-version L2 case has no furniture boxes"] ),
+            *( [
+                "furniture surfaces are solid and adiabatic; thermal mass is not modeled",
+                "furniture blocks whole cells selected by cell centre; box edges snap to the mesh",
+            ] if obstacles else [] ),
             "omitted: envelope_u_value",
-            "P1 first-version L2 case has no furniture boxes",
             "wall temperatures are not invented from UA",
             "supply band spans the full wall; velocity scaled to preserve project supply m3/s",
             "each window enters at its own wall, span and height; total window W is the sum over windows",
@@ -272,6 +323,22 @@ def project_to_l2_room(draft: dict) -> dict:
                 },
             }
             for rect in window_rects
+        ],
+        # One entry per furniture box in contract Z-up metres: the case writer
+        # turns each AABB into blocked mesh cells. `kind` rides along for
+        # disclosure; it never changes the solver input.
+        "obstacles": [
+            {
+                "id": box["id"],
+                "kind": box["kind"],
+                "x0_m": {"value": box["x0"], "unit": "m", "source": "project"},
+                "y0_m": {"value": box["y0"], "unit": "m", "source": "project"},
+                "z0_m": {"value": box["z0"], "unit": "m", "source": "project"},
+                "x1_m": {"value": box["x1"], "unit": "m", "source": "project"},
+                "y1_m": {"value": box["y1"], "unit": "m", "source": "project"},
+                "z1_m": {"value": box["z1"], "unit": "m", "source": "project"},
+            }
+            for box in obstacles
         ],
         "gains": {
             "n_people": _qty(occupancy["occupantCount"]),

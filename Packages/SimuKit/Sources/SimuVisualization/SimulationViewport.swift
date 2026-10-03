@@ -7,6 +7,10 @@ import SimuDesignSystem
 /// RealityKit room; older systems keep the Canvas wireframe. A quality-passed
 /// field slice paints the seat-height plane; without a field no colour is
 /// drawn - an illustrative rainbow is never presented as CFD.
+///
+/// Tap placement (2026-10-04) exists only on the RealityKit path: the canvas
+/// fallback has no hit-test, so `isPlacing`/`onTapSurface` are ignored there
+/// and the inspector add-buttons stay the accessible path.
 public struct SimulationViewport: View {
     private let draft: ProjectDraft?
     private let field: FieldSlice?
@@ -17,6 +21,9 @@ public struct SimulationViewport: View {
     /// its measured air temperature. nil keeps the plain seat names - no
     /// temperature is ever invented.
     private let seatSamples: [SeatSample]?
+    /// Placement-mode flag and tap callback, forwarded to `RoomRealityView`.
+    private let isPlacing: Bool
+    private let onTapSurface: ((PlacementGeometry.Surface) -> Void)?
 
     public init(
         draft: ProjectDraft?,
@@ -24,7 +31,9 @@ public struct SimulationViewport: View {
         flow: FlowOverlay? = nil,
         sharedPalette: SlicePalette? = nil,
         yaw: Binding<Double>? = nil,
-        seatSamples: [SeatSample]? = nil
+        seatSamples: [SeatSample]? = nil,
+        isPlacing: Bool = false,
+        onTapSurface: ((PlacementGeometry.Surface) -> Void)? = nil
     ) {
         self.draft = draft
         self.field = field
@@ -32,6 +41,8 @@ public struct SimulationViewport: View {
         self.sharedPalette = sharedPalette
         self.yaw = yaw
         self.seatSamples = seatSamples
+        self.isPlacing = isPlacing
+        self.onTapSurface = onTapSurface
     }
 
     public var body: some View {
@@ -46,7 +57,9 @@ public struct SimulationViewport: View {
                     flow: flow,
                     sharedPalette: sharedPalette,
                     yaw: yaw,
-                    seatSamples: seatSamples
+                    seatSamples: seatSamples,
+                    isPlacing: isPlacing,
+                    onTapSurface: onTapSurface
                 )
             } else {
                 RoomWireframeView(

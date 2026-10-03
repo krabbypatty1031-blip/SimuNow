@@ -17,10 +17,20 @@ public struct RoomRealityView: View {
     /// or unmatched ids keep the plain seat name, never a fabricated number.
     private let seatSamples: [SeatSample]?
     private let externalYaw: Binding<Double>?
+    /// Tap placement (2026-10-04): when a placement mode is armed the next
+    /// tap hit-tests the named wall/floor collision boxes and reports the
+    /// draft surface it landed on. Camera orbit keeps working; a tap that
+    /// misses every named box is ignored, never clamped onto a wall.
+    private let isPlacing: Bool
+    private let onTapSurface: ((PlacementGeometry.Surface) -> Void)?
     @State private var internalYaw: Double = ViewportOrbit.defaultYaw
     @State private var orbit = ViewportOrbit()
     @State private var dragStart: (yaw: Double, pitch: Double)?
     @State private var pinchStart: Double?
+    /// Camera content captured in RealityView's make closure so a later tap
+    /// can call `hitTest(point:in:)`. The struct holds the scene's backing
+    /// handle, so the copy still resolves the same content.
+    @State private var realityContent: RealityViewCameraContent?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
@@ -29,7 +39,9 @@ public struct RoomRealityView: View {
         flow: FlowOverlay? = nil,
         sharedPalette: SlicePalette? = nil,
         yaw: Binding<Double>? = nil,
-        seatSamples: [SeatSample]? = nil
+        seatSamples: [SeatSample]? = nil,
+        isPlacing: Bool = false,
+        onTapSurface: ((PlacementGeometry.Surface) -> Void)? = nil
     ) {
         self.scene = scene
         self.field = field
@@ -37,6 +49,8 @@ public struct RoomRealityView: View {
         self.sharedPalette = sharedPalette
         self.seatSamples = seatSamples
         self.externalYaw = yaw
+        self.isPlacing = isPlacing
+        self.onTapSurface = onTapSurface
     }
 
     private var yaw: Binding<Double> {
@@ -79,6 +93,9 @@ public struct RoomRealityView: View {
     private func realityContent(phase: Double) -> some View {
         RealityView { content in
             content.camera = .virtual
+            // Keep the camera content so a placement tap can hitTest through
+            // it later (the make closure's `content` is inout and escapes).
+            realityContent = content
             let root = await RoomEntityBuilder.makeRoot(
                 scene: scene,
                 field: field,
@@ -99,6 +116,16 @@ public struct RoomRealityView: View {
             }
         }
         .id(buildID)
+        .gesture(
+            // Placement taps only fire when a mode is armed; orbit drags
+            // keep working at all times. A tap without a mode does nothing,
+            // so the two interactions never fight.
+            SpatialTapGesture()
+                .onEnded { value in
+                    guard isPlacing, onTapSurface != nil else { return }
+                    handlePlacementTap(at: value.location)
+                }
+        )
         .gesture(
             DragGesture()
                 .onChanged { value in
@@ -135,8 +162,66 @@ public struct RoomRealityView: View {
             }
         }
         .accessibilityLabel(Text(accessibilityText))
-        .accessibilityHint(Text("拖动旋转房间，捏合缩放"))
+        .accessibilityHint(Text(isPlacing
+            ? "已开启点击放置：点房间墙面放窗户、门或风口，点地面放座位；拖动仍可旋转房间"
+            : "拖动旋转房间，捏合缩放"))
         .accessibilityIdentifier("roomRealityView")
+    }
+
+    /// Resolves one placement tap: hit-test the named wall/floor collision
+    /// boxes, convert the scene-space hit into root-local display metres
+    /// (undoing the orbit transform), then into draft coordinates. A tap
+    /// that misses every named box is dropped — the patch is never forced
+    /// onto the nearest wall.
+    private func handlePlacementTap(at location: CGPoint) {
+        guard let content = realityContent else { return }
+        let hits = content.hitTest(point: location, in: .local, query: .all, mask: .all)
+        // Walls and floor carry "placement.*" names; the first named hit wins.
+        guard let hit = hits.first(where: { $0.entity.name.hasPrefix("placement.") }) else { return }
+        // Entity has no `ancestors` collection: walk `parent` up to the room
+        // root so the hit position can be converted into root-local metres.
+        var node: Entity? = hit.entity
+        var root: Entity?
+        while let current = node {
+            if current.name == RoomEntityBuilder.rootName {
+                root = current
+                break
+            }
+            node = current.parent
+        }
+        guard let root else { return }
+        // Hit position is scene-space; convert into the root's local frame,
+        // where the schematic meshes were placed in centered display metres.
+        let local = root.convert(position: SIMD3<Float>(hit.position), from: nil)
+        let sizeXM = scene.sizeXM
+        let sizeYM = scene.sizeYM
+        let sizeZM = scene.sizeZM
+        if hit.entity.name == PlacementGeometry.floorEntityName {
+            let floor = PlacementGeometry.floorSurface(
+                displayX: Double(local.x),
+                displayY: Double(local.y),
+                displayZ: Double(local.z),
+                sizeXM: sizeXM,
+                sizeYM: sizeYM,
+                sizeZM: sizeZM
+            )
+            onTapSurface?(.floor(xM: floor.xM, yM: floor.yM))
+        } else {
+            // "placement.wall.<rawValue>"; an unknown suffix is dropped.
+            let raw = hit.entity.name
+                .dropFirst("placement.wall.".count)
+            guard let wall = WallFace(rawValue: String(raw)) else { return }
+            let surface = PlacementGeometry.wallSurface(
+                wall: wall,
+                displayX: Double(local.x),
+                displayY: Double(local.y),
+                displayZ: Double(local.z),
+                sizeXM: sizeXM,
+                sizeYM: sizeYM,
+                sizeZM: sizeZM
+            )
+            onTapSurface?(.wall(wall, sM: surface.sM, zM: surface.zM))
+        }
     }
 
     private var accessibilityText: String {

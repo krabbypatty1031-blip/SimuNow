@@ -25,17 +25,20 @@ public struct WallPatchScene: Equatable, Sendable {
 }
 
 /// Furniture box in computation metres (Z-up). Same origin/size as the
-/// draft obstacle; the stored id stays on the model.
+/// draft obstacle; the stored id stays on the model. `kind` drives the
+/// schematic shape only — physics sees one blocked box either way.
 public struct FurnitureScene: Equatable, Identifiable, Sendable {
     public var id: String
     public var origin: Position3D
     public var size: Position3D
+    public var kind: FurnitureKind
     public var displayName: String
 
-    public init(id: String, origin: Position3D, size: Position3D, displayName: String) {
+    public init(id: String, origin: Position3D, size: Position3D, kind: FurnitureKind, displayName: String) {
         self.id = id
         self.origin = origin
         self.size = size
+        self.kind = kind
         self.displayName = displayName
     }
 }
@@ -86,12 +89,18 @@ public struct RoomScene: Equatable, Sendable {
         doors = geometry.openings.filter { $0.kind == .door }.map(Self.patch)
         supply = draft.hvac.map { Self.patch($0.supply) }
         returnAir = draft.hvac.map { Self.patch($0.returnTerminal) }
-        furniture = geometry.obstacles.enumerated().map { index, box in
-            FurnitureScene(
+        // Numbering runs within each kind (桌子 1, 椅子 1, ...) so the label
+        // names what the user placed. Kinds older files lack decode as desks.
+        var kindCounts: [FurnitureKind: Int] = [:]
+        furniture = geometry.obstacles.map { box in
+            let index = kindCounts[box.kind, default: 0]
+            kindCounts[box.kind] = index + 1
+            return FurnitureScene(
                 id: box.id,
                 origin: box.origin,
                 size: box.size,
-                displayName: UserFacingCopy.furnitureTitle(index: index)
+                kind: box.kind,
+                displayName: UserFacingCopy.furnitureTitle(kind: box.kind, index: index)
             )
         }
         let draftSeats = draft.occupancy?.seats ?? []

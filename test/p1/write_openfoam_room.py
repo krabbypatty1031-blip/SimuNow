@@ -20,6 +20,7 @@ from room_input import (
     inlet_area_m2,
     input_hash,
     internal_gain_w,
+    obstacle_boxes,
     qty,
     room_box,
     window_area_m2,
@@ -63,6 +64,59 @@ def _mid(lo: float, hi: float) -> float:
 
 def _in_band(m: float, lo: float, hi: float) -> bool:
     return lo - 1e-9 <= m <= hi + 1e-9
+
+
+def _blocked_cells(
+    cuts_x: list[float],
+    cuts_h: list[float],
+    cuts_s: list[float],
+    nxs: list[int],
+    nhs: list[int],
+    nss: list[int],
+    boxes: list[dict[str, Any]],
+) -> tuple[int, float, float]:
+    """Cells whose centres lie inside a furniture box, in foam coordinates.
+
+    Same selection rule as OpenFOAM boxToCell (cell-centre containment), so
+    the counted blocked volume matches the cells subsetMesh will remove —
+    the internal-gain source is rescaled by exactly that fluid volume, so
+    the energy gate keeps accounting the draft's people/light/equipment
+    watts even with furniture in the room. Total cells stay a few thousand;
+    the enumeration is cheap and exact.
+    """
+    # Foam (x, y_up, z_span) = contract (x, z, y): convert each box once.
+    foam_boxes = [
+        ((box["x0"], box["z0"], box["y0"]), (box["x1"], box["z1"], box["y1"]))
+        for box in boxes
+    ]
+
+    def inside(x: float, y: float, z: float) -> bool:
+        return any(
+            lo[0] <= x <= hi[0] and lo[1] <= y <= hi[1] and lo[2] <= z <= hi[2]
+            for lo, hi in foam_boxes
+        )
+
+    blocked = 0
+    blocked_volume = 0.0
+    total_volume = 0.0
+    for i, nx_i in enumerate(nxs):
+        dx = (cuts_x[i + 1] - cuts_x[i]) / nx_i
+        for sub_i in range(nx_i):
+            cx = cuts_x[i] + (sub_i + 0.5) * dx
+            for j, nh_j in enumerate(nhs):
+                dh = (cuts_h[j + 1] - cuts_h[j]) / nh_j
+                for sub_j in range(nh_j):
+                    ch = cuts_h[j] + (sub_j + 0.5) * dh
+                    for k, ns_k in enumerate(nss):
+                        ds = (cuts_s[k + 1] - cuts_s[k]) / ns_k
+                        for sub_k in range(ns_k):
+                            cs = cuts_s[k] + (sub_k + 0.5) * ds
+                            volume = dx * dh * ds
+                            total_volume += volume
+                            if inside(cx, ch, cs):
+                                blocked += 1
+                                blocked_volume += volume
+    return blocked, blocked_volume, total_volume
 
 
 def _validated_windows(room: dict[str, Any]) -> list[dict[str, Any]]:
@@ -141,6 +195,13 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
     nhs = _allocate_cells([cuts_h[j + 1] - cuts_h[j] for j in range(len(cuts_h) - 1)], n_height)
     nss = _allocate_cells([cuts_s[k + 1] - cuts_s[k] for k in range(len(cuts_s) - 1)], n_span)
 
+    # Furniture (2026-10-04): validated contract AABBs; each box becomes
+    # blocked mesh cells via topoSet/subsetMesh in the pipeline.
+    obstacles = obstacle_boxes(room)
+    blocked_cells, blocked_volume, total_volume = (
+        _blocked_cells(cuts_x, cuts_h, cuts_s, nxs, nhs, nss, obstacles) if obstacles else (0, 0.0, 0.0)
+    )
+
     u_in = qty(room["supply"]["u_m_s"])
     t_supply = qty(room["supply"]["t_c"]) + 273.15
     t_init = qty(room["t_init_c"]) + 273.15
@@ -156,7 +217,12 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
     window_gradients = [qty(item["q_w_m2"]) / kappa for item in windows]
     window_patches = [f"window{index}" for index in range(len(windows))]
     volume = lx * span * height
-    su_t = internal_gain_w(room) / (rho * cp * volume)
+    # Internal gains spread over the FLUID volume: blocked cells no longer
+    # carry source, so Su is rescaled to inject the same total watts the
+    # energy gate accounts (people + lights + equipment), never silently
+    # less because furniture displaced air.
+    volume_fluid = (total_volume or volume) - blocked_volume
+    su_t = internal_gain_w(room) / (rho * cp * volume_fluid)
     end_time = int(qty(room["solver"]["end_time"]))
     seat_h = qty(room["seat_height_m"])
     far = max(room["seats"], key=lambda seat: float(seat["x_m"]))
@@ -283,6 +349,48 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
         )
         + "\n);\nmergePatchPairs ();\n",
     )
+    if obstacles:
+        # Foam coordinates: (x, y_up=contract z, z_span=contract y). The
+        # pipeline runs topoSet then `subsetMesh fluid -patch furniture` so
+        # the exposed faces become a solid `furniture` boundary patch.
+        foam_boxes = "\n".join(
+            f"            ({box['x0']:.6f} {box['z0']:.6f} {box['y0']:.6f}) "
+            f"({box['x1']:.6f} {box['z1']:.6f} {box['y1']:.6f})"
+            for box in obstacles
+        )
+        # v2512 (ESI) topoSetDict: `type` names the SET kind, `source` the
+        # selector; `invert` carries the set type too. Verified against the
+        # pinned engine by hand (2026-10-04).
+        _write(
+            dest / "system" / "topoSetDict",
+            _header("dictionary", "topoSetDict")
+            + f"""actions
+(
+    {{
+        name    furniture;
+        action  new;
+        type    cellSet;
+        source  boxToCell;
+        boxes
+        (
+{foam_boxes}
+        );
+    }}
+    {{
+        name    fluid;
+        action  new;
+        type    cellSet;
+        source  cellToCell;
+        set     furniture;
+    }}
+    {{
+        name    fluid;
+        action  invert;
+        type    cellSet;
+    }}
+);
+""",
+        )
     _write(
         dest / "system" / "controlDict",
         _header("dictionary", "controlDict")
@@ -581,5 +689,31 @@ boundaryField
         "turbulence": "laminar",
         "assumptions": room["assumptions"],
     }
+    # Furniture accounting (2026-10-04): what the pipeline removes and the
+    # fluid volume the rescaled internal-gain source spreads over, so the
+    # energy gate's numbers stay traceable to the mesh. Only furnished
+    # rooms carry the keys; the empty-room meta stays the pre-furniture
+    # pinned shape.
+    if obstacles:
+        meta.update(
+            {
+                "obstacles": [
+                    {
+                        "id": box["id"],
+                        "kind": box["kind"],
+                        "x0_m": box["x0"],
+                        "y0_m": box["y0"],
+                        "z0_m": box["z0"],
+                        "x1_m": box["x1"],
+                        "y1_m": box["y1"],
+                        "z1_m": box["z1"],
+                    }
+                    for box in obstacles
+                ],
+                "blocked_cells": blocked_cells,
+                "blocked_volume_m3": blocked_volume,
+                "fluid_volume_m3": volume_fluid,
+            }
+        )
     _write(dest / "case_meta.json", json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
     return dest

@@ -1,5 +1,6 @@
 import SwiftUI
 import SimuCore
+import SimuDesignSystem
 
 /// Which room item is open. The list stays in the sidebar; the editor uses the other column.
 enum InspectorPage: Hashable {
@@ -7,6 +8,8 @@ enum InspectorPage: Hashable {
     case room
     case opening(String)
     case obstacle(String)
+    /// Top-down drag-to-place plan (user request 2026-10-04).
+    case furniturePlan
     case occupancy
     case seat(String)
     case temperatures
@@ -226,7 +229,7 @@ public struct RoomEditorForm: View {
                     Text("先填写房间尺寸后再添加家具。")
                         .foregroundStyle(.secondary)
                 } else if store.project?.geometry?.obstacles.isEmpty == true {
-                    Text("还没有家具。")
+                    Text("还没有家具。可以在俯视图里拖入。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -235,9 +238,23 @@ public struct RoomEditorForm: View {
                         toggle(.obstacle(box.id))
                     }
                 }
-                Button("添加家具") { addObstacle() }
-                    .disabled(store.project?.geometry == nil)
-                    .accessibilityLabel("添加家具，位置与尺寸单位米")
+                InspectorRow(title: "俯视图拖拽布置家具", isSelected: currentPage == .furniturePlan) {
+                    toggle(.furniturePlan)
+                }
+                .accessibilityLabel("俯视图拖拽布置家具，类型先选再拖入")
+                // 类型按钮（用户要求 2026-10-04）：家具按类型添加，各自带
+                // 默认尺寸落到房间一角附近，之后可拖拽或数值微调。
+                // FlowLayout（2026-10-04 修复）：检查器窄列容不下四个按钮的
+                // 一整行，HStack 不折行会把右端裁掉；流式布局保持横排、
+                // 放不下才折到下一行，宽检查器与 iPhone 整行仍是一行。
+                FlowLayout(spacing: 12) {
+                    ForEach(FurnitureKind.allCases, id: \.self) { kind in
+                        Button("添加\(kind.title)") { addObstacle(kind: kind) }
+                            .fixedSize()
+                            .accessibilityLabel("添加\(kind.title)，默认尺寸单位米")
+                    }
+                }
+                .disabled(store.project?.geometry == nil)
             }
             Section("使用") {
                 InspectorRow(title: occupancyLine, isSelected: currentPage == .occupancy) { toggle(.occupancy) }
@@ -319,26 +336,44 @@ public struct RoomEditorForm: View {
                 missingItem
             }
         case .obstacle(let id):
-            if let indexed = store.project?.geometry?.obstacles.enumerated().first(where: { $0.element.id == id }) {
-                Section(UserFacingCopy.furnitureTitle(index: indexed.offset)) {
+            if let box = store.project?.geometry?.obstacles.first(where: { $0.id == id }) {
+                Section(furnitureTitle(for: box)) {
                     ObstacleEditor(
-                        box: indexed.element,
-                        displayTitle: UserFacingCopy.furnitureTitle(index: indexed.offset),
-                        issue: store.fieldIssues.first(where: { $0.path == "geometry.obstacles.\(indexed.element.id)" }),
-                        onApply: { origin, size in
-                            store.applyObstacle(id: indexed.element.id, origin: origin, size: size)
+                        box: box,
+                        displayTitle: furnitureTitle(for: box),
+                        issue: store.fieldIssues.first(where: { $0.path == "geometry.obstacles.\(box.id)" }),
+                        onApply: { kind, origin, size in
+                            store.applyObstacle(id: box.id, origin: origin, size: size, kind: kind)
                         },
                         onDelete: {
-                            store.removeObstacle(id: indexed.element.id)
+                            store.removeObstacle(id: box.id)
                             show(.list)
                         }
                     )
-                    Text("外形是示意桌，不进入气流计算。")
+                    if let message = store.furniturePlacementMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("放置被拒绝 \(message)")
+                    }
+                    Text("外形是示意。家具以整格阻挡进入气流计算，与外形细节无关。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             } else {
                 missingItem
+            }
+        case .furniturePlan:
+            Section("俯视图拖拽布置") {
+                if store.project?.geometry == nil {
+                    Text("先填写房间尺寸后再布置家具。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    FurniturePlanView(store: store)
+                }
+                Text("松手时只放在房间内、不压其他家具、座位、送回风带和窗户的位置；不合法的位置会被拒绝并说明原因。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         case .occupancy:
             Section("人数与时间") { occupancyEditor }
@@ -699,9 +734,18 @@ public struct RoomEditorForm: View {
         return "\(title) · \(span)"
     }
 
+    /// Kind-based name (桌子 1 …), numbered within its own kind so the
+    /// label names what the user placed.
+    private func furnitureTitle(for box: ObstacleBox) -> String {
+        guard let obstacles = store.project?.geometry?.obstacles else {
+            return box.kind.title
+        }
+        let index = obstacles.prefix(while: { $0.id != box.id }).filter { $0.kind == box.kind }.count
+        return UserFacingCopy.furnitureTitle(kind: box.kind, index: index)
+    }
+
     private func furnitureSummary(_ box: ObstacleBox, index: Int) -> String {
-        let title = UserFacingCopy.furnitureTitle(index: index)
-        return "\(title) · 左右 \(UserFacingCopy.displayNumber(box.origin.x)) · 前后 \(UserFacingCopy.displayNumber(box.origin.y)) m"
+        "\(furnitureTitle(for: box)) · 左右 \(UserFacingCopy.displayNumber(box.origin.x)) · 前后 \(UserFacingCopy.displayNumber(box.origin.y)) m"
     }
 
     private func seatSummary(_ seat: Seat) -> String {
@@ -833,15 +877,20 @@ public struct RoomEditorForm: View {
         show(.opening(id))
     }
 
-    private func addObstacle() {
+    private func addObstacle(kind: FurnitureKind) {
         let existing = store.project?.geometry?.obstacles.map(\.id) ?? []
         let id = ProjectDraft.nextPrefixedID(prefix: "F", existing: existing)
+        let size = kind.defaultSize
         store.applyObstacle(
             id: id,
             origin: Position3D(x: 1, y: 1, z: 0),
-            size: Position3D(x: 1.2, y: 0.7, z: 0.75)
+            size: size,
+            kind: kind
         )
-        show(.obstacle(id))
+        // A refused default corner (message set) stays on the list page so
+        // the reason is visible; the drag plan or numeric editor can place
+        // the piece legally.
+        show(store.furniturePlacementMessage == nil ? .obstacle(id) : .furniturePlan)
     }
 
     private func addSeat() {
@@ -996,9 +1045,10 @@ private struct ObstacleEditor: View {
     let box: ObstacleBox
     let displayTitle: String
     let issue: FieldIssue?
-    let onApply: (Position3D, Position3D) -> Void
+    let onApply: (FurnitureKind, Position3D, Position3D) -> Void
     let onDelete: () -> Void
 
+    @State private var kind: FurnitureKind
     @State private var originX: Double
     @State private var originY: Double
     @State private var originZ: Double
@@ -1010,7 +1060,7 @@ private struct ObstacleEditor: View {
         box: ObstacleBox,
         displayTitle: String,
         issue: FieldIssue?,
-        onApply: @escaping (Position3D, Position3D) -> Void,
+        onApply: @escaping (FurnitureKind, Position3D, Position3D) -> Void,
         onDelete: @escaping () -> Void
     ) {
         self.box = box
@@ -1018,6 +1068,7 @@ private struct ObstacleEditor: View {
         self.issue = issue
         self.onApply = onApply
         self.onDelete = onDelete
+        _kind = State(initialValue: box.kind)
         _originX = State(initialValue: box.origin.x)
         _originY = State(initialValue: box.origin.y)
         _originZ = State(initialValue: box.origin.z)
@@ -1028,6 +1079,12 @@ private struct ObstacleEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Picker("类型", selection: $kind) {
+                ForEach(FurnitureKind.allCases, id: \.self) { item in
+                    Text(item.title).tag(item)
+                }
+            }
+            .accessibilityLabel("家具类型")
             NumericField("左右", value: $originX, unit: "m")
             NumericField("前后", value: $originY, unit: "m")
             NumericField("离地", value: $originZ, unit: "m")
@@ -1051,6 +1108,7 @@ private struct ObstacleEditor: View {
         .padding(.vertical, 4)
         .onSubmit(apply)
         .onChange(of: box) { _, updated in
+            kind = updated.kind
             originX = updated.origin.x
             originY = updated.origin.y
             originZ = updated.origin.z
@@ -1061,7 +1119,8 @@ private struct ObstacleEditor: View {
     }
 
     private var isDirty: Bool {
-        inspectorValuesDiffer(originX, box.origin.x)
+        kind != box.kind
+            || inspectorValuesDiffer(originX, box.origin.x)
             || inspectorValuesDiffer(originY, box.origin.y)
             || inspectorValuesDiffer(originZ, box.origin.z)
             || inspectorValuesDiffer(sizeX, box.size.x)
@@ -1071,6 +1130,7 @@ private struct ObstacleEditor: View {
 
     private func apply() {
         onApply(
+            kind,
             Position3D(x: originX, y: originY, z: originZ),
             Position3D(x: sizeX, y: sizeY, z: sizeZ)
         )

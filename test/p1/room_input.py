@@ -38,7 +38,14 @@ def load_room(path: Path) -> dict[str, Any]:
     if coords.get("foam_up_axis") != "Y":
         raise RoomError("P1 adapter only implements foam_up_axis=Y")
     assumptions = data.get("assumptions") or []
-    if not any("omitted: furniture_boxes" in str(item) for item in assumptions):
+    obstacles = data.get("obstacles") or []
+    if obstacles:
+        # Furnished rooms (2026-10-04): furniture blocks whole mesh cells.
+        # The disclosure must be present so no furnished case can pose as
+        # the pre-furniture "omitted" contract.
+        if not any("furniture boxes enter the L2 case as blocked cells" in str(item) for item in assumptions):
+            raise RoomError("furnished rooms must disclose furniture boxes as blocked cells")
+    elif not any("omitted: furniture_boxes" in str(item) for item in assumptions):
         raise RoomError("first-version rooms must assume omitted: furniture_boxes")
     LOGGER.debug("loaded room %s", data.get("name"))
     return data
@@ -155,6 +162,49 @@ def inlet_area_m2(room: dict[str, Any]) -> float:
 
 
 def point_in_fluid(room: dict[str, Any], x: float, y: float, z: float, margin: float = 1e-6) -> bool:
-    """No furniture in P1; reject wall/outside samples so 0 is not used as room air."""
+    """Reject wall/outside samples so 0 is never used as room air.
+
+    Furniture boxes (2026-10-04) block whole cells, so their AABBs are not
+    fluid either: a sample inside a box is omitted upstream, never snapped
+    to a neighbouring cell that could read as room air.
+    """
     lx, ly, lz = room_box(room)
-    return margin < x < lx - margin and margin < y < ly - margin and margin < z < lz - margin
+    if not (margin < x < lx - margin and margin < y < ly - margin and margin < z < lz - margin):
+        return False
+    for box in obstacle_boxes(room):
+        if box["x0"] + margin < x < box["x1"] - margin and box["y0"] + margin < y < box["y1"] - margin and box["z0"] + margin < z < box["z1"] - margin:
+            return False
+    return True
+
+
+def obstacle_boxes(room: dict[str, Any]) -> list[dict[str, Any]]:
+    """Contract Z-up AABBs of the furniture the L2 case blocks cells for.
+
+    The App's placement rules keep boxes inside the room and clear of
+    windows/terminals; this reader still validates bounds so a hand-edited
+    or migrated draft is an honest error, never a case with furniture
+    hanging outside the mesh.
+    """
+    lx, ly, lz = room_box(room)
+    boxes: list[dict[str, Any]] = []
+    for index, item in enumerate(room.get("obstacles") or []):
+        x0, y0, z0 = qty(item["x0_m"]), qty(item["y0_m"]), qty(item["z0_m"])
+        x1, y1, z1 = qty(item["x1_m"]), qty(item["y1_m"]), qty(item["z1_m"])
+        if not (0 <= x0 < x1 <= lx + 1e-9 and 0 <= y0 < y1 <= ly + 1e-9 and 0 <= z0 < z1 <= lz + 1e-9):
+            raise RoomError(
+                f"obstacle {item.get('id', index)} leaves the room box "
+                f"0..{lx:g} x 0..{ly:g} x 0..{lz:g} m"
+            )
+        boxes.append(
+            {
+                "id": str(item.get("id", f"F{index + 1}")),
+                "kind": str(item.get("kind", "desk")),
+                "x0": x0,
+                "y0": y0,
+                "z0": z0,
+                "x1": x1,
+                "y1": y1,
+                "z1": z1,
+            }
+        )
+    return boxes

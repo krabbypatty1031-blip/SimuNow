@@ -72,6 +72,10 @@ def project_to_l1_room(draft: dict) -> dict:
             "omitted: l1.shgc",
             "EnergyPlus constructions are engine defaults, not project envelope",
             "all windows merge into one east-wall window; window area is the sum over windows",
+            # Furniture (2026-10-04): the representative IdealLoads day has no
+            # furniture input; boxes reach the L2 case as blocked cells only.
+            # Honest omission, disclosed where the L1 result is read.
+            "furniture boxes do not enter the L1 IdealLoads day; they block cells in L2 only",
         ],
         "size": {
             "x_m": _qty(geometry["sizeX"]),

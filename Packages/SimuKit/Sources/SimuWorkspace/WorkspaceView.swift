@@ -15,6 +15,10 @@ public struct WorkspaceView: View {
     @State private var comparisonYaw: Double = -0.6
     /// Consult assistant sheet. One flag for both platforms.
     @State private var isChatPresented = false
+    /// Viewport tap placement (2026-10-04): the armed choice, or nil. The
+    /// toolbar only exists on the RealityKit path (macOS 15 / iOS 18);
+    /// the canvas fallback and VoiceOver keep the inspector add-buttons.
+    @State private var placementChoice: WorkspaceStore.ViewportPlacementChoice?
     /// Temporarily hidden (user request 2026-10-03): both detail disclosures
     /// cluttered the result cards. One switch gates every occurrence
     /// (results card, candidate card, recommendation card) so they come back
@@ -223,8 +227,13 @@ public struct WorkspaceView: View {
                 field: store.lastFieldSlice,
                 flow: store.lastFlowOverlay,
                 sharedPalette: nil,
-                seatSamples: store.lastL2Result?.seatSamples
+                seatSamples: store.lastL2Result?.seatSamples,
+                isPlacing: placementChoice != nil,
+                onTapSurface: handleViewportTap
             )
+            .overlay(alignment: .top) {
+                placementToolbar
+            }
         }
         #else
         NavigationStack {
@@ -237,8 +246,13 @@ public struct WorkspaceView: View {
                         field: store.lastFieldSlice,
                         flow: store.lastFlowOverlay,
                         sharedPalette: nil,
-                        seatSamples: store.lastL2Result?.seatSamples
+                        seatSamples: store.lastL2Result?.seatSamples,
+                        isPlacing: placementChoice != nil,
+                        onTapSurface: handleViewportTap
                     )
+                    .overlay(alignment: .top) {
+                        placementToolbar
+                    }
                 }
                 NavigationLink("编辑房间") {
                     RoomEditorForm(store: store)
@@ -248,6 +262,75 @@ public struct WorkspaceView: View {
             }
         }
         #endif
+    }
+
+    /// Placement toolbar. macOS 15 / iOS 18 only — the canvas fallback has no
+    /// hit-test, so the inspector add-buttons stay that path's only entry.
+    /// Re-selecting the armed choice disarms; a refused tap keeps the mode
+    /// and shows the reason so the user can try a different spot.
+    @ViewBuilder
+    private var placementToolbar: some View {
+        if #available(macOS 15.0, iOS 18.0, *) {
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("点击放置")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)  // the buttons carry the words
+                    ForEach(placementChoices, id: \.self) { choice in
+                        // Selected/unselected split into branches: one ternary
+                        // over two buttonStyle types does not type-check.
+                        if choice == placementChoice {
+                            Button(choice.title) {
+                                placementChoice = nil
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityLabel("\(choice.title)，已选中，点后到房间里点击放置")
+                            .accessibilityAddTraits(.isSelected)
+                        } else {
+                            Button(choice.title) {
+                                placementChoice = choice
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("\(choice.title)，点后到房间里点击放置")
+                        }
+                    }
+                    if placementChoice != nil {
+                        Button("取消") {
+                            placementChoice = nil
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("取消点击放置")
+                    }
+                }
+                if placementChoice != nil {
+                    Text("点房间墙面放窗户、门、风口；点地面放座位。拖动仍可旋转房间。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let notice = store.viewportPlacementMessage {
+                    Text(notice)
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
+            }
+            .padding(10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .padding(8)
+        }
+    }
+
+    private let placementChoices: [WorkspaceStore.ViewportPlacementChoice] = [
+        .window, .door, .supplyTerminal, .returnTerminal, .seat,
+    ]
+
+    /// One tap, one placement: a successful place disarms the mode; a
+    /// refused one keeps it armed so the next tap can try another spot.
+    private func handleViewportTap(_ surface: PlacementGeometry.Surface) {
+        guard let choice = placementChoice else { return }
+        if store.placeFromViewport(choice, on: surface) == nil {
+            placementChoice = nil
+        }
     }
 
     @ViewBuilder

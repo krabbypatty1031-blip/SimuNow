@@ -248,8 +248,11 @@ public enum UserFacingCopy: Sendable {
         return seatTitle(index: index, near: place)
     }
 
-    public static func furnitureTitle(index: Int) -> String {
-        "家具 \(index + 1)"
+    /// Furniture name by kind (user request 2026-10-04): the label names what
+    /// the user placed, numbered within its own kind. The old index-only
+    /// "家具 N" could not tell a desk from a cabinet.
+    public static func furnitureTitle(kind: FurnitureKind, index: Int) -> String {
+        "\(kind.title) \(index + 1)"
     }
 
     public static func terminalTitle(isSupply: Bool) -> String {

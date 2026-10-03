@@ -34,6 +34,65 @@ public struct ListedAssumption: Equatable, Identifiable, Sendable {
     }
 }
 
+public extension ProjectDraft {
+    /// Which existing wall patch a candidate span would collide with.
+    /// Same-wall rectangles overlap only when BOTH the s-range and the
+    /// z-range intersect; touching edges (s1 == otherS0) do not count, so
+    /// windows can sit side by side. Used by viewport tap placement to
+    /// refuse an overlapping patch before it ever enters the draft.
+    ///
+    /// Static form edits keep their existing per-opening wall-bounds checks
+    /// only; this query is placement-time policy, not a new draft rule.
+    func conflictingWallPatch(
+        wall: WallFace,
+        s0: Double,
+        s1: Double,
+        z0: Double,
+        z1: Double,
+        excluding owner: WallPatchOwner? = nil
+    ) -> WallPatchOwner? {
+        func overlaps(_ other: (s0: Double, s1: Double, z0: Double, z1: Double)) -> Bool {
+            s0 < other.s1 && other.s0 < s1 && z0 < other.z1 && other.z0 < z1
+        }
+        for opening in geometry?.openings ?? [] where opening.wall == wall {
+            // The owner's own patch never conflicts with itself; match by id
+            // so the kind label stays free to change.
+            if case .opening(let ownerID, _)? = owner, ownerID == opening.id {
+                continue
+            }
+            if overlaps((opening.s0.value, opening.s1.value, opening.z0.value, opening.z1.value)) {
+                return .opening(id: opening.id, kind: opening.kind)
+            }
+        }
+        if let hvac, owner != .supply, hvac.supply.wall == wall,
+           overlaps((hvac.supply.s0.value, hvac.supply.s1.value, hvac.supply.z0.value, hvac.supply.z1.value)) {
+            return .supply
+        }
+        if let hvac, owner != .returnTerminal, hvac.returnTerminal.wall == wall,
+           overlaps((hvac.returnTerminal.s0.value, hvac.returnTerminal.s1.value, hvac.returnTerminal.z0.value, hvac.returnTerminal.z1.value)) {
+            return .returnTerminal
+        }
+        return nil
+    }
+}
+
+/// Identifies one wall patch in the draft: an opening by id, or a terminal.
+public enum WallPatchOwner: Equatable, Sendable {
+    case opening(id: String, kind: OpeningKind)
+    case supply
+    case returnTerminal
+
+    /// Room-language name for the refusal message; never a raw id.
+    public var displayName: String {
+        switch self {
+        case .opening(_, .window): "窗户"
+        case .opening(_, .door): "门"
+        case .supply: "送风口"
+        case .returnTerminal: "回风口"
+        }
+    }
+}
+
 extension ProjectDraft {
     /// Reject non-positive sizes without inventing a default room.
     @discardableResult
@@ -200,8 +259,13 @@ extension ProjectDraft {
     }
 
     @discardableResult
-    public mutating func applyObstacle(id: String, origin: Position3D, size: Position3D) -> [FieldIssue] {
-        upsertObstacle(ObstacleBox(id: id, origin: origin, size: size))
+    public mutating func applyObstacle(
+        id: String,
+        origin: Position3D,
+        size: Position3D,
+        kind: FurnitureKind = .desk
+    ) -> [FieldIssue] {
+        upsertObstacle(ObstacleBox(id: id, origin: origin, size: size, kind: kind))
     }
 
     public mutating func removeObstacle(id: String) {

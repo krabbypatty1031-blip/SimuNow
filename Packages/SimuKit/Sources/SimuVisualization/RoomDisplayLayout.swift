@@ -260,8 +260,10 @@ public enum RoomDisplayLayout: Sendable {
             parts.append("ret:\(patchKey(returnAir))")
         }
         for box in scene.furniture {
+            // Kind rides in the key: switching a box from desk to cabinet
+            // must rebuild the schematic even at the same origin/size.
             parts.append(
-                "f:\(box.id):\(format(box.origin.x)),\(format(box.origin.y)),\(format(box.origin.z)):\(format(box.size.x)),\(format(box.size.y)),\(format(box.size.z))"
+                "f:\(box.id):\(box.kind.rawValue):\(format(box.origin.x)),\(format(box.origin.y)),\(format(box.origin.z)):\(format(box.size.x)),\(format(box.size.y)),\(format(box.size.z))"
             )
         }
         for seat in scene.seats {

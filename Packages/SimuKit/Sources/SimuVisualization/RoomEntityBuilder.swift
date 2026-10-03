@@ -109,7 +109,8 @@ enum RoomEntityBuilder {
             center: Position3D(x: scene.sizeXM / 2, y: scene.sizeYM / 2, z: 0),
             size: Position3D(x: scene.sizeXM, y: scene.sizeYM, z: 0.03),
             scene: scene,
-            material: RoomDisplayColor.unlit(RoomDisplayColor.floor, transparent: false)
+            material: RoomDisplayColor.unlit(RoomDisplayColor.floor, transparent: false),
+            name: PlacementGeometry.floorEntityName
         )
     }
 
@@ -121,28 +122,32 @@ enum RoomEntityBuilder {
             center: Position3D(x: 0, y: scene.sizeYM / 2, z: scene.sizeZM / 2),
             size: Position3D(x: thickness, y: scene.sizeYM, z: scene.sizeZM),
             scene: scene,
-            material: wall
+            material: wall,
+            name: PlacementGeometry.wallEntityName(.xMin)
         )
         addBox(
             to: root,
             center: Position3D(x: scene.sizeXM, y: scene.sizeYM / 2, z: scene.sizeZM / 2),
             size: Position3D(x: thickness, y: scene.sizeYM, z: scene.sizeZM),
             scene: scene,
-            material: wall
+            material: wall,
+            name: PlacementGeometry.wallEntityName(.xMax)
         )
         addBox(
             to: root,
             center: Position3D(x: scene.sizeXM / 2, y: 0, z: scene.sizeZM / 2),
             size: Position3D(x: scene.sizeXM, y: thickness, z: scene.sizeZM),
             scene: scene,
-            material: wall
+            material: wall,
+            name: PlacementGeometry.wallEntityName(.yMin)
         )
         addBox(
             to: root,
             center: Position3D(x: scene.sizeXM / 2, y: scene.sizeYM, z: scene.sizeZM / 2),
             size: Position3D(x: scene.sizeXM, y: thickness, z: scene.sizeZM),
             scene: scene,
-            material: wall
+            material: wall,
+            name: PlacementGeometry.wallEntityName(.yMax)
         )
     }
 
@@ -190,7 +195,8 @@ enum RoomEntityBuilder {
         let extents = RoomDisplayLayout.displayBoxExtents(size: box.size)
         let display = RoomDisplayLayout.centeredDisplay(center, scene: scene)
         root.addChild(
-            RoomSchematicMeshes.desk(
+            RoomSchematicMeshes.furniture(
+                kind: box.kind,
                 center: SIMD3(display.x, display.y, display.z),
                 size: SIMD3(extents.width, extents.height, extents.depth)
             )
@@ -318,13 +324,22 @@ enum RoomEntityBuilder {
         center: Position3D,
         size: Position3D,
         scene: RoomScene,
-        material: UnlitMaterial
+        material: UnlitMaterial,
+        name: String? = nil
     ) {
         let extents = RoomDisplayLayout.displayBoxExtents(size: size)
         let entity = ModelEntity(
             mesh: .generateBox(width: extents.width, height: extents.height, depth: extents.depth),
             materials: [material]
         )
+        // A named collision box lets viewport taps hit-test this face
+        // (PlacementGeometry resolves the name into a draft surface).
+        if let name {
+            entity.name = name
+            entity.collision = CollisionComponent(
+                shapes: [.generateBox(width: extents.width, height: extents.height, depth: extents.depth)]
+            )
+        }
         let display = RoomDisplayLayout.centeredDisplay(center, scene: scene)
         entity.position = SIMD3(display.x, display.y, display.z)
         root.addChild(entity)

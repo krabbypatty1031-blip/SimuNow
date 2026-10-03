@@ -5,6 +5,7 @@ import AppKit
 #endif
 import RealityKit
 import simd
+import SimuCore
 
 #if os(iOS) || os(tvOS)
 private typealias PlatformColor = UIColor
@@ -46,6 +47,83 @@ enum RoomSchematicMeshes {
                 root.addChild(leg)
             }
         }
+        return root
+    }
+
+    /// Kind dispatch (user request 2026-10-04): one entry per furniture type
+    /// so the viewport shows what the user dropped. The shapes are a display
+    /// convention only — the solver consumes one blocked box per piece.
+    static func furniture(kind: FurnitureKind, center: SIMD3<Float>, size: SIMD3<Float>) -> Entity {
+        switch kind {
+        case .desk:
+            return desk(center: center, size: size)
+        case .chair:
+            return chair(center: center, size: size)
+        case .cabinet:
+            return cabinet(center: center, size: size)
+        case .screen:
+            return screen(center: center, size: size)
+        }
+    }
+
+    /// Chair-only schematic (no seated person): seat slab, backrest on the
+    /// far side, four legs. Recognisably not a desk at a glance.
+    static func chair(center: SIMD3<Float>, size: SIMD3<Float>) -> Entity {
+        let root = Entity()
+        root.position = center
+        let seatY = -size.y / 2 + size.y * 0.45
+        root.addChild(box(SIMD3(size.x, size.y * 0.06, size.z * 0.9), at: SIMD3(0, seatY, 0), color: woodLight))
+        let backZ = size.z / 2 - size.z * 0.08
+        let backHeight = size.y * 0.5
+        root.addChild(
+            box(SIMD3(size.x, backHeight, size.z * 0.08), at: SIMD3(0, seatY + size.y * 0.28, backZ), color: woodDark)
+        )
+        let legHeight = size.y * 0.42
+        let legY = -size.y / 2 + legHeight / 2
+        let insetX = min(0.05, size.x * 0.15)
+        let insetZ = min(0.05, size.z * 0.15)
+        for x in [-1, 1] as [Float] {
+            for z in [-1, 1] as [Float] {
+                let leg = cylinder(height: legHeight, radius: 0.016, color: woodDark)
+                leg.position = SIMD3(x * (size.x / 2 - insetX), legY, z * (size.z / 2 - insetZ))
+                root.addChild(leg)
+            }
+        }
+        return root
+    }
+
+    /// Cabinet: one solid volume plus a handle bar on the front face.
+    static func cabinet(center: SIMD3<Float>, size: SIMD3<Float>) -> Entity {
+        let root = Entity()
+        root.position = center
+        root.addChild(box(size, at: .zero, color: woodDark))
+        let handleWidth = min(size.x * 0.4, 0.24)
+        let handleY = min(size.y * 0.3, 0.5)
+        root.addChild(
+            box(
+                SIMD3(handleWidth, 0.02, 0.012),
+                at: SIMD3(0, handleY, size.z / 2 + 0.007),
+                color: bezel
+            )
+        )
+        return root
+    }
+
+    /// Screen: thin standing panel with two feet so it reads as a divider.
+    static func screen(center: SIMD3<Float>, size: SIMD3<Float>) -> Entity {
+        let root = Entity()
+        root.position = center
+        let footY = -size.y / 2 + size.y * 0.05
+        for x in [-1, 1] as [Float] {
+            root.addChild(
+                box(
+                    SIMD3(size.x * 0.16, size.y * 0.1, size.z + 0.06),
+                    at: SIMD3(x * (size.x / 2 - size.x * 0.08), footY, 0),
+                    color: woodDark
+                )
+            )
+        }
+        root.addChild(box(SIMD3(size.x, size.y, size.z), at: .zero, color: fabric))
         return root
     }
 
@@ -191,6 +269,7 @@ enum RoomSchematicMeshes {
 
     private static var woodLight: PlatformColor { rgba(0.72, 0.55, 0.36) }
     private static var woodDark: PlatformColor { rgba(0.45, 0.30, 0.18) }
+    private static var fabric: PlatformColor { rgba(0.62, 0.60, 0.55) }
     private static var shirt: PlatformColor { rgba(0.25, 0.42, 0.62) }
     private static var mannequin: PlatformColor { rgba(0.78, 0.73, 0.66) }
     private static var bezel: PlatformColor { rgba(0.16, 0.16, 0.16) }

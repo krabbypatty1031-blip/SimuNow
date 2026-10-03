@@ -3,6 +3,7 @@ import Observation
 import SimuCore
 import SimuReporting
 import SimuSimulation
+import SimuVisualization
 
 @MainActor
 @Observable
@@ -39,6 +40,9 @@ public final class WorkspaceStore {
     public var lastBoundary: L2Boundary?
     public var runEvents: [SimulationEvent] = []
     public var runMessage: String?
+    /// Why the last furniture placement was refused; nil after a legal drop.
+    /// Placement rules are user-facing, so the wording is room language.
+    public var furniturePlacementMessage: String?
     public var isSubmitting = false
     public var engineStatus = "还不能估算。请在「计算准备」里选择计算文件夹。"
     public var pendingRepositoryRoot: URL?
@@ -168,9 +172,23 @@ public final class WorkspaceStore {
         project = draft
     }
 
-    public func applyObstacle(id: String, origin: Position3D, size: Position3D) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
-        fieldIssues = draft.applyObstacle(id: id, origin: origin, size: size)
+    /// Placement gate (user request 2026-10-04): a furniture box lands only
+    /// inside the room, clear of other furniture, seats, the supply/return
+    /// bands and windows — the same rule the drag preview runs live, so the
+    /// editor and the drop can never disagree. A refusal sets the message
+    /// and leaves the draft untouched.
+    public func applyObstacle(id: String, origin: Position3D, size: Position3D, kind: FurnitureKind = .desk) {
+        guard let current = project else {
+            return
+        }
+        let box = ObstacleBox(id: id, origin: origin, size: size, kind: kind)
+        if let rejection = FurniturePlacement.rejection(for: box, in: current, ignoring: id) {
+            furniturePlacementMessage = rejection.rawValue
+            return
+        }
+        furniturePlacementMessage = nil
+        var draft = current
+        fieldIssues = draft.applyObstacle(id: id, origin: origin, size: size, kind: kind)
         project = draft
     }
 
@@ -232,6 +250,173 @@ public final class WorkspaceStore {
         var draft = project ?? ProjectDraft(name: "未命名房间")
         fieldIssues = draft.applyReturnTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
         project = draft
+    }
+
+    // MARK: - Viewport tap placement (2026-10-04)
+
+    /// What the viewport can place with one tap. Mirrors the inspector's
+    /// add-buttons; the canvas fallback and VoiceOver keep that path.
+    public enum ViewportPlacementChoice: Equatable, Sendable {
+        case window, door, supplyTerminal, returnTerminal, seat
+
+        /// Room-language label for the placement toolbar.
+        public var title: String {
+            switch self {
+            case .window: "放窗户"
+            case .door: "放门"
+            case .supplyTerminal: "放送风口"
+            case .returnTerminal: "放回风口"
+            case .seat: "放座位"
+            }
+        }
+    }
+
+    /// Why the last viewport placement was refused; nil after a legal place.
+    /// Room language, like `furniturePlacementMessage`.
+    public var viewportPlacementMessage: String?
+
+    /// Places one item from a viewport tap. nil = placed; non-nil = a
+    /// room-language refusal. A refused tap leaves the draft untouched:
+    /// overlapping or out-of-wall patches are never written, so the draft
+    /// never gains an overlap from placement.
+    @discardableResult
+    public func placeFromViewport(
+        _ choice: ViewportPlacementChoice,
+        on surface: PlacementGeometry.Surface
+    ) -> String? {
+        viewportPlacementMessage = nil
+        guard var draft = project, let geometry = draft.geometry else {
+            viewportPlacementMessage = "先填写房间尺寸，再点击放置。"
+            return viewportPlacementMessage
+        }
+        let sizeXM = geometry.sizeX.value
+        let sizeYM = geometry.sizeY.value
+        let sizeZM = geometry.sizeZ.value
+
+        switch choice {
+        case .window, .door:
+            guard case .wall(let wall, let sM, let zM) = surface else {
+                viewportPlacementMessage = "窗户和门只能放在墙面上；点一下房间的一面墙。"
+                return viewportPlacementMessage
+            }
+            let patch: WallPatchScene?
+            if choice == .window {
+                patch = PlacementGeometry.windowPatch(
+                    on: wall, sM: sM, zM: zM, sizeXM: sizeXM, sizeYM: sizeYM, sizeZM: sizeZM
+                )
+            } else {
+                // A door stands on the floor; the tap height is ignored.
+                patch = PlacementGeometry.doorPatch(
+                    on: wall, sM: sM, sizeXM: sizeXM, sizeYM: sizeYM, sizeZM: sizeZM
+                )
+            }
+            guard let patch else {
+                viewportPlacementMessage = "这面墙放不下默认尺寸的\(choice == .window ? "窗户" : "门")。"
+                return viewportPlacementMessage
+            }
+            if let conflict = draft.conflictingWallPatch(
+                wall: wall, s0: patch.s0M, s1: patch.s1M, z0: patch.z0M, z1: patch.z1M
+            ) {
+                viewportPlacementMessage = "这里会与\(conflict.displayName)重叠；挪开一点再放。"
+                return viewportPlacementMessage
+            }
+            let id = ProjectDraft.nextPrefixedID(
+                prefix: choice == .window ? "W" : "D",
+                existing: geometry.openings.map(\.id)
+            )
+            // New windows get the same template-level 80 W/m² the inspector
+            // add-button writes, so both entry points reach both engines.
+            let flux = choice == .window
+                ? PhysicalQuantity(value: 80, unit: "W/m2", source: .assumed)
+                : nil
+            fieldIssues = draft.applyOpening(
+                id: id,
+                kind: choice == .window ? .window : .door,
+                wall: wall,
+                s0: patch.s0M,
+                s1: patch.s1M,
+                z0: patch.z0M,
+                z1: patch.z1M,
+                source: .user,
+                heatFluxWm2: flux
+            )
+            project = draft
+            return nil
+
+        case .supplyTerminal, .returnTerminal:
+            guard case .wall(let wall, let sM, let zM) = surface else {
+                viewportPlacementMessage = "风口只能放在墙面上；点一下房间的一面墙。"
+                return viewportPlacementMessage
+            }
+            // Placing a terminal on an HVAC-less draft installs the default
+            // split AC first (same machine as the inspector button), then
+            // moves the tapped terminal onto the tap.
+            if draft.hvac == nil {
+                _ = draft.installDefaultSplitAC()
+            }
+            let patch: WallPatchScene?
+            if choice == .supplyTerminal {
+                patch = PlacementGeometry.supplyPatch(
+                    on: wall, sM: sM, zM: zM, sizeXM: sizeXM, sizeYM: sizeYM, sizeZM: sizeZM
+                )
+            } else {
+                patch = PlacementGeometry.returnPatch(
+                    on: wall, sM: sM, zM: zM, sizeXM: sizeXM, sizeYM: sizeYM, sizeZM: sizeZM
+                )
+            }
+            guard let patch else {
+                viewportPlacementMessage = "这面墙放不下默认尺寸的风口。"
+                return viewportPlacementMessage
+            }
+            // Moving a terminal excludes its own current position, but the
+            // other terminal and every opening still block the tap.
+            let excluding: WallPatchOwner = choice == .supplyTerminal ? .supply : .returnTerminal
+            if let conflict = draft.conflictingWallPatch(
+                wall: wall,
+                s0: patch.s0M,
+                s1: patch.s1M,
+                z0: patch.z0M,
+                z1: patch.z1M,
+                excluding: excluding
+            ) {
+                viewportPlacementMessage = "这里会与\(conflict.displayName)重叠；挪开一点再放。"
+                return viewportPlacementMessage
+            }
+            if choice == .supplyTerminal {
+                // applySupplyTerminal recomputes flow from the new area;
+                // speed stays the independent input.
+                fieldIssues = draft.applySupplyTerminal(
+                    wall: wall, s0: patch.s0M, s1: patch.s1M, z0: patch.z0M, z1: patch.z1M, source: .user
+                )
+            } else {
+                fieldIssues = draft.applyReturnTerminal(
+                    wall: wall, s0: patch.s0M, s1: patch.s1M, z0: patch.z0M, z1: patch.z1M, source: .user
+                )
+            }
+            project = draft
+            return nil
+
+        case .seat:
+            guard case .floor(let xM, let yM) = surface else {
+                viewportPlacementMessage = "座位放在地面上；点一下房间地面。"
+                return viewportPlacementMessage
+            }
+            let position = PlacementGeometry.seatPosition(
+                xM: xM, yM: yM, sizeXM: sizeXM, sizeYM: sizeYM
+            )
+            // The sample point must sit in the fluid domain: not inside a
+            // furniture box, not against a wall.
+            guard geometry.containsSeat(Seat(id: "probe", position: position, source: .user)) else {
+                viewportPlacementMessage = "座位不能放在家具上或太靠墙；点地面的空处。"
+                return viewportPlacementMessage
+            }
+            let existing = draft.occupancy?.seats.map(\.id) ?? []
+            let id = ProjectDraft.nextPrefixedID(prefix: "S", existing: existing)
+            // applySeat: a new seat is a new person; headcount follows seats.
+            fieldIssues = draft.applySeat(id: id, position: position, source: .user)
+            project = draft
+            return nil
+        }
     }
 
     public func applyOccupantCount(_ value: Double) {
@@ -593,7 +778,19 @@ public final class WorkspaceStore {
         guard chatStreamingText != nil else { return }
         chatStreamingText = nil
         isChatThinking = false
-        chatTurns.append(ChatTurn(role: .assistant, text: final))
+        // History keeps the model's own words only (ADR-022 live hand-test
+        // 2026-10-04): the appended caution note must not ride back into the
+        // history the next round's model reads, or the model starts copying
+        // the note style into its own replies. The note becomes display
+        // metadata on the turn instead.
+        let hasCaution = final.hasSuffix(ChatGuard.cautionNote)
+        let body = hasCaution
+            ? String(final.dropLast(ChatGuard.cautionNote.count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            : final
+        chatTurns.append(
+            ChatTurn(role: .assistant, text: body.isEmpty ? final : body, hasCautionNote: hasCaution)
+        )
     }
 
     /// Start over without losing the project. Kept explicit: consult logs

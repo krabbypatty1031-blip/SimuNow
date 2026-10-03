@@ -24,9 +24,12 @@ from room_input import (
     foam_xyz,
     inlet_area_m2,
     input_hash,
+    internal_gain_w,
     load_room,
+    obstacle_boxes,
     point_in_fluid,
     qty,
+    room_box,
     window_rects,
     window_total_w,
 )
@@ -90,6 +93,132 @@ def _parse_checkmesh(text: str) -> str:
     if "Mesh OK." in text and "***Failed" not in text:
         return "ok"
     return "failed"
+
+
+# Boundary entry the exposed furniture faces get per solved field. Solid and
+# adiabatic: no slip, no heat flux, no pressure flux. Applied AFTER
+# subsetMesh (which may or may not rewrite 0/ fields), so the solver always
+# reads explicit entries, never a utility default.
+_FURNITURE_BC = {
+    "U": "type noSlip;",
+    "T": "type zeroGradient;",
+    "p_rgh": "type fixedFluxPressure; value uniform 0;",
+    "p": "type calculated; value uniform 0;",
+    "alphat": "type calculated; value uniform 0;",
+}
+
+
+def _account_furniture(case: Path, run_dir: Path, room: dict[str, Any]) -> dict[str, Any]:
+    """Measure what furniture actually removed; rescale the gain source.
+
+    The case writer estimates the blocked cells from its own enumeration;
+    topoSet/boxToCell decides on the real mesh. The honest numbers are the
+    ones the engine produced: blocked cells from the subsetMesh log, fluid
+    volume from checkMesh's Total volume. The internal-gain Su is rewritten
+    to spread the SAME people+lights+equipment watts over the measured
+    fluid volume, so the energy gate keeps accounting the draft's gains
+    regardless of how the boxes snapped to cells.
+    """
+    sub_log = (run_dir / "subsetMesh.log").read_text(encoding="utf-8", errors="replace")
+    match = re.search(r"Subset (\d+) of (\d+) cells", sub_log)
+    if not match:
+        raise RoomError("cannot read the furniture subset cell counts from subsetMesh.log")
+    kept, total = int(match.group(1)), int(match.group(2))
+    blocked_cells = total - kept
+    check_log = (run_dir / "checkMesh.log").read_text(encoding="utf-8", errors="replace")
+    # checkMesh prints "Total volume = 99.761484." mid-line: capture the run
+    # of number characters, then drop the sentence period.
+    volume_match = re.search(r"Total volume = ([0-9.eE+-]+)", check_log)
+    if not volume_match:
+        raise RoomError("cannot read the fluid volume from checkMesh.log")
+    fluid_volume = float(volume_match.group(1).rstrip("."))
+    lx, span, height = room_box(room)
+    blocked_volume = lx * span * height - fluid_volume
+
+    rho = qty(room["air"]["rho"])
+    cp = qty(room["air"]["cp"])
+    gains = internal_gain_w(room)
+    su = gains / (rho * cp * fluid_volume)
+
+    fv_path = case / "constant" / "fvOptions"
+    if fv_path.is_file():
+        fv = fv_path.read_text(encoding="utf-8", errors="replace")
+        fv = re.sub(r"T\s+\([^)]*\)\s*;", f"T           ({su:.8g} 0);", fv, count=1)
+        fv_path.write_text(fv, encoding="utf-8")
+
+    meta_path = case / "case_meta.json"
+    if meta_path.is_file():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["blocked_cells"] = blocked_cells
+        meta["blocked_volume_m3"] = blocked_volume
+        meta["fluid_volume_m3"] = fluid_volume
+        meta["t_source_k_s"] = su
+        meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    LOGGER.info(
+        "furniture blocked_cells=%s fluid_volume_m3=%.6f su=%.8g K/s",
+        blocked_cells,
+        fluid_volume,
+        su,
+    )
+    return {
+        "blocked_cells": blocked_cells,
+        "blocked_volume_m3": blocked_volume,
+        "fluid_volume_m3": fluid_volume,
+        "gain_w": gains,
+        "t_source_k_s": su,
+        "note": "boxes snap to whole cells (boxToCell); Su rescaled over measured fluid volume",
+    }
+
+
+def _make_furniture_wall_patch(case: Path) -> None:
+    """Re-type the mesh-level `furniture` patch from `empty` to `wall`.
+
+    subsetMesh stamps the new patch `type empty;` — the 2-D front/back-face
+    semantics — which is geometrically wrong for real faces wrapping a
+    furniture box: the solver would refuse mismatched patch fields and, even
+    when it ran, treat the faces as empty. A solid box deserves a wall patch.
+    """
+    boundary = case / "constant" / "polyMesh" / "boundary"
+    if not boundary.is_file():
+        return
+    text = boundary.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r"(^    furniture\s*\{[^}]*\})", text, re.MULTILINE)
+    if not match:
+        return
+    entry = match.group(1)
+    fixed = re.sub(r"type\s+empty\s*;", "type            wall;", entry)
+    # Drop the now-wrong empty group tag so inGroups matches the patch type.
+    fixed = re.sub(r"inGroups\s+\d+\(empty\)\s*;\s*\n", "", fixed)
+    if fixed != entry:
+        text = text.replace(entry, fixed, 1)
+        boundary.write_text(text, encoding="utf-8")
+
+
+def _write_furniture_boundary(case: Path) -> None:
+    """Force an explicit, physical `furniture` patch entry on every 0/ field.
+
+    subsetMesh creates the patch but stamps it `type empty;` (a 2-D
+    placeholder), which would abort or mis-solve the case. This replaces
+    any existing entry — or inserts one when subsetMesh left the field
+    alone — with the solid, adiabatic boundary: no slip, no heat flux, no
+    pressure flux.
+    """
+    _make_furniture_wall_patch(case)
+    for field, bc in _FURNITURE_BC.items():
+        path = case / "0" / field
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        entry = f"    furniture\n    {{\n        {bc}\n    }}\n"
+        if re.search(r"[ \t]*furniture\s*\{[^}]*\}", text):
+            text = re.sub(r"[ \t]*furniture\s*\{[^}]*\}", entry.rstrip(), text, count=1)
+        else:
+            close = text.rstrip().rfind("}")
+            if close < 0:
+                continue
+            text = text[:close] + entry + text[close:]
+        path.write_text(text, encoding="utf-8")
 
 
 def _probe_table(path: Path) -> list[list[float]]:
@@ -192,9 +321,33 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
     block = _of(case, ["blockMesh"], run_dir / "blockMesh.log", 120)
     if block.returncode != 0:
         raise RoomError("blockMesh failed")
+    # Furniture (2026-10-04): remove blocked cells before any quality claim.
+    # topoSet marks whole cells whose centres lie inside a furniture box;
+    # subsetMesh keeps the complement and turns the exposed faces into a
+    # solid `furniture` boundary patch, so the mesh the solver sees is the
+    # fluid the user's furniture left behind.
+    if obstacle_boxes(room):
+        topo = _of(case, ["topoSet"], run_dir / "topoSet.log", 120)
+        if topo.returncode != 0:
+            raise RoomError("topoSet failed")
+        sub = _of(
+            case,
+            ["subsetMesh", "fluid", "-patch", "furniture", "-overwrite"],
+            run_dir / "subsetMesh.log",
+            120,
+        )
+        if sub.returncode != 0:
+            raise RoomError("subsetMesh failed")
+        _write_furniture_boundary(case)
     check = _of(case, ["checkMesh"], run_dir / "checkMesh.log", 120)
     check_status = _parse_checkmesh((run_dir / "checkMesh.log").read_text(encoding="utf-8", errors="replace"))
     LOGGER.info("checkMesh %s", check_status)
+    # Measured furniture accounting (blocked cells, fluid volume) before any
+    # quality claim: the solver's gain source is rescaled to the volume the
+    # mesh actually kept.
+    furniture_quality: dict[str, Any] | None = None
+    if obstacle_boxes(room):
+        furniture_quality = _account_furniture(case, run_dir, room)
     quality: dict[str, Any] = {
         "pass": False,
         "input_hash": digest,
@@ -203,6 +356,8 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
         "pyvista": False,
         "slice_note": "未用 PyVista；切片来自 postProcess cuttingPlane VTK",
     }
+    if furniture_quality is not None:
+        quality["furniture"] = furniture_quality
     if check_status != "ok":
         LOGGER.error("checkMesh failed; not solving")
         (run_dir / "quality.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")

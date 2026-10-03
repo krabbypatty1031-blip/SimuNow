@@ -245,6 +245,27 @@
 影响：新增 `ChatTurn`（SimuCore）、`ChatContext`/`ChatAssistant` 协议/`ChatWriterSkill` prompt/`ChatGuard`/`DeepSeekChatClient`（SimuReporting，复用报告客户端的密钥解析与官方 URL，自由文本模式不用 json_object）、`ChatContextBuilder` + store 的 `sendChat`/`clearChat`（SimuWorkspace）、`ChatPanel` 对话面板 + 工具栏「咨询」按钮 sheet（两端通用，iOS 17/macOS 14 起可用 API）；`NarrationGuard.numericValues/numberTokens` private→internal 供同模块复用。UI 无 UI 测试 target，流程经 store 单测覆盖（stub assistant + guard 替换 + 无密钥 spoken note）。
 验证（2026-10-04）：`Scripts/check.sh test` 191 全绿（新增 4 例：请求携带 skill+上下文+历史、无密钥不联网、守卫四分支、store 流程含 guard 替换）；`mac`/`ios` BUILD SUCCEEDED。DeepSeek 实文手测待用户配置密钥后验证。
 
+## ADR-023：家具拖拽布置进 L2 阻挡格——topoSet/subsetMesh + 实测体积对账（已接受）
+
+日期：2026-10-04。
+背景：用户要求家具功能（桌子/椅子/柜子/屏风）+ 拖入放置 + 只能放在无重叠位置 + 拖拽定位后 L1/L2 引擎可以消费。
+备选：(a) 家具只显示不进求解（视口看到桌子，L2 空房间照算）；(b) 家具 box 进 L2 为阻挡格（topoSet boxToCell → subsetMesh 挖格 + 暴露面为 wall patch），L1 不进；(c) 家具实体热边界 CFD（湍流解析、热容、辐射交换）。
+选择：(b)。裁决依据：
+1. **不能假装家具不存在**：桌椅在送风射流路径上，空房间场会误导座位舒适结论——家具必须以某种物理形式进 L2；
+2. **P0/P1 不具备实体解析**：家具边界层网格与湍流模型远超当前验证范围（laminar + ν 0.003 钉版），实体建模是未验证宣称，违背硬约束 5/7——整格阻挡是可验证的最小物理（挖掉体积、暴露面 noSlip/绝热）；
+3. **L1 不进**：单区 IdealLoads 无几何概念，家具如实披露「不进 L1 代表日」；能量口径 L1/L2 本就不同口径分别披露；
+4. **kind 是显示标签**：桌子/椅子/柜子/屏风对求解器只是同一 AABB 阻挡，四类外形差异只进视口（`RoomSchematicMeshes`），不改求解输入——防止把外观当物理；
+5. **实测对账**：writer 预枚举 blocked cells（99）≠ boxToCell 实际（72→首试坐标转换缺失后为 97），内热源 Su 必须按 checkMesh 实测流体体积（99.761484 m³）重算，总增益 W 守恒不变（1036 W）——预估数字只进预估字段，能量门吃实测口径。
+
+实施要点：
+- **Swift 放置规则**（`FurniturePlacement.rejection`）：出房间/压家具（0.4 m 间隔）/压座位/挡终端带（整面墙全跨度，对齐 case writer 的整墙带）/挡窗（0.4 m 净空）拒绝；`WorkspaceStore.applyObstacle` 前置门禁，拒绝返回人话原因且草稿不动；`FurniturePlanView` 俯视 2D Canvas 拖拽（RealityView 无公开屏幕→世界 raycast，俯视图是可精确定位方案），0.05 m 吸附，ghost 绿/红实时反馈；
+- **管线**（`run_room.run_pipeline`）：blockMesh 后 `topoSet`（ESI v2512 语法：`type cellSet` 是集合类型、`source boxToCell/cellToCell` 是选择器、invert 也带 type）→ `subsetMesh fluid -patch furniture -overwrite` → **boundary 里 furniture patch 从 subsetMesh 写的 `type empty`（2-D 占位）改 `type wall`** → 0/ 场强制写家具条目（U noSlip / T zeroGradient / p_rgh fixedFluxPressure）——empty patch 语义对真实包围面是几何错误，求解器直接 FATAL；
+- **披露**：有家具房间必须带「furniture boxes enter the L2 case as blocked cells (boxToCell/subsetMesh)」等四条（`room_input.load_room` 前置强制，与空房间「omitted: furniture_boxes」互斥——家具房间不能冒充空房间合同）；`l2_room` 从 App draft（origin/size/kind）映射成 contract AABB qty 节点；
+- **空家具回归**：无 obstacles 时 writer 不写 topoSetDict、meta 无家具键（钉版输出形状不变），管线不跑 topoSet/subsetMesh。
+
+影响：`FurniturePlacement`（新，SimuCore）、`ObstacleBox.kind` + 旧 JSON 解码回退 desk、`FurniturePlanView`（新，SimuWorkspace 俯视拖拽）、`RoomSchematicMeshes` 四类外形、`FurniturePlacementTests` 8 例；Python `room_input.obstacle_boxes/point_in_fluid`、`l2_room._obstacles` + 披露切换、`write_openfoam_room` topoSetDict + 预估 Su + meta、`run_room` topoSet/subsetMesh/wall 重类型/Su 实测重算/`_account_furniture`；测试 `FurnitureTests` 8 例（p1）+ `FurnitureMappingTests` 4 例（Backend，含拖拽形状→映射→loader→writer 全链）。
+验证（2026-10-04）：`test/p1` 60 全绿（52+8 家具）；`Backend/tests` 137 全绿；`Scripts/check.sh test` 209 全绿；`mac`/`ios` BUILD SUCCEEDED。**真引擎端到端**：带家具（桌 1.2×0.7×0.75 + 椅）PASS=true，checkMesh ok、solver End、mass 相对误差 0、energy 相对误差 0.20%、monitors stable、97 cells 阻挡、Su 0.0086024 K/s（= 1036 W ÷ 实测流体体积）、4 座位全采样无 omitted；空家具真跑 PASS=true，钉版 t_source 0.008513732 与座位数字逐位不漂移。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

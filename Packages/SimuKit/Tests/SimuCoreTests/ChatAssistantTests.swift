@@ -3,7 +3,9 @@ import os
 import Testing
 import SimuCore
 import SimuReporting
-import SimuWorkspace
+// @testable: ChatContextBuilder is an internal SimuWorkspace type; the
+// draft-summary fixture asserts its furniture line without making it public.
+@testable import SimuWorkspace
 
 /// Consult assistant (ADR-022): the DeepSeek request carries the skill
 /// prompt plus the frozen context; the free-text guard keeps invented
@@ -107,6 +109,68 @@ import SimuWorkspace
     // "what is COP" answers carry industry-typical ranges).
     let invented = "换这个方案大约能省 37%。"
     #expect(ChatGuard.screen(invented, history: history, context: context) == invented + "\n\n" + ChatGuard.cautionNote)
+    // Idempotent (2026-10-04 live hand-test: the client screens once, the
+    // store screens again — the double append showed two identical notes):
+    // screening an already-noted reply must not add a second note.
+    let noted = invented + "\n\n" + ChatGuard.cautionNote
+    #expect(ChatGuard.screen(noted, history: history, context: context) == noted)
+}
+
+/// The caution note is display metadata, never model history: the stored
+/// turn keeps the model's own words, so the next round's model cannot copy
+/// the note style into its own reply (2026-10-04 live hand-test showed the
+/// model writing its own "注：…" line after seeing one in history).
+@MainActor
+@Test func consultStoreStripsCautionNoteFromHistoryTurn() async throws {
+    let store = WorkspaceStore()
+    store.chatTypingIntervalMs = 0
+    store.chatAssistant = StubChatAssistant { _, _ in "大概能省 37%。" }
+    await store.sendChat("能省多少？")
+    let turn = try #require(store.chatTurns.last)
+    #expect(turn.role == .assistant)
+    // The body keeps only the model's words; the note rides the flag.
+    #expect(turn.text == "大概能省 37%。")
+    #expect(turn.hasCautionNote == true)
+    // A clean reply: no note flag, unchanged text.
+    store.chatAssistant = StubChatAssistant { _, _ in "两个方案都通过了质量检查。" }
+    await store.sendChat("质量如何？")
+    let clean = try #require(store.chatTurns.last)
+    #expect(clean.text == "两个方案都通过了质量检查。")
+    #expect(clean.hasCautionNote == false)
+    // The history handed to the model never contains the note text: the
+    // model cannot imitate a line it has never seen.
+    for turn in store.chatTurns where turn.role == .assistant {
+        #expect(turn.text.contains(ChatGuard.cautionNote) == false)
+    }
+}
+
+/// Decoding turns persisted before the caution flag existed must read the
+/// flag as false, not fail (tolerant decode in `ChatTurn.init(from:)`).
+@Test func chatTurnDecodesWithoutCautionFlag() throws {
+    let legacy = """
+    {"id":"5D4C4B33-0000-0000-0000-000000000001","role":"assistant","text":"你好","sentAt":0}
+    """
+    let turn = try JSONDecoder().decode(ChatTurn.self, from: Data(legacy.utf8))
+    #expect(turn.text == "你好")
+    #expect(turn.hasCautionNote == false)
+}
+
+/// The draft summary carries furniture the consult assistant can quote
+/// (total + per-kind counts, kind order = FurnitureKind.allCases); an empty
+/// room stays silent about furniture instead of saying "家具 0 件".
+@Test func chatDraftSummaryCarriesFurnitureKindsAndCounts() throws {
+    var draft = ProjectDraft(name: "办公室")
+    _ = draft.applyRoomSize(x: 6, y: 6, z: 2.8, source: .user)
+    #expect(ChatContextBuilder.draftSummary(for: draft)?.contains("家具") == false)
+    // Default kind is desk; the second box names chair explicitly.
+    _ = draft.upsertObstacle(
+        ObstacleBox(id: "F1", origin: Position3D(x: 1, y: 1, z: 0), size: Position3D(x: 1.2, y: 0.7, z: 0.75))
+    )
+    _ = draft.upsertObstacle(
+        ObstacleBox(id: "F2", origin: Position3D(x: 3, y: 1, z: 0), size: Position3D(x: 0.5, y: 0.5, z: 0.9), kind: .chair)
+    )
+    let summary = try #require(ChatContextBuilder.draftSummary(for: draft))
+    #expect(summary.contains("家具 2 件：桌子×1、椅子×1"))
 }
 
 /// The store flow: context freezes the pinned evidence, a stubbed reply
@@ -137,10 +201,12 @@ import SimuWorkspace
     #expect(context.draftSummary?.contains("设定温度") == true)
 
     // A stubbed reply with a figure the project does not hold must not
-    // bypass the guard — it ships with the caution line appended.
+    // bypass the guard — the turn carries the note as display metadata
+    // (text stays the model's own words; see the strip test above).
     store.chatAssistant = StubChatAssistant { _, _ in "大概能省 37%。" }
     await store.sendChat("能省多少？")
-    #expect(store.chatTurns.last?.text == "大概能省 37%。\n\n" + ChatGuard.cautionNote)
+    #expect(store.chatTurns.last?.text == "大概能省 37%。")
+    #expect(store.chatTurns.last?.hasCautionNote == true)
 
     // No assistant at all: a spoken note, not silence.
     store.chatAssistant = nil

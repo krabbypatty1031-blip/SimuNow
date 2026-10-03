@@ -36,6 +36,17 @@ enum ChatContextBuilder {
             let windows = geometry.openings.filter { $0.kind == .window }
             let area = windows.reduce(0.0) { $0 + $1.patchAreaM2 }
             lines.append("窗 \(windows.count) 扇共 \(UserFacingCopy.displayNumber(area)) m²")
+            // Furniture in kind order with counts: the assistant can then
+            // answer "我有几件家具" quoting the draft's own figures, which
+            // also puts those numbers inside the guard's allowed set. An
+            // empty room stays silent about furniture instead of saying 0.
+            if !geometry.obstacles.isEmpty {
+                let counted = FurnitureKind.allCases.compactMap { kind -> String? in
+                    let count = geometry.obstacles.filter { $0.kind == kind }.count
+                    return count > 0 ? "\(kind.title)×\(count)" : nil
+                }
+                lines.append("家具 \(geometry.obstacles.count) 件：\(counted.joined(separator: "、"))")
+            }
         }
         if let costs = draft.costAssumptions, let price = costs.pricePerKWh {
             lines.append("电价 \(UserFacingCopy.displayNumber(price)) \(costs.currency)/kWh")

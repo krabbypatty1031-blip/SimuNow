@@ -1,5 +1,6 @@
 import SwiftUI
 import SimuCore
+import SimuReporting
 
 /// The consult conversation, ChatGPT-style: the user speaks in a tinted
 /// bubble on the right; SNer answers from the left with an avatar and bare
@@ -264,7 +265,19 @@ struct ChatBubble: View {
                     .accessibilityLabel("我说：\(turn.text)")
             }
         } else {
-            AssistantMessage(text: turn.text)
+            // The guard's caution note (if any) renders as a secondary line
+            // under the reply — it is display metadata, not the model's own
+            // words, so it never re-enters the history as a style to copy.
+            VStack(alignment: .leading, spacing: 6) {
+                AssistantMessage(text: turn.text)
+                if turn.hasCautionNote {
+                    Text(ChatGuard.cautionNote)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .accessibilityLabel("提示 \(ChatGuard.cautionNote)")
+                }
+            }
         }
     }
 }

@@ -24,7 +24,7 @@ import PDFKit
 }
 
 /// A paragraph that introduces 37 is dropped. A paragraph that only repeats listed figures stays.
-@Test func proseWithUnlisted37PercentIsRejected() throws {
+@Test func proseWithUnlisted37PercentIsRejected() async throws {
     let evidence = try narratorEvidence()
     let encoded = String(decoding: try JSONEncoder().encode(evidence), as: UTF8.self)
     #expect(!encoded.contains("37"))
@@ -54,13 +54,14 @@ import PDFKit
     #if os(macOS)
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-guard-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
+    // ADR-024: WebKit layout is async; extraction whitespace handled by pdfTextContains.
+    try await EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(!text.contains("叙述未采用"))
-    #expect(!text.contains("not adopted"))
-    #expect(!text.contains("37"))
-    #expect(text.contains(evidence.candidates[0].runID.uuidString))
+    #expect(!pdfTextContains("叙述未采用", in: text))
+    #expect(!pdfTextContains("not adopted", in: text))
+    #expect(!pdfTextContains("37", in: text))
+    #expect(pdfTextContains(evidence.candidates[0].runID.uuidString, in: text))
     #endif
 }
 
@@ -206,14 +207,14 @@ import PDFKit
     #if os(macOS)
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-key-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
+    try await EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let bytes = try Data(contentsOf: url)
     #expect(bytes.range(of: Data(secret.utf8)) == nil)
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("办公室送风对比"))
-    #expect(text.contains("DeepSeek"))
-    #expect(text.contains("Calculation basis"))
+    #expect(pdfTextContains("办公室送风对比", in: text))
+    #expect(pdfTextContains("DeepSeek", in: text))
+    #expect(pdfTextContains("Calculation basis", in: text))
     #endif
 }
 

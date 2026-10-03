@@ -266,6 +266,26 @@
 影响：`FurniturePlacement`（新，SimuCore）、`ObstacleBox.kind` + 旧 JSON 解码回退 desk、`FurniturePlanView`（新，SimuWorkspace 俯视拖拽）、`RoomSchematicMeshes` 四类外形、`FurniturePlacementTests` 8 例；Python `room_input.obstacle_boxes/point_in_fluid`、`l2_room._obstacles` + 披露切换、`write_openfoam_room` topoSetDict + 预估 Su + meta、`run_room` topoSet/subsetMesh/wall 重类型/Su 实测重算/`_account_furniture`；测试 `FurnitureTests` 8 例（p1）+ `FurnitureMappingTests` 4 例（Backend，含拖拽形状→映射→loader→writer 全链）。
 验证（2026-10-04）：`test/p1` 60 全绿（52+8 家具）；`Backend/tests` 137 全绿；`Scripts/check.sh test` 209 全绿；`mac`/`ios` BUILD SUCCEEDED。**真引擎端到端**：带家具（桌 1.2×0.7×0.75 + 椅）PASS=true，checkMesh ok、solver End、mass 相对误差 0、energy 相对误差 0.20%、monitors stable、97 cells 阻挡、Su 0.0086024 K/s（= 1036 W ÷ 实测流体体积）、4 座位全采样无 omitted；空家具真跑 PASS=true，钉版 t_source 0.008513732 与座位数字逐位不漂移。
 
+## ADR-024：对比 PDF 排版改 HTML/CSS + WKWebView `createPDF`，弃手绘 CoreText（已接受）
+
+日期：2026-10-04。
+背景：用户问对比报告能否产出「带格式的美观 PDF」（起因问 LaTeX）。LaTeX 三条路都撞项目约束：沙盒 App exec 外部 latex 二进制被拒、MacTeX ~4 GB 超离线体量、Tectonic 首次编译在线拉宏包违反「不在 App 启动时下载依赖」、iOS 无 LaTeX。
+备选：(a) LaTeX 离线发行版打包；(b) 保留 CoreText 手绘、升级 AttributedString 排版；(c) HTML/CSS + `WKWebView.createPDF`（macOS 13 / iOS 16 起公开 API，项目两端最低版本均满足）。
+选择：(c)。裁决依据：
+1. **排版表达力**：CSS 直接给标题层级、色条节标题、bullet 行动建议、附录小字灰色与分页规则，CoreText 手绘要逐行复刻且不可维护；
+2. **两端统一**：WebKit 在 macOS/iOS 都内置，顺带解除 iOS 此前 `unsupportedPlatform` 不能导出 PDF 的限制；
+3. **口径不动**：只换渲染层——`NarrationGuard` 过滤、`appendix(evidence:copy:)` 证据行、两位小数、行内容全部原样，数字口径零改动；
+4. **安全**：DeepSeek 任意文本进 HTML 前全部 `escapeHTML`。
+
+实施要点：
+- `write` 改 `async throws`（`createPDF` 异步，不用信号量堵主线程）；渲染函数 `@MainActor`，调用方（`WorkspaceStore`/`EvidenceReportExporter`/测试）`await` 跨 actor；
+- **WKWebView 必须显式 Letter frame**：零 frame 的 view 把 HTML 排进零宽 viewport，字形单列垂直堆叠（spike 实测）；`WKPDFConfiguration.rect = .null` 才分页输出完整多页 PDF（非 null rect 只截单页）；
+- 加载完成用 `isLoading` 轮询（10 s 上限，超时 `writeFailed` 不写半成品）；
+- **已知限制（如实披露）**：WebKit PDF 文本提取层把「风」等字映射为 CJK Radicals Supplement 码点（⻛ U+2EDB，Unicode 无 NFKC 分解）、CJK 字间插空白——**视觉渲染不受影响**，仅复制/搜索文本受损；Kangxi 区部首（⼝⽐⽅⽤）NFKC 可自动还原。测试侧 `pdfTextContains` 以 NFKC + 去空白 + 已知部首映射表兜底。
+
+影响：`EvidencePDFAssembler` 重写（`write` async + `htmlDocument`/`appendixHTML`/`escapeHTML`/`renderPDFData`，删 CoreText `writePDF`）；`EvidenceReportExporter.export` 与 `WorkspaceStore.writeEvidencePDF` 加 `await`；`unsupportedPlatform` 保留（源兼容）但不再抛出；测试 `evidencePDFKeepsAppendixAndHidesHashesFromTheBody`/`proseWithUnlisted37PercentIsRejected`/`deepSeekRequestUsesOfficialHostAndKeepsKeyOutOfArtifacts`/`officeDemoExportsDeepSeekReportWithAppendix` 改 async + `pdfTextContains` 断言。
+验证（2026-10-04）：`Scripts/check.sh test` **216 全绿**；`mac`/`ios` BUILD SUCCEEDED；样张（中文 copy）视觉检查通过——标题层级、蓝色竖条节标题、bullet 行动建议、附录灰色小字、多页附录含详细编号；提取层限制已记录于断言 helper 注释。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

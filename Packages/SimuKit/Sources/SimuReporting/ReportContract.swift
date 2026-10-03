@@ -33,7 +33,8 @@ public struct EvidenceReportExporter: ReportExporter {
         guard let report = await generator.generate(request.evidence) else {
             throw EvidencePDFError.generatorUnavailable
         }
-        try EvidencePDFAssembler.write(
+        // ADR-024: WebKit layout is async; hop to the MainActor render inside.
+        try await EvidencePDFAssembler.write(
             evidence: request.evidence,
             report: report,
             to: destination

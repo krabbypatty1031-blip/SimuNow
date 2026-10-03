@@ -1,12 +1,12 @@
 import Foundation
 import SimuCore
-#if os(macOS)
-import AppKit
-import CoreText
+#if canImport(WebKit)
+import WebKit
 #endif
 
 public enum EvidencePDFError: Error, Equatable {
-    /// iOS has no PDF writer in this phase. Callers must not invent a stand-in document.
+    /// Kept for callers written before WebKit export. WebKit renders on both
+    /// platforms now, so this is no longer thrown; the case stays source-compatible.
     case unsupportedPlatform
     /// Quality failed, no feasible seats, or mixed basis. The page may explain; it must not write a recommendation PDF.
     case notExportable
@@ -15,17 +15,27 @@ public enum EvidencePDFError: Error, Equatable {
     case writeFailed
 }
 
-/// Draws a DeepSeek-written report plus a local evidence appendix.
+/// Renders a DeepSeek-written report plus a local evidence appendix.
+/// ADR-024: layout moved from hand-drawn CoreText to HTML/CSS laid out by
+/// WebKit, so both platforms export the same styled PDF. Evidence numbers,
+/// appendix lines, and NarrationGuard filtering are unchanged.
 public enum EvidencePDFAssembler {
     public static func write(
         evidence: ReportEvidence,
         report: GeneratedReport,
         copy: UserFacingCopy = .english,
         to url: URL
-    ) throws {
-        #if os(macOS)
+    ) async throws {
+        #if canImport(WebKit)
+        // Same freeze as before: the PDF renders only guarded text.
         let guarded = NarrationGuard.filter(report, evidence: evidence, language: copy.language)
-        try writePDF(report: guarded, evidence: evidence, copy: copy, to: url)
+        let document = htmlDocument(evidence: evidence, report: guarded, copy: copy)
+        let data = try await renderPDFData(html: document)
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            throw EvidencePDFError.writeFailed
+        }
         #else
         throw EvidencePDFError.unsupportedPlatform
         #endif
@@ -141,90 +151,139 @@ public enum EvidencePDFAssembler {
         UserFacingCopy.displayNumber(value)
     }
 
-    #if os(macOS)
-    private static func writePDF(
-        report: GeneratedReport,
-        evidence: ReportEvidence,
-        copy: UserFacingCopy,
-        to url: URL
-    ) throws {
-        let data = NSMutableData()
-        var media = CGRect(x: 0, y: 0, width: 612, height: 792)
-        guard let consumer = CGDataConsumer(data: data as CFMutableData),
-              let context = CGContext(consumer: consumer, mediaBox: &media, nil) else {
+    // MARK: - HTML
+
+    /// DeepSeek text is arbitrary model output. It must never be interpolated
+    /// into the HTML template unescaped.
+    static func escapeHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    /// One styled page: title, model caption, guarded body sections, suggested
+    /// actions, then the small-print evidence appendix. Letter size, metric
+    /// two-decimal figures, no invented numbers.
+    static func htmlDocument(evidence: ReportEvidence, report: GeneratedReport, copy: UserFacingCopy) -> String {
+        let lang = copy.language == .chinese ? "zh-Hans" : "en"
+        let title = report.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        var body = """
+        <!DOCTYPE html>
+        <html lang="\(lang)">
+        <head>
+        <meta charset="utf-8">
+        <style>
+        @page { margin: 40pt 48pt; }
+        body {
+          font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+          font-size: 10.5pt; line-height: 1.55; color: #1d1d1f;
+          -webkit-print-color-adjust: exact;
+        }
+        h1 { font-size: 17pt; font-weight: 600; margin: 0 0 4pt; }
+        .caption { color: #6e6e73; font-size: 8.5pt; margin: 0 0 12pt; }
+        .summary { margin: 0 0 14pt; }
+        h2 {
+          font-size: 12pt; font-weight: 600; margin: 16pt 0 6pt;
+          padding-left: 6pt; border-left: 2.5pt solid #0a84ff;
+          break-after: avoid;
+        }
+        p { margin: 0 0 8pt; }
+        ul.actions { margin: 0 0 8pt; padding-left: 14pt; }
+        ul.actions li { margin: 0 0 4pt; }
+        .appendix { border-top: 0.5pt solid #d2d2d7; margin-top: 18pt; padding-top: 10pt; }
+        .appendix h3 { font-size: 11pt; font-weight: 600; margin: 12pt 0 5pt; break-after: avoid; }
+        .appendix p { font-size: 8.5pt; color: #3a3a3c; margin: 0 0 3.5pt; line-height: 1.45; }
+        .appendix p.scheme { font-weight: 600; color: #1d1d1f; margin-top: 6pt; }
+        </style>
+        </head>
+        <body>
+        <h1>\(escapeHTML(title.isEmpty ? copy.pdfFallbackTitle : title))</h1>
+        <p class="caption">\(escapeHTML(copy.pdfDeepSeekCaption))</p>
+        <p class="summary">\(escapeHTML(report.summary))</p>
+        """
+
+        for section in report.sections {
+            let heading = section.heading.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !heading.isEmpty {
+                body += "<h2>\(escapeHTML(heading))</h2>\n"
+            }
+            let text = section.body.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                body += "<p>\(escapeHTML(text))</p>\n"
+            }
+        }
+
+        if !report.caveats.isEmpty {
+            body += "<h2>\(escapeHTML(copy.pdfSuggestedActions))</h2>\n<ul class=\"actions\">\n"
+            for caveat in report.caveats where !caveat.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                body += "<li>\(escapeHTML(caveat))</li>\n"
+            }
+            body += "</ul>\n"
+        }
+
+        body += appendixHTML(evidence: evidence, copy: copy)
+        body += "</body>\n</html>\n"
+        return body
+    }
+
+    /// The appendix keeps its line content from `appendix(evidence:copy:)` (tests
+    /// pin those lines); here each line is classed into heading / scheme / detail.
+    private static func appendixHTML(evidence: ReportEvidence, copy: UserFacingCopy) -> String {
+        let schemeNames = Set(evidence.candidates.map(\.name))
+        var html = "<div class=\"appendix\">\n"
+        for line in appendix(evidence: evidence, copy: copy).components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if copy.isPDFHeading(trimmed) {
+                html += "<h3>\(escapeHTML(trimmed))</h3>\n"
+            } else if schemeNames.contains(trimmed) {
+                html += "<p class=\"scheme\">\(escapeHTML(trimmed))</p>\n"
+            } else {
+                html += "<p>\(escapeHTML(trimmed))</p>\n"
+            }
+        }
+        html += "</div>\n"
+        return html
+    }
+
+    // MARK: - WebKit render
+
+    #if canImport(WebKit)
+    /// Lays out the page offscreen and snapshots it as one Letter-size PDF.
+    /// WKWebView is MainActor-isolated; callers hop here from any async context.
+    @MainActor
+    private static func renderPDFData(html: String) async throws -> Data {
+        // Zero-frame WKWebView lays HTML out in a zero-width viewport and the
+        // text stacks one glyph per line. Pin the page frame to Letter size.
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let webView = WKWebView(frame: pageRect)
+        webView.loadHTMLString(html, baseURL: nil)
+        // Poll the load flag; a plain test host or a background export has no
+        // runloop-driven UI waiting for a navigation delegate.
+        var waitedMilliseconds = 0
+        while webView.isLoading && waitedMilliseconds < 10_000 {
+            try await Task.sleep(for: .milliseconds(50))
+            waitedMilliseconds += 50
+        }
+        if webView.isLoading {
+            // A hung load must not hang the export. No partial document.
             throw EvidencePDFError.writeFailed
         }
-        let chinese = copy.language == .chinese
-        let titleFont = CTFontCreateWithName((chinese ? "PingFangSC-Medium" : "Helvetica-Bold") as CFString, 18, nil)
-        let headingFont = CTFontCreateWithName((chinese ? "PingFangSC-Medium" : "Helvetica-Bold") as CFString, 13, nil)
-        let bodyFont = CTFontCreateWithName((chinese ? "PingFangSC-Regular" : "Helvetica") as CFString, 11, nil)
-        let captionFont = CTFontCreateWithName((chinese ? "PingFangSC-Regular" : "Helvetica") as CFString, 9, nil)
-        let margin: CGFloat = 48
-        let width = media.width - margin * 2
-        var y = media.height - margin
-
-        func newPage() {
-            context.endPDFPage()
-            context.beginPDFPage(nil)
-            y = media.height - margin
-        }
-
-        func ensure(_ height: CGFloat) {
-            if y - height < margin {
-                newPage()
-            }
-        }
-
-        func drawWrapped(_ text: String, font: CTFont, lineHeight: CGFloat) {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor.black,
-            ]
-            let attributed = NSAttributedString(string: trimmed, attributes: attributes)
-            let typesetter = CTTypesetterCreateWithAttributedString(attributed)
-            var start = 0
-            let count = attributed.length
-            while start < count {
-                ensure(lineHeight)
-                let breakIndex = CTTypesetterSuggestLineBreak(typesetter, start, Double(width))
-                let length = max(breakIndex, 1)
-                let line = CTTypesetterCreateLine(typesetter, CFRange(location: start, length: length))
-                context.saveGState()
-                context.textMatrix = .identity
-                context.translateBy(x: margin, y: y)
-                CTLineDraw(line, context)
-                context.restoreGState()
-                y -= lineHeight
-                start += length
-            }
-            y -= 6
-        }
-
-        context.beginPDFPage(nil)
-        let title = report.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        drawWrapped(title.isEmpty ? copy.pdfFallbackTitle : title, font: titleFont, lineHeight: 24)
-        drawWrapped(copy.pdfDeepSeekCaption, font: captionFont, lineHeight: 13)
-        drawWrapped(report.summary, font: bodyFont, lineHeight: 16)
-        for section in report.sections {
-            drawWrapped(section.heading, font: headingFont, lineHeight: 18)
-            drawWrapped(section.body, font: bodyFont, lineHeight: 16)
-        }
-        if !report.caveats.isEmpty {
-            drawWrapped(copy.pdfSuggestedActions, font: headingFont, lineHeight: 18)
-            for caveat in report.caveats {
-                drawWrapped(caveat, font: bodyFont, lineHeight: 16)
-            }
-        }
-        for line in appendix(evidence: evidence, copy: copy).components(separatedBy: "\n") {
-            let isHeading = copy.isPDFHeading(line)
-            drawWrapped(line, font: isHeading ? headingFont : captionFont, lineHeight: isHeading ? 18 : 13)
-        }
-        context.endPDFPage()
-        context.closePDF()
+        // A non-null rect captures only that single region. CGRect.null keeps
+        // the whole scrollable content and paginates it into a multi-page PDF.
+        let configuration = WKPDFConfiguration()
+        configuration.rect = .null
         do {
-            try (data as Data).write(to: url, options: .atomic)
+            return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                webView.createPDF(configuration: configuration) { result in
+                    switch result {
+                    case .success(let data): continuation.resume(returning: data)
+                    case .failure(let error): continuation.resume(throwing: error)
+                    }
+                }
+            }
         } catch {
             throw EvidencePDFError.writeFailed
         }

@@ -719,7 +719,8 @@ public final class WorkspaceStore {
             reportMessage = copy.generateFailedStatus
             throw EvidencePDFError.generatorUnavailable
         }
-        try EvidencePDFAssembler.write(evidence: evidence, report: report, copy: copy, to: url)
+        // ADR-024: WebKit layout is async; hop to the MainActor render inside.
+        try await EvidencePDFAssembler.write(evidence: evidence, report: report, copy: copy, to: url)
         reportMessage = copy.exportedStatus
     }
 

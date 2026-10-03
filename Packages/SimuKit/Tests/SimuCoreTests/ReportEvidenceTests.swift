@@ -7,6 +7,30 @@ import SimuWorkspace
 import PDFKit
 #endif
 
+#if os(macOS)
+/// WebKit's PDF text layer extracts CJK glyphs as separate runs with inserted
+/// whitespace, and emits some Han characters as radical code points. Kangxi
+/// radicals (⼝⽐⽅⽤) recover through NFKC compatibility mapping, but CJK
+/// Radicals Supplement (风→⻛ U+2EDB) has no decomposition in Unicode, so
+/// the observed look-alikes are mapped back by hand. Visual rendering is
+/// unaffected; this only repairs extracted text for contains() assertions.
+private let webKitRadicalLookalikes: [Character: Character] = [
+    "⻛": "风", "⻜": "飞", "⻝": "食", "⻢": "马", "⻦": "鸟", "⻩": "黄",
+    "⻪": "黾", "⻫": "齐", "⻭": "齿", "⻯": "龟", "⻰": "龙", "⻳": "龟",
+    "⻋": "车", "⻅": "见", "⻉": "贝", "⻓": "长", "⻔": "门", "⻚": "页",
+    "⻧": "卤", "⻨": "麦", "⻮": "齿", "⻬": "齐", "⻲": "龟",
+]
+
+func normalizedPDFText(_ text: String) -> String {
+    let mapped = String(text.map { webKitRadicalLookalikes[$0] ?? $0 })
+    return mapped.precomposedStringWithCompatibilityMapping.filter { !$0.isWhitespace }
+}
+
+func pdfTextContains(_ needle: String, in haystack: String) -> Bool {
+    normalizedPDFText(haystack).contains(normalizedPDFText(needle))
+}
+#endif
+
 /// Evidence is a frozen copy of pinned runs. Required schema keys survive a round trip,
 /// and the pass ratio / day cost are the candidate's numbers.
 @Test func reportEvidenceRoundTripsAndKeepsCandidateNumbers() throws {
@@ -85,7 +109,9 @@ import PDFKit
 
 #if os(macOS)
 /// DeepSeek body plus a local appendix. Hashes stay behind 详细编号.
-@Test func evidencePDFKeepsAppendixAndHidesHashesFromTheBody() throws {
+/// ADR-024: the PDF is HTML/CSS laid out by WebKit, so text assertions go
+/// through pdfTextContains (extraction inserts whitespace / radical forms).
+@Test func evidencePDFKeepsAppendixAndHidesHashesFromTheBody() async throws {
     let pair = try evidencePair()
     let evidence = ReportEvidence.build(from: [pair.low, pair.high])
     let report = GeneratedReport(
@@ -101,36 +127,38 @@ import PDFKit
     )
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-evidence-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
+    try await EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("办公室送风对比"))
-    #expect(text.contains("DeepSeek"))
-    #expect(text.contains(pair.low.name))
-    #expect(text.contains(pair.high.name))
-    #expect(text.contains("Calculation basis"))
-    #expect(text.contains("Detailed IDs"))
-    let body = String(text.split(separator: "Detailed IDs", maxSplits: 1).first ?? "")
+    #expect(pdfTextContains("办公室送风对比", in: text))
+    #expect(pdfTextContains("DeepSeek", in: text))
+    #expect(pdfTextContains(pair.low.name, in: text))
+    #expect(pdfTextContains(pair.high.name, in: text))
+    #expect(pdfTextContains("Calculation basis", in: text))
+    #expect(pdfTextContains("Detailed IDs", in: text))
+    // Whitespace-removed split: the body is everything before the detailed IDs block.
+    let normalized = normalizedPDFText(text)
+    let body = String(normalized.split(separator: "DetailedIDs", maxSplits: 1).first ?? "")
     #expect(!body.contains("inputHash"))
     #expect(!body.contains(pair.high.identity.inputHash))
     #expect(!body.contains("mrtC"))
-    #expect(text.contains(pair.low.identity.runID.uuidString))
-    #expect(text.contains(pair.high.identity.inputHash))
-    #expect(text.contains(UserFacingCopy.qualityTitle(pair.low.quality)))
-    #expect(text.contains("Yearly electricity cost"))
-    #expect(text.contains("Electricity price"))
-    #expect(!text.contains("比赛演示假设，非真实电价"))
-    #expect(!text.contains("不是问卷"))
-    #expect(text.contains("23"))
-    #expect(text.contains("26"))
-    #expect(text.contains("Surrounding surface temperature"))
+    #expect(pdfTextContains(pair.low.identity.runID.uuidString, in: text))
+    #expect(pdfTextContains(pair.high.identity.inputHash, in: text))
+    #expect(pdfTextContains(UserFacingCopy.qualityTitle(pair.low.quality), in: text))
+    #expect(pdfTextContains("Yearly electricity cost", in: text))
+    #expect(pdfTextContains("Electricity price", in: text))
+    #expect(!normalized.contains("比赛演示假设，非真实电价"))
+    #expect(!normalized.contains("不是问卷"))
+    #expect(pdfTextContains("23", in: text))
+    #expect(pdfTextContains("26", in: text))
+    #expect(pdfTextContains("Surrounding surface temperature", in: text))
     let ratio = try #require(evidence.candidates.first { $0.runID == pair.high.identity.runID }?.seatPassRatio)
-    #expect(text.contains(UserFacingCopy.displayNumber(ratio)))
+    #expect(pdfTextContains(UserFacingCopy.displayNumber(ratio), in: text))
     let assumption = try #require(evidence.comfortAssumptions.first?.reference)
     #expect(assumption == UserFacingCopy.storedMRTEqualsSetpoint)
-    #expect(text.contains(UserFacingCopy.english.displayStoredNote(assumption)))
-    #expect(!text.contains(UserFacingCopy.storedMRTEqualsSetpoint))
-    #expect(!text.contains("叙述未采用"))
+    #expect(pdfTextContains(UserFacingCopy.english.displayStoredNote(assumption), in: text))
+    #expect(!pdfTextContains(UserFacingCopy.storedMRTEqualsSetpoint, in: text))
+    #expect(!pdfTextContains("叙述未采用", in: text))
 }
 #endif
 

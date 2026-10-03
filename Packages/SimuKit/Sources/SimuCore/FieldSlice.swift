@@ -143,4 +143,19 @@ public struct FieldSlice: Codable, Equatable, Sendable {
         self.inputHash = inputHash
         self.quality = quality
     }
+
+    /// Mean of valid cells only. Wall and furniture interiors stay out of the average.
+    public var meanValidC: Double? {
+        var sum = 0.0
+        var count = 0
+        for row in values.indices {
+            guard row < valid.count else { continue }
+            for column in values[row].indices {
+                guard column < valid[row].count, valid[row][column] else { continue }
+                sum += values[row][column]
+                count += 1
+            }
+        }
+        return count == 0 ? nil : sum / Double(count)
+    }
 }

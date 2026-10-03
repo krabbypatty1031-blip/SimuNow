@@ -39,6 +39,9 @@ private func fixturesDirectory() -> URL {
         #expect(minC > 16)
         #expect(maxC < 30)
     }
+    let mean = try #require(slice.meanValidC)
+    #expect(mean >= slice.stats.minC ?? mean)
+    #expect(mean <= slice.stats.maxC ?? mean)
 }
 
 @Test func fieldSliceRejectsChangedWireClaims() throws {

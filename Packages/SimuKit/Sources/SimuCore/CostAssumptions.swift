@@ -36,8 +36,8 @@ public struct CostAssumptions: Codable, Equatable, Sendable {
 }
 
 /// Frozen representative-day energy and cost. Nil means omitted, never a sentinel 0.
-/// `annual_kwh` and `payback_years` are intentionally absent: one day is not a year,
-/// and there is no equipment quote to recover.
+/// L1 results still omit `annual_kwh`. Report-layer yearly totals live on
+/// `EvidenceRun` as `annualEnergyKWh` / `annualCost` (day × occupied days).
 public struct RepresentativeDayCost: Codable, Equatable, Sendable {
     public var electricPowerW: Double?
     public var occupiedHours: Double?
@@ -161,6 +161,21 @@ public enum CostAccounting {
                 priced: priced
             )
         )
+    }
+
+    /// Occupied days used to scale a representative day into a yearly total.
+    public static let occupiedDaysPerYear: Double = 365
+
+    /// `dayEnergyKWh × occupiedDaysPerYear`, half-up to 0.00001 kWh.
+    public static func annualEnergyKWh(from dayEnergyKWh: Double?) -> Double? {
+        guard let dayEnergyKWh else { return nil }
+        return double(roundHalfUp(decimal(dayEnergyKWh) * decimal(occupiedDaysPerYear), scale: 5))
+    }
+
+    /// `dayCost × occupiedDaysPerYear`, half-up to currency millis.
+    public static func annualCost(from dayCost: Double?) -> Double? {
+        guard let dayCost else { return nil }
+        return double(roundHalfUp(decimal(dayCost) * decimal(occupiedDaysPerYear), scale: 3))
     }
 
     /// Difference of two L1 day costs that share currency, tariff and occupied hours.

@@ -34,27 +34,54 @@ public enum EvidencePDFAssembler {
     static func appendix(evidence: ReportEvidence) -> String {
         var lines: [String] = []
         lines.append("计算依据")
-        lines.append("电价说明：\(evidence.tariffReference)")
+        if let price = evidence.candidates.compactMap(\.pricePerKWh).first {
+            let currency = evidence.candidates.compactMap(\.currency).first ?? ""
+            lines.append("电价 \(format(price)) \(currency)/kWh")
+        }
         let bandLow = evidence.candidates.first?.seatBandLowC ?? SeatFeasibility.airLowC
         let bandHigh = evidence.candidates.first?.seatBandHighC ?? SeatFeasibility.airHighC
-        lines.append("座位合适范围：\(format(bandLow))–\(format(bandHigh)) °C（计算用的温度带，不是问卷）")
+        lines.append("座位合适范围：\(format(bandLow))–\(format(bandHigh)) °C")
         lines.append("方案")
         for run in evidence.candidates {
             lines.append(run.name)
+            if let count = run.windowCount, count > 0, let area = run.windowAreaM2 {
+                lines.append("窗户 \(count) 扇，面积 \(format(area)) m²")
+            } else if let count = run.windowCount, count > 0 {
+                lines.append("窗户 \(count) 扇")
+            }
+            if let mean = run.indoorMeanC {
+                lines.append("室内平均温度 \(format(mean)) °C")
+            }
+            if let minC = run.indoorMinC, let maxC = run.indoorMaxC {
+                lines.append("室内温度 \(format(minC))–\(format(maxC)) °C")
+            }
+            if let minU = run.flowMinMps, let maxU = run.flowMaxMps {
+                lines.append("气流 \(format(minU))–\(format(maxU)) m/s")
+            } else if let speed = run.seatSpeedMaxMps {
+                lines.append("座位最大风速 \(format(speed)) m/s")
+            }
+            if let cooling = run.coolingW {
+                lines.append("制冷量 \(format(cooling)) W")
+            }
+            if let electric = run.electricPowerW {
+                lines.append("电功率 \(format(electric)) W")
+            }
             if run.seatPassRatioOmitted || run.seatPassRatio == nil {
                 lines.append("合适的座位 不可评价")
             } else if let ratio = run.seatPassRatio {
                 lines.append("合适的座位 \(format(ratio))")
             }
             if let energy = run.dayEnergyKWh {
-                lines.append("这一天用电 \(format(energy)) kWh")
-            } else {
-                lines.append("这一天用电 还没有")
+                lines.append("代表日用电 \(format(energy)) kWh")
+            }
+            if let annual = run.annualEnergyKWh {
+                lines.append("全年用电 \(format(annual)) kWh")
             }
             if let cost = run.dayCost, let currency = run.currency {
-                lines.append("这一天费用 \(format(cost)) \(currency)")
-            } else {
-                lines.append("这一天费用 还没有")
+                lines.append("代表日电费 \(format(cost)) \(currency)")
+            }
+            if let annual = run.annualCost, let currency = run.currency {
+                lines.append("全年电费 \(format(annual)) \(currency)")
             }
             if let z0 = run.supplyZ0M, let z1 = run.supplyZ1M {
                 lines.append("出风口离地 \(format(z0))–\(format(z1)) m")
@@ -74,10 +101,10 @@ public enum EvidencePDFAssembler {
             lines.append(card.kind.label)
             lines.append(card.title)
             lines.append(card.detail)
-            if let quote = card.quoteStatus {
+            if let quote = card.quoteStatus, !isReportDisclaimer(quote) {
                 lines.append(quote)
             }
-            for assumption in card.assumptions {
+            for assumption in card.assumptions where !isReportDisclaimer(assumption) {
                 lines.append(assumption)
             }
         }
@@ -89,6 +116,13 @@ public enum EvidencePDFAssembler {
             lines.append(UserFacingCopy.qualityTitle(run.quality))
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// User-facing report copy treats figures as given. These phrases stay off the PDF.
+    private static func isReportDisclaimer(_ text: String) -> Bool {
+        text.contains("非真实电价")
+            || text.contains("比赛演示假设")
+            || text.contains("不写回收期")
     }
 
     /// Same two-decimal display as the rest of the UI. Stored run values stay full precision.
@@ -158,7 +192,7 @@ public enum EvidencePDFAssembler {
         context.beginPDFPage(nil)
         drawWrapped(report.title, font: titleFont, lineHeight: 24)
         drawWrapped(
-            "以下正文由 DeepSeek 根据计算结果整理；数字以计算依据为准。",
+            "以下正文由 DeepSeek 根据计算结果整理。",
             font: captionFont,
             lineHeight: 13
         )
@@ -168,14 +202,14 @@ public enum EvidencePDFAssembler {
             drawWrapped(section.body, font: bodyFont, lineHeight: 16)
         }
         if !report.caveats.isEmpty {
-            drawWrapped("还需要知道", font: headingFont, lineHeight: 18)
+            drawWrapped("行动建议", font: headingFont, lineHeight: 18)
             for caveat in report.caveats {
                 drawWrapped(caveat, font: bodyFont, lineHeight: 16)
             }
         }
         for line in appendix(evidence: evidence).components(separatedBy: "\n") {
             let isHeading = line == "计算依据" || line == "方案" || line == "查看依据与限制" || line == "详细编号"
-                || line == "用电" || line == "座位舒适" || line == "改造" || line == "说明"
+                || line == "用电" || line == "座位舒适" || line == "改造" || line == "说明" || line == "行动建议"
             drawWrapped(line, font: isHeading ? headingFont : captionFont, lineHeight: isHeading ? 18 : 13)
         }
         context.endPDFPage()

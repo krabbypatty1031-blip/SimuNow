@@ -34,7 +34,7 @@ import PDFKit
         title: "送风高度不同",
         summary: "座位带下限 \(listed) °C，见计算依据。",
         sections: [
-            ReportSection(heading: "comfort", body: "座位带下限 \(listed) °C，见计算依据。"),
+            ReportSection(heading: ReportWriterSkill.comparisonHeading, body: "座位带下限 \(listed) °C，见计算依据。"),
             ReportSection(heading: "run", body: "引用 \(prefix)。"),
             ReportSection(heading: "bad", body: "相对基准节电 37%。"),
         ],
@@ -77,6 +77,31 @@ import PDFKit
     #expect(filtered.summary == report.summary)
 }
 
+/// Yearly totals copied onto the evidence pack may appear in the report body.
+@Test func annualCostCopiedOntoEvidenceIsAllowed() throws {
+    let evidence = try narratorEvidence()
+    let annual = try #require(evidence.candidates[0].annualCost)
+    let shown = UserFacingCopy.displayNumber(annual)
+    let report = GeneratedReport(
+        title: "全年电费",
+        summary: "方案一全年电费 \(shown) HKD。",
+        sections: [
+            ReportSection(
+                heading: ReportWriterSkill.energyPlusHeading,
+                body: "EnergyPlus 全年电费 \(shown) HKD。"
+            ),
+            ReportSection(
+                heading: ReportWriterSkill.openFOAMHeading,
+                body: "OpenFOAM 座位温度 \(UserFacingCopy.displayNumber(try #require(evidence.candidates[0].seatTMinC))) °C。"
+            ),
+        ],
+        caveats: ["采用方案一。"]
+    )
+    let filtered = NarrationGuard.filter(report, evidence: evidence)
+    #expect(filtered.summary == report.summary)
+    #expect(filtered.sections.map(\.heading) == report.sections.map(\.heading))
+}
+
 /// The official DeepSeek path, model, and JSON object mode are used. The API key stays out of the PDF.
 @Test func deepSeekRequestUsesOfficialHostAndKeepsKeyOutOfArtifacts() async throws {
     let secret = "sk-test-simunow-not-a-real-key"
@@ -87,7 +112,7 @@ import PDFKit
         sections: [
             ReportSection(heading: "座位是否合适", body: "合适的座位 \(UserFacingCopy.displayNumber(1))。"),
         ],
-        caveats: ["这一天费用不是全年电费。"]
+        caveats: ["采用低送风口。"]
     )
     let lines = OSAllocatedUnfairLock(initialState: [String]())
     let requests = OSAllocatedUnfairLock(initialState: [URLRequest]())
@@ -117,6 +142,16 @@ import PDFKit
     let body = try JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any]
     #expect(body?["model"] as? String == "deepseek-chat")
     #expect((body?["response_format"] as? [String: Any])?["type"] as? String == "json_object")
+    let messages = try #require(body?["messages"] as? [[String: Any]])
+    #expect(messages.first?["content"] as? String == ReportWriterSkill.systemPrompt)
+    let prompt = try #require(messages.first?["content"] as? String)
+    #expect(prompt.contains(ReportWriterSkill.energyPlusHeading))
+    #expect(prompt.contains(ReportWriterSkill.openFOAMHeading))
+    #expect(prompt.contains(ReportWriterSkill.comparisonHeading))
+    #expect(prompt.contains(ReportWriterSkill.adviceHeading))
+    #expect(prompt.contains("全年电费"))
+    #expect(!prompt.contains("不得推算全年电费"))
+    #expect(!prompt.contains("不是全年电费"))
     let logText = lines.withLock { $0.joined(separator: "\n") }
     #expect(!logText.contains(secret))
 

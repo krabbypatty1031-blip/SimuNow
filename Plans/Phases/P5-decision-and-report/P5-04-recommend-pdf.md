@@ -7,6 +7,8 @@
 - Create: `Packages/SimuKit/Sources/SimuReporting/EvidencePDFAssembler.swift`（macOS Core Graphics / Core Text）
 - Create: `Packages/SimuKit/Sources/SimuReporting/ReportNarrator.swift`
 - Create: `Packages/SimuKit/Sources/SimuReporting/DeepSeekReportClient.swift`（DeepSeek 官方 `POST /chat/completions`）
+- Create: `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`（DeepSeek 系统提示词）
+- Create: `.cursor/skills/llm-report/SKILL.md`
 - Create: `Backend/src/simunow_worker/models/recommend.py`
 - Create: `Protocols/Schemas/report-evidence.schema.json`
 - Modify: `Packages/SimuKit/Sources/SimuReporting/ReportContract.swift`
@@ -32,7 +34,7 @@
 **PDF 两层：**
 
 1. **证据层（必须）**：表内数字 = `ReportEvidence` 字段。含 run ID、inputHash、quality、座位带、达标比例、代表日 kWh/HKD、舒适假设、电价 reference。
-2. **说明层（DeepSeek，ADR-019）**：`ReportGenerator.generate(evidence)` → 标题、总述、小节。官方 `POST https://api.deepseek.com/chat/completions`。密钥 `DEEPSEEK_API_KEY` 或 `SIMUNOW_REPORT_API_KEY` 或钥匙串。无密钥不能导出。
+2. **说明层（DeepSeek，ADR-019 / ADR-020）**：`ReportGenerator.generate(evidence)` → 标题、总述、四节（EnergyPlus、OpenFOAM、方案对比、建议）。官方 `POST https://api.deepseek.com/chat/completions`。密钥 `DEEPSEEK_API_KEY` 或 `SIMUNOW_REPORT_API_KEY` 或钥匙串。无密钥不能导出。提示词见 `ReportWriterSkill`。
 
 叙述守卫：从 prose 抽出的数字必须是证据包数值集合的子集（允许 run ID 短前缀、两位小数展示值、单位换算后的已列值）。否则该段丢弃并注明未采用。无密钥 / 网络失败 → 不写 PDF。
 
@@ -53,7 +55,7 @@
 - [x] 有生成结果时 `EvidencePDFAssembler` 写出模型正文与本地附录
 - [x] 改当前草稿后，已生成报告仍引用原 run ID（冻结）
 
-通过：PDF 打开可见 run ID 与「演示假设，非真实电价」。失败：PDF 数字与证据包不一致。
+通过：PDF 打开可见 run ID、EnergyPlus/OpenFOAM 与全年电费。失败：PDF 数字与证据包不一致。
 
 ### P5-04c 叙述器守卫
 

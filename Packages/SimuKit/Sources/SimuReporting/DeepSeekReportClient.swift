@@ -143,7 +143,7 @@ private struct ChatRequest: Encodable {
         try container.encode(ResponseFormat(), forKey: .responseFormat)
         let evidenceJSON = String(decoding: try JSONEncoder().encode(evidence), as: UTF8.self)
         let messages = [
-            ChatMessage(role: "system", content: Self.systemPrompt),
+            ChatMessage(role: "system", content: ReportWriterSkill.systemPrompt),
             ChatMessage(role: "user", content: evidenceJSON),
         ]
         try container.encode(messages, forKey: .messages)
@@ -152,19 +152,6 @@ private struct ChatRequest: Encodable {
     private struct ResponseFormat: Encodable {
         var type = "json_object"
     }
-
-    /// The model writes a readable report. It must not invent figures; the guard still checks.
-    private static let systemPrompt = """
-    你是室内空调方案说明的作者。根据用户给出的证据 JSON，写一篇给非技术人员看的中文对比说明。
-    只返回 JSON：{"title":"标题","summary":"一段总述","sections":[{"heading":"小节标题","body":"段落"}],"caveats":["限制"]}。
-    建议小节：这次对比了什么、座位是否合适、这一天用电和费用、可以怎么调整、还不能下的结论。
-    硬性规则：
-    - 所有数字必须来自证据 JSON。可用原文，或与界面相同的两位小数；不得新增百分比、不得推算全年电费或回收期。
-    - 不要写满意率、实测、全局最优、合规证书。合适的座位比例是模型门覆盖，不是问卷。
-    - 不要在正文写 UUID、inputHash、L1、L2、z0、PMV、EnergyPlus、OpenFOAM。
-    - 改造无报价时写待报价，不要编设备价格。
-    - 这一天的电费不是全年电费。稳态场不表示开机降温时间。
-    """
 
     private enum CodingKeys: String, CodingKey {
         case model, temperature, messages

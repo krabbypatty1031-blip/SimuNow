@@ -116,7 +116,10 @@ import PDFKit
     #expect(text.contains("DeepSeek"))
     #expect(text.contains(pair.low.identity.runID.uuidString))
     #expect(text.contains(pair.high.identity.runID.uuidString))
-    #expect(text.contains("比赛演示假设，非真实电价"))
+    #expect(text.contains("全年电费"))
+    #expect(text.contains("EnergyPlus"))
+    #expect(text.contains("OpenFOAM"))
+    #expect(!text.contains("比赛演示假设，非真实电价"))
     let ratio = try #require(evidence.candidates.first { $0.runID == pair.high.identity.runID }?.seatPassRatio)
     #expect(text.contains(UserFacingCopy.displayNumber(ratio)))
     let cost = try #require(pair.high.dayCost.cost)
@@ -133,22 +136,44 @@ private struct StubReportGenerator: ReportGenerator {
         let names = evidence.candidates.map(\.name).joined(separator: "、")
         let first = evidence.candidates[0]
         let ratio = first.seatPassRatio.map(UserFacingCopy.displayNumber) ?? "还没有"
-        let cost: String
+        let dayCostText: String
         if let value = first.dayCost, let currency = first.currency {
-            cost = "\(UserFacingCopy.displayNumber(value)) \(currency)"
+            dayCostText = "\(UserFacingCopy.displayNumber(value)) \(currency)"
         } else {
-            cost = "还没有"
+            dayCostText = "还没有"
         }
+        let annualText: String
+        if let value = first.annualCost, let currency = first.currency {
+            annualText = "\(UserFacingCopy.displayNumber(value)) \(currency)"
+        } else {
+            annualText = dayCostText
+        }
+        let cooling = first.coolingW.map(UserFacingCopy.displayNumber) ?? "还没有"
+        let mean = first.indoorMeanC.map(UserFacingCopy.displayNumber)
+            ?? first.seatTMinC.map(UserFacingCopy.displayNumber)
+            ?? "还没有"
         return GeneratedReport(
             title: "办公室送风对比",
-            summary: "这次对比了\(names)。合适的座位是 \(ratio)，这一天费用是 \(cost)。",
+            summary: "这次对比了\(names)。方案一全年电费 \(annualText)。",
             sections: [
                 ReportSection(
-                    heading: "座位是否合适",
-                    body: "合适的座位 \(ratio)。"
+                    heading: ReportWriterSkill.energyPlusHeading,
+                    body: "EnergyPlus 制冷量 \(cooling) W，全年电费 \(annualText)。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.openFOAMHeading,
+                    body: "OpenFOAM 室内温度 \(mean) °C。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.comparisonHeading,
+                    body: "方案一合适的座位 \(ratio)，代表日电费 \(dayCostText)。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.adviceHeading,
+                    body: "建议采用方案一。"
                 ),
             ],
-            caveats: ["这一天费用不是全年电费。"]
+            caveats: ["采用低送风口。"]
         )
     }
 }

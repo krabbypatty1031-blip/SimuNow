@@ -1,6 +1,21 @@
 import SwiftUI
 import SimuCore
 
+/// Which room item is open. The list stays in the sidebar; the editor uses the other column.
+enum InspectorPage: Hashable {
+    case list
+    case room
+    case opening(String)
+    case obstacle(String)
+    case occupancy
+    case seat(String)
+    case temperatures
+    case supply
+    case returnTerminal
+    case airflow
+    case engines
+}
+
 /// Inspector fields show at most two decimals. The bound Double keeps full precision.
 private enum InspectorNumberFormat {
     static let twoPlaces = FloatingPointFormatStyle<Double>.number
@@ -11,9 +26,22 @@ private enum InspectorNumberFormat {
         .grouping(.never)
 }
 
+/// Where this form draws. Sidebar and detail share one `InspectorPage` on the Mac.
+enum RoomInspectorColumn {
+    /// Rows inside the leading sidebar list. Selecting a row does not replace the list.
+    case sidebar
+    /// Editor for the selected row, shown in the trailing inspector.
+    case detail
+    /// iPhone: the list and the editor share one column.
+    case stack
+}
+
 /// Shared Mac inspector / iOS detail editor. Does not submit simulation jobs.
 public struct RoomEditorForm: View {
     @Bindable var store: WorkspaceStore
+    private var page: Binding<InspectorPage>?
+    private var column: RoomInspectorColumn
+    @State private var ownedPage = InspectorPage.list
     @State private var sizeX: Double = 0
     @State private var sizeY: Double = 0
     @State private var sizeZ: Double = 0
@@ -25,277 +53,77 @@ public struct RoomEditorForm: View {
     @State private var tariffCurrency = "HKD"
     @State private var tariffSource: ParameterSource = .assumed
     @State private var tariffReference = "比赛演示假设，非真实电价"
-    /// Keep 计算准备 open after a folder pick so the result is not off-screen.
-    @State private var prepExpanded = true
-
+    @State private var setpointC: Double = 26
+    @State private var supplyTemperatureC: Double = 16
     public init(store: WorkspaceStore) {
         self.store = store
+        self.page = nil
+        self.column = .stack
+    }
+
+    init(store: WorkspaceStore, page: Binding<InspectorPage>, column: RoomInspectorColumn) {
+        self.store = store
+        self.page = page
+        self.column = column
+    }
+
+    private var currentPage: InspectorPage {
+        page?.wrappedValue ?? ownedPage
     }
 
     public var body: some View {
-        Form {
-            Section("项目") {
-                LabeledContent("状态", value: statusText)
-                    .accessibilityLabel("项目状态 \(statusText)")
-                LabeledContent("项目包", value: store.packageURL?.lastPathComponent ?? "未保存")
-                    .accessibilityLabel("项目包 \(store.packageURL?.lastPathComponent ?? "未保存")")
-                if let warning = store.packageWarning {
-                    Text(warning)
-                        .font(.footnote)
-                        .accessibilityLabel(warning)
+        switch column {
+        case .sidebar:
+            listColumn
+                .onChange(of: store.project?.id) { _, _ in
+                    show(.list)
                 }
-                if let error = store.packageError {
-                    Text(error)
-                        .font(.footnote)
-                        .accessibilityLabel("项目包错误 \(error)")
-                }
-                LabeledContent("计算", value: store.engineStatus)
-                    .accessibilityLabel("计算 \(store.engineStatus)")
-                if let name = store.engineFolderName {
-                    LabeledContent("计算文件夹", value: name)
-                        .accessibilityLabel("计算文件夹 \(name)")
-                }
-            }
-            if store.project == nil {
-                Section("开始") {
-                    Button("从办公室模板创建") {
-                        store.loadOfficeTemplate()
-                    }
-                    .accessibilityLabel("从办公室模板创建项目")
-                    Button("从教室模板创建") {
-                        store.loadClassroomTemplate()
-                    }
-                    .accessibilityLabel("从教室模板创建项目")
-                    Text("模板会填入房间、人员和空调。墙保温和天气还没填时不会按 0 计算。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            enginePrepSection
-            Section("房间") {
-                sizeField("长度", value: $sizeX, pathHint: "geometry.sizeX")
-                sizeField("宽度", value: $sizeY, pathHint: "geometry.sizeY")
-                sizeField("高度", value: $sizeZ, pathHint: "geometry.sizeZ")
-                Button("应用尺寸") {
-                    store.applyRoomSize(x: sizeX, y: sizeY, z: sizeZ)
-                    refreshFromStore()
-                }
-                .accessibilityLabel("应用房间尺寸，单位米")
-                Text("0° 表示近侧墙的对面是北。改朝向不会自动转动已经放好的门窗。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                TextField("哪面墙朝北（度）", value: $northYaw, format: InspectorNumberFormat.twoPlaces)
-                    .accessibilityLabel("哪面墙朝北，单位度")
-                Button("应用朝向") {
-                    store.applyNorthYawDegrees(northYaw)
-                }
-                if store.project?.geometry == nil {
-                    Text("先填写房间尺寸后再添加门窗。")
-                        .foregroundStyle(.secondary)
+        case .detail:
+            detailForm
+        case .stack:
+            Form {
+                if currentPage == .list {
+                    listColumn
                 } else {
-                    ForEach(store.project?.geometry?.openings ?? []) { opening in
-                        OpeningEditor(
-                            opening: opening,
-                            displayTitle: openingDisplayTitle(opening),
-                            issue: store.fieldIssues.first(where: { $0.path == "geometry.openings.\(opening.id)" }),
-                            onApply: { kind, wall, s0, s1, z0, z1, source in
-                                store.applyOpening(
-                                    id: opening.id,
-                                    kind: kind,
-                                    wall: wall,
-                                    s0: s0,
-                                    s1: s1,
-                                    z0: z0,
-                                    z1: z1,
-                                    source: source
-                                )
-                            },
-                            onDelete: { store.removeOpening(id: opening.id) }
-                        )
-                    }
-                    Button("添加窗") {
-                        addOpening(kind: .window)
-                    }
-                    .accessibilityLabel("添加窗，沿墙位置单位米")
-                    Button("添加门") {
-                        addOpening(kind: .door)
-                    }
-                    .accessibilityLabel("添加门，沿墙位置单位米")
-                }
-                if store.project?.geometry == nil {
-                    Text("先填写房间尺寸后再添加家具。")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array((store.project?.geometry?.obstacles ?? []).enumerated()), id: \.element.id) { index, box in
-                        ObstacleEditor(
-                            box: box,
-                            displayTitle: UserFacingCopy.furnitureTitle(index: index),
-                            issue: store.fieldIssues.first(where: { $0.path == "geometry.obstacles.\(box.id)" }),
-                            onApply: { origin, size in
-                                store.applyObstacle(id: box.id, origin: origin, size: size)
-                            },
-                            onDelete: { store.removeObstacle(id: box.id) }
-                        )
-                    }
-                    Button("添加家具") {
-                        addObstacle()
-                    }
-                    .accessibilityLabel("添加家具，位置与尺寸单位米")
-                    Text("增删窗、门、家具后，三维视口会立刻更新。家具外形是示意桌，目前不进气流网格。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    editorColumn
                 }
             }
-            Section("使用") {
-                Text("人数和座位必须相同。加座位会加一个人，改人数会增删座位。时段是选定的一天，不是全年。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                TextField("人数", value: $occupantCount, format: InspectorNumberFormat.integer)
-                    .accessibilityLabel("人数")
-                Button("应用人数") {
-                    store.applyOccupantCount(occupantCount)
-                }
-                .accessibilityLabel("应用人数")
-                TextField("开始 HH:MM", text: $occupiedStart)
-                    .accessibilityLabel("使用开始时间")
-                TextField("结束 HH:MM", text: $occupiedEnd)
-                    .accessibilityLabel("使用结束时间")
-                Button("应用使用时间") {
-                    store.applyOccupiedHours(start: occupiedStart, end: occupiedEnd)
-                }
-                .accessibilityLabel("应用使用时间")
-                Text("每个座位是一个人，也是舒适检查点。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                ForEach(store.project?.occupancy?.seats ?? []) { seat in
-                    SeatEditor(
-                        seat: seat,
-                        displayTitle: seatDisplayTitle(seat),
-                        issue: store.fieldIssues.first(where: { $0.path == "occupancy.seats.\(seat.id)" }),
-                        onApply: { position, source in
-                            store.applySeat(id: seat.id, position: position, source: source)
-                        },
-                        onDelete: { store.removeSeat(id: seat.id) }
-                    )
-                }
-                Button("添加座位") {
-                    addSeat()
-                }
-                .accessibilityLabel("添加座位检查点，坐标单位米")
-                Text("每个座位在三维里画成椅子和坐着的人。删座位会同时少一个人。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            .formStyle(.grouped)
+            .onChange(of: store.project?.id, initial: true) { _, _ in
+                show(.list)
+                refreshFromStore()
             }
-            Section("空调") {
-                Button("安装默认分体空调") {
-                    store.installDefaultSplitAC()
-                }
-                .accessibilityLabel("安装默认分体空调，设定与出风温度分开")
-                if let hvac = store.project?.hvac {
-                    Text("设定 \(UserFacingCopy.displayNumber(hvac.setpointC.value)) °C，出风 \(UserFacingCopy.displayNumber(hvac.supplyTemperatureC.value)) °C。")
-                        .font(.footnote)
-                    TerminalEditor(
-                        title: UserFacingCopy.terminalTitle(isSupply: true),
-                        terminal: hvac.supply,
-                        issue: store.fieldIssues.first(where: { $0.path == "hvac.supply" }),
-                        onApply: { wall, s0, s1, z0, z1, source in
-                            store.applySupplyTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
-                        }
-                    )
-                    TerminalEditor(
-                        title: UserFacingCopy.terminalTitle(isSupply: false),
-                        terminal: hvac.returnTerminal,
-                        issue: store.fieldIssues.first(where: { $0.path == "hvac.returnTerminal" }),
-                        onApply: { wall, s0, s1, z0, z1, source in
-                            store.applyReturnTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
-                        }
-                    )
-                    SupplyFlowEditor(
-                        hvac: hvac,
-                        airflowIssue: store.fieldIssues.first(where: { $0.path == "hvac.supplyAirflowM3s" }),
-                        onApplyOutdoorAir: { store.applyOutdoorAirM3s($0) },
-                        onApplySpeed: { store.applySupplySpeedMs($0) },
-                        onApplyAirflow: { store.applySupplyAirflowM3s($0) },
-                        onRecompute: { store.recomputeSupplyAirflowFromSpeedAndArea() }
-                    )
-                    Button("移除空调", role: .destructive) {
-                        store.removeHVAC()
-                    }
-                    .accessibilityLabel("移除分体空调，三维视口不再画室内机")
-                    Text("出风口画成壁挂室内机，回风口画成格栅。外形是示意，不是实测尺寸。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(store.fieldIssues.filter { $0.path.hasPrefix("hvac") }) { issue in
-                    Text(issue.message)
-                        .font(.footnote)
-                        .accessibilityLabel(issue.message)
-                }
+            .onChange(of: store.project?.geometry?.sizeX.value) { _, _ in
+                refreshFromStore()
             }
-            DisclosureGroup("电价") {
-                Text("只算选定的一天，不是全年。改造待报价。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                TextField("电价（每千瓦时）", text: $tariffPriceText)
-                    .accessibilityLabel("演示电价，每千瓦时")
-                TextField("币种", text: $tariffCurrency)
-                    .accessibilityLabel("电价币种")
-                SourcePicker(source: $tariffSource)
-                TextField("出处", text: $tariffReference)
-                    .accessibilityLabel("电价出处")
-                Button("应用电价") {
-                    let trimmedPrice = tariffPriceText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let reference = tariffReference.trimmingCharacters(in: .whitespacesAndNewlines)
-                    store.applyElectricityTariff(CostAssumptions(
-                        pricePerKWh: trimmedPrice.isEmpty ? nil : Double(trimmedPrice),
-                        currency: tariffCurrency.trimmingCharacters(in: .whitespacesAndNewlines),
-                        source: tariffSource,
-                        reference: reference.isEmpty ? nil : reference
-                    ))
-                }
-                .accessibilityLabel("应用演示电价")
-                if let tariff = store.project?.costAssumptions {
-                    Text("出处 \(UserFacingCopy.sourceTitle(tariff.source))：\(tariff.reference ?? "无出处")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("电价出处 \(UserFacingCopy.sourceTitle(tariff.source)) \(tariff.reference ?? "无出处")")
-                }
-                Text("缺电价、缺用电功率或缺使用时间时费用省略，不填 0。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            .onChange(of: store.project?.geometry?.sizeY.value) { _, _ in
+                refreshFromStore()
             }
-            DisclosureGroup("查看假设") {
-                if store.lockedAssumptions.isEmpty && listed.isEmpty && store.overridable.isEmpty {
-                    Text("还没有需要说明的假设。未知出处不会显示为 0。")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.lockedAssumptions, id: \.self) { note in
-                        Text(UserFacingCopy.omittedAssumptionTitle(note))
-                            .accessibilityLabel(UserFacingCopy.omittedAssumptionTitle(note))
-                    }
-                    ForEach(listed) { item in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(UserFacingCopy.fieldTitle(item.path))
-                            Text(item.provenanceText)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            if let uncertainty = item.uncertainty, let unit = item.unit {
-                                Text("不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))")
-                                    .font(.footnote)
-                                    .accessibilityLabel("不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))")
-                            }
-                        }
-                    }
-                    ForEach(store.overridable, id: \.self) { path in
-                        Text(UserFacingCopy.fieldTitle(path))
-                            .accessibilityLabel(UserFacingCopy.fieldTitle(path))
-                    }
-                }
+            .onChange(of: store.project?.geometry?.sizeZ.value) { _, _ in
+                refreshFromStore()
+            }
+            .onChange(of: store.project?.geometry?.northYawDegrees.value) { _, _ in
+                refreshFromStore()
+            }
+            .onChange(of: store.project?.occupancy?.occupantCount.value) { _, _ in
+                refreshFromStore()
+            }
+            .onChange(of: store.project?.occupancy?.schedule?.start) { _, _ in
+                refreshFromStore()
             }
         }
+    }
+
+    private var detailForm: some View {
+        Form {
+            editorColumn
+        }
+        .id(currentPage)
         .formStyle(.grouped)
-        // Inspector is already on screen before a template loads, so onAppear alone leaves 0 / 0 / 0.
-        .onChange(of: store.project?.id, initial: true) { _, _ in
+        .onAppear {
+            refreshFromStore()
+        }
+        .onChange(of: currentPage) { _, _ in
             refreshFromStore()
         }
         .onChange(of: store.project?.geometry?.sizeX.value) { _, _ in
@@ -319,47 +147,482 @@ public struct RoomEditorForm: View {
     }
 
     @ViewBuilder
-    private var enginePrepSection: some View {
-        DisclosureGroup("计算准备", isExpanded: $prepExpanded) {
-            Text(store.engineStatus)
-                .font(.footnote)
-                .accessibilityLabel(store.engineStatus)
-            if let name = store.engineFolderName {
-                Text("当前文件夹：\(name)")
+    private var listColumn: some View {
+        if let warning = store.packageWarning {
+            Section {
+                Text(warning)
                     .font(.footnote)
-                    .accessibilityLabel("当前文件夹 \(name)")
+                    .accessibilityLabel(warning)
             }
-            #if os(macOS)
-            Text("计算程序会复制到本机工作区。只需选择计算文件夹，不要把路径写进项目。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            Button(store.engineFolderName == nil ? "选择计算文件夹" : "重新选择计算文件夹") {
-                store.chooseEnginesRoot()
-                prepExpanded = true
-            }
-            .accessibilityLabel(store.engineFolderName == nil ? "选择计算文件夹" : "重新选择计算文件夹")
-            Button("选择程序副本（备用）") {
-                store.chooseRepositoryRoot()
-                prepExpanded = true
-            }
-            .accessibilityLabel("选择程序副本，仅当应用资源缺失时")
-            #else
-            Text("这台设备上还不能在本地估算。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            #endif
-            if let message = store.runMessage {
-                Text(message)
-                    .font(.footnote)
-                    .accessibilityLabel(message)
-            }
-            Text(store.reportStatusLine ?? "加入通过检查的方案后，到「导出报告」导出对比说明。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel(store.reportStatusLine ?? "对比说明导出提示")
+            // PR#4 moved the engines/run-message block into the inspector's
+            // 计算准备 page (enginesEditor); the sidebar list stays a list.
         }
-        .onChange(of: store.engineStatus) { _, _ in
-            prepExpanded = true
+        if let error = store.packageError {
+            Section {
+                Text(error)
+                    .font(.footnote)
+                    .accessibilityLabel("项目包错误 \(error)")
+            }
+        }
+        Section {
+            InspectorRow(title: "计算准备", isSelected: currentPage == .engines) { toggle(.engines) }
+                .accessibilityLabel("计算准备、电价和假设")
+        }
+        if store.project == nil {
+            Section("开始") {
+                Button("从办公室模板创建") {
+                    store.loadOfficeTemplate()
+                }
+                .accessibilityLabel("从办公室模板创建项目")
+                Button("从教室模板创建") {
+                    store.loadClassroomTemplate()
+                }
+                .accessibilityLabel("从教室模板创建项目")
+                Text("模板会填入房间、人员和空调。墙保温和天气还没填时不会按 0 计算。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Text(statusText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("项目状态 \(statusText)")
+            Section("房间") {
+                InspectorRow(title: roomLine, isSelected: currentPage == .room) { toggle(.room) }
+                    .accessibilityLabel("编辑房间尺寸 \(roomLine)")
+            }
+            Section("门窗") {
+                if store.project?.geometry == nil {
+                    Text("先填写房间尺寸后再添加门窗。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.project?.geometry?.openings ?? []) { opening in
+                        InspectorRow(title: openingSummary(opening), isSelected: currentPage == .opening(opening.id)) {
+                            toggle(.opening(opening.id))
+                        }
+                    }
+                    Button("添加窗") { addOpening(kind: .window) }
+                        .accessibilityLabel("添加窗，沿墙位置单位米")
+                    Button("添加门") { addOpening(kind: .door) }
+                        .accessibilityLabel("添加门，沿墙位置单位米")
+                }
+            }
+            Section("家具") {
+                if store.project?.geometry == nil {
+                    Text("先填写房间尺寸后再添加家具。")
+                        .foregroundStyle(.secondary)
+                } else if store.project?.geometry?.obstacles.isEmpty == true {
+                    Text("还没有家具。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(Array((store.project?.geometry?.obstacles ?? []).enumerated()), id: \.element.id) { index, box in
+                    InspectorRow(title: furnitureSummary(box, index: index), isSelected: currentPage == .obstacle(box.id)) {
+                        toggle(.obstacle(box.id))
+                    }
+                }
+                Button("添加家具") { addObstacle() }
+                    .disabled(store.project?.geometry == nil)
+                    .accessibilityLabel("添加家具，位置与尺寸单位米")
+            }
+            Section("使用") {
+                InspectorRow(title: occupancyLine, isSelected: currentPage == .occupancy) { toggle(.occupancy) }
+                    .accessibilityLabel("编辑人数和使用时间 \(occupancyLine)")
+                ForEach(store.project?.occupancy?.seats ?? []) { seat in
+                    InspectorRow(title: seatSummary(seat), isSelected: currentPage == .seat(seat.id)) {
+                        toggle(.seat(seat.id))
+                    }
+                }
+                Button("添加座位") { addSeat() }
+                    .accessibilityLabel("添加座位检查点，坐标单位米")
+            }
+            Section("空调") {
+                if store.project?.hvac == nil {
+                    Button("安装默认分体空调") {
+                        store.installDefaultSplitAC()
+                    }
+                    .accessibilityLabel("安装默认分体空调，设定与出风温度分开")
+                } else if let hvac = store.project?.hvac {
+                    InspectorRow(title: temperatureLine, isSelected: currentPage == .temperatures) { toggle(.temperatures) }
+                        .accessibilityLabel("编辑设定温度和出风温度")
+                    InspectorRow(title: terminalSummary(hvac.supply, isSupply: true), isSelected: currentPage == .supply) {
+                        toggle(.supply)
+                    }
+                    InspectorRow(title: terminalSummary(hvac.returnTerminal, isSupply: false), isSelected: currentPage == .returnTerminal) {
+                        toggle(.returnTerminal)
+                    }
+                    InspectorRow(title: "风量与新风", isSelected: currentPage == .airflow) { toggle(.airflow) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var editorColumn: some View {
+        if column == .stack {
+            Section {
+                Button {
+                    show(.list)
+                } label: {
+                    Label("返回", systemImage: "chevron.backward")
+                }
+                .accessibilityLabel("返回房间清单")
+            }
+        }
+        switch currentPage {
+        case .list:
+            EmptyView()
+        case .room:
+            Section("房间") { roomEditor }
+        case .opening(let id):
+            if let opening = store.project?.geometry?.openings.first(where: { $0.id == id }) {
+                Section(openingDisplayTitle(opening)) {
+                    OpeningEditor(
+                        opening: opening,
+                        displayTitle: openingDisplayTitle(opening),
+                        issue: store.fieldIssues.first(where: { $0.path == "geometry.openings.\(opening.id)" }),
+                        onApply: { kind, wall, s0, s1, z0, z1, source in
+                            store.applyOpening(
+                                id: opening.id,
+                                kind: kind,
+                                wall: wall,
+                                s0: s0,
+                                s1: s1,
+                                z0: z0,
+                                z1: z1,
+                                source: source
+                            )
+                        },
+                        onDelete: {
+                            store.removeOpening(id: opening.id)
+                            show(.list)
+                        }
+                    )
+                }
+            } else {
+                missingItem
+            }
+        case .obstacle(let id):
+            if let indexed = store.project?.geometry?.obstacles.enumerated().first(where: { $0.element.id == id }) {
+                Section(UserFacingCopy.furnitureTitle(index: indexed.offset)) {
+                    ObstacleEditor(
+                        box: indexed.element,
+                        displayTitle: UserFacingCopy.furnitureTitle(index: indexed.offset),
+                        issue: store.fieldIssues.first(where: { $0.path == "geometry.obstacles.\(indexed.element.id)" }),
+                        onApply: { origin, size in
+                            store.applyObstacle(id: indexed.element.id, origin: origin, size: size)
+                        },
+                        onDelete: {
+                            store.removeObstacle(id: indexed.element.id)
+                            show(.list)
+                        }
+                    )
+                    Text("外形是示意桌，不进入气流计算。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                missingItem
+            }
+        case .occupancy:
+            Section("人数与时间") { occupancyEditor }
+        case .seat(let id):
+            if let seat = store.project?.occupancy?.seats.first(where: { $0.id == id }) {
+                Section(seatDisplayTitle(seat)) {
+                    SeatEditor(
+                        seat: seat,
+                        displayTitle: seatDisplayTitle(seat),
+                        issue: store.fieldIssues.first(where: { $0.path == "occupancy.seats.\(seat.id)" }),
+                        onApply: { position, source in
+                            store.applySeat(id: seat.id, position: position, source: source)
+                        },
+                        onDelete: {
+                            store.removeSeat(id: seat.id)
+                            show(.list)
+                        }
+                    )
+                    Text("删座位会同时少一个人。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                missingItem
+            }
+        case .temperatures:
+            Section("温度") { temperatureEditor }
+        case .supply:
+            if let hvac = store.project?.hvac {
+                Section(UserFacingCopy.terminalTitle(isSupply: true)) {
+                    TerminalEditor(
+                        title: UserFacingCopy.terminalTitle(isSupply: true),
+                        terminal: hvac.supply,
+                        issue: store.fieldIssues.first(where: { $0.path == "hvac.supply" }),
+                        onApply: { wall, s0, s1, z0, z1, source in
+                            store.applySupplyTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
+                        }
+                    )
+                    Text("出风口画成壁挂室内机。外形是示意，不是实测尺寸。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                missingItem
+            }
+        case .returnTerminal:
+            if let hvac = store.project?.hvac {
+                Section(UserFacingCopy.terminalTitle(isSupply: false)) {
+                    TerminalEditor(
+                        title: UserFacingCopy.terminalTitle(isSupply: false),
+                        terminal: hvac.returnTerminal,
+                        issue: store.fieldIssues.first(where: { $0.path == "hvac.returnTerminal" }),
+                        onApply: { wall, s0, s1, z0, z1, source in
+                            store.applyReturnTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
+                        }
+                    )
+                    Text("回风口画成格栅。外形是示意，不是实测尺寸。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                missingItem
+            }
+        case .airflow:
+            if let hvac = store.project?.hvac {
+                Section("风量与新风") {
+                    SupplyFlowEditor(
+                        hvac: hvac,
+                        airflowIssue: store.fieldIssues.first(where: { $0.path == "hvac.supplyAirflowM3s" }),
+                        onApplyOutdoorAir: { store.applyOutdoorAirM3s($0) },
+                        onApplySpeed: { store.applySupplySpeedMs($0) },
+                        onApplyAirflow: { store.applySupplyAirflowM3s($0) },
+                        onRecompute: { store.recomputeSupplyAirflowFromSpeedAndArea() }
+                    )
+                }
+            } else {
+                missingItem
+            }
+        case .engines:
+            Section("计算准备") { enginesEditor }
+            Section("电价") { tariffEditor }
+            Section("查看假设") { assumptionsEditor }
+        }
+    }
+
+    private var missingItem: some View {
+        Section {
+            Text("这一项已经不在房间里。")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var roomEditor: some View {
+        sizeField("长度", value: $sizeX, pathHint: "geometry.sizeX")
+        sizeField("宽度", value: $sizeY, pathHint: "geometry.sizeY")
+        sizeField("高度", value: $sizeZ, pathHint: "geometry.sizeZ")
+        ApplyButton(
+            title: "应用尺寸",
+            isDirty: roomSizeIsDirty,
+            accessibilityLabel: "应用房间尺寸，单位米"
+        ) {
+            store.applyRoomSize(x: sizeX, y: sizeY, z: sizeZ)
+            refreshFromStore()
+        }
+        NumericField("哪面墙朝北", value: $northYaw, unit: "°")
+        Text("0° 表示近侧墙的对面是北。改朝向不会挪动已经放好的门窗。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        ApplyButton(
+            title: "应用朝向",
+            isDirty: northYawIsDirty,
+            accessibilityLabel: "应用朝向，单位度"
+        ) {
+            store.applyNorthYawDegrees(northYaw)
+        }
+    }
+
+    @ViewBuilder
+    private var occupancyEditor: some View {
+        LabeledContent("人数") {
+            TextField("人数", value: $occupantCount, format: InspectorNumberFormat.integer)
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+        }
+        .accessibilityLabel("人数")
+        ApplyButton(
+            title: "应用人数",
+            isDirty: occupantCountIsDirty,
+            accessibilityLabel: "应用人数"
+        ) {
+            store.applyOccupantCount(occupantCount)
+        }
+        Text("人数和座位数保持一致。改人数会增删座位。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        LabeledContent("开始") {
+            TextField("开始", text: $occupiedStart)
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+        }
+        .accessibilityLabel("使用开始时间")
+        LabeledContent("结束") {
+            TextField("结束", text: $occupiedEnd)
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+        }
+        .accessibilityLabel("使用结束时间")
+        ApplyButton(
+            title: "应用使用时间",
+            isDirty: occupiedHoursAreDirty,
+            accessibilityLabel: "应用使用时间"
+        ) {
+            store.applyOccupiedHours(start: occupiedStart, end: occupiedEnd)
+        }
+        Text("时段是选定的一天，不是全年。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var temperatureEditor: some View {
+        if store.project?.hvac == nil {
+            Text("还没有安装空调。")
+                .foregroundStyle(.secondary)
+        } else {
+            NumericField("设定温度", value: $setpointC, unit: "°C")
+            NumericField("出风温度", value: $supplyTemperatureC, unit: "°C")
+            Text("设定温度是房间目标，出风温度是空调吹出来的空气，两者分开。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            ApplyButton(
+                title: "应用温度",
+                isDirty: temperaturesAreDirty,
+                accessibilityLabel: "应用设定温度和出风温度，单位摄氏度"
+            ) {
+                if setpointC != store.project?.hvac?.setpointC.value {
+                    store.applyZoneSetpointC(setpointC)
+                }
+                if supplyTemperatureC != store.project?.hvac?.supplyTemperatureC.value {
+                    store.applySupplyTemperatureC(supplyTemperatureC)
+                }
+            }
+            Button("移除空调", role: .destructive) {
+                store.removeHVAC()
+                show(.list)
+            }
+            .accessibilityLabel("移除分体空调，三维视口不再画室内机")
+            ForEach(store.fieldIssues.filter { $0.path.hasPrefix("hvac") && $0.path != "hvac.supply" && $0.path != "hvac.returnTerminal" && $0.path != "hvac.supplyAirflowM3s" }) { issue in
+                Text(issue.message)
+                    .font(.footnote)
+                    .accessibilityLabel(issue.message)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var enginesEditor: some View {
+        Text(store.engineStatus)
+            .font(.footnote)
+            .accessibilityLabel(store.engineStatus)
+        if let name = store.engineFolderName {
+            Text("当前文件夹：\(name)")
+                .font(.footnote)
+                .accessibilityLabel("当前文件夹 \(name)")
+        }
+        #if os(macOS)
+        Text("计算程序会复制到本机工作区。只需选择计算文件夹，不要把路径写进项目。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        Button(store.engineFolderName == nil ? "选择计算文件夹" : "重新选择计算文件夹") {
+            store.chooseEnginesRoot()
+        }
+        .accessibilityLabel(store.engineFolderName == nil ? "选择计算文件夹" : "重新选择计算文件夹")
+        Button("选择程序副本（备用）") {
+            store.chooseRepositoryRoot()
+        }
+        .accessibilityLabel("选择程序副本，仅当应用资源缺失时")
+        #else
+        Text("这台设备上还不能在本地估算。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        #endif
+        if let message = store.runMessage {
+            Text(message)
+                .font(.footnote)
+                .accessibilityLabel(message)
+        }
+        // Kept from dev (export-report copy): the engines page also carries the
+        // report-export hint; PR#4's move had not seen that commit yet.
+        Text(store.reportStatusLine ?? "加入通过检查的方案后，到「导出报告」导出对比说明。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(store.reportStatusLine ?? "对比说明导出提示")
+    }
+
+    @ViewBuilder
+    private var tariffEditor: some View {
+        Text("只算选定的一天，不是全年。改造待报价。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        TextField("电价（每千瓦时）", text: $tariffPriceText)
+            .accessibilityLabel("演示电价，每千瓦时")
+        TextField("币种", text: $tariffCurrency)
+            .accessibilityLabel("电价币种")
+        SourcePicker(source: $tariffSource)
+        TextField("出处", text: $tariffReference)
+            .accessibilityLabel("电价出处")
+        ApplyButton(
+            title: "应用电价",
+            isDirty: tariffIsDirty,
+            accessibilityLabel: "应用演示电价"
+        ) {
+            let trimmedPrice = tariffPriceText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let reference = tariffReference.trimmingCharacters(in: .whitespacesAndNewlines)
+            store.applyElectricityTariff(CostAssumptions(
+                pricePerKWh: trimmedPrice.isEmpty ? nil : Double(trimmedPrice),
+                currency: tariffCurrency.trimmingCharacters(in: .whitespacesAndNewlines),
+                source: tariffSource,
+                reference: reference.isEmpty ? nil : reference
+            ))
+        }
+        if let tariff = store.project?.costAssumptions {
+            Text("出处 \(UserFacingCopy.sourceTitle(tariff.source))：\(tariff.reference ?? "无出处")")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("电价出处 \(UserFacingCopy.sourceTitle(tariff.source)) \(tariff.reference ?? "无出处")")
+        }
+        Text("缺电价、缺用电功率或缺使用时间时费用省略，不填 0。")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var assumptionsEditor: some View {
+        if store.lockedAssumptions.isEmpty && listed.isEmpty && store.overridable.isEmpty {
+            Text("还没有需要说明的假设。未知出处不会显示为 0。")
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(store.lockedAssumptions, id: \.self) { note in
+                Text(UserFacingCopy.omittedAssumptionTitle(note))
+                    .accessibilityLabel(UserFacingCopy.omittedAssumptionTitle(note))
+            }
+            ForEach(listed) { item in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(UserFacingCopy.fieldTitle(item.path))
+                    Text(item.provenanceText)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if let uncertainty = item.uncertainty, let unit = item.unit {
+                        Text("不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))")
+                            .font(.footnote)
+                            .accessibilityLabel("不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))")
+                    }
+                }
+            }
+            ForEach(store.overridable, id: \.self) { path in
+                Text(UserFacingCopy.fieldTitle(path))
+                    .accessibilityLabel(UserFacingCopy.fieldTitle(path))
+            }
         }
     }
 
@@ -382,6 +645,61 @@ public struct RoomEditorForm: View {
         store.project?.listedAssumptions() ?? []
     }
 
+    private func show(_ next: InspectorPage) {
+        if let page {
+            page.wrappedValue = next
+        } else {
+            ownedPage = next
+            refreshFromStore()
+        }
+    }
+
+    /// Selecting the open row again closes the trailing editor.
+    private func toggle(_ next: InspectorPage) {
+        show(currentPage == next ? .list : next)
+    }
+
+    private var roomLine: String {
+        guard let geometry = store.project?.geometry else { return "尚未填写尺寸" }
+        return "\(UserFacingCopy.displayNumber(geometry.sizeX.value)) × \(UserFacingCopy.displayNumber(geometry.sizeY.value)) × \(UserFacingCopy.displayNumber(geometry.sizeZ.value)) m"
+    }
+
+    private var occupancyLine: String {
+        let count = Int(store.project?.occupancy?.occupantCount.value ?? 0)
+        let start = store.project?.occupancy?.schedule?.start ?? "08:00"
+        let end = store.project?.occupancy?.schedule?.end ?? "18:00"
+        return "\(count) 人 · \(start)–\(end)"
+    }
+
+    private var temperatureLine: String {
+        let setpoint = UserFacingCopy.displayNumber(store.project?.hvac?.setpointC.value ?? setpointC)
+        let supply = UserFacingCopy.displayNumber(store.project?.hvac?.supplyTemperatureC.value ?? supplyTemperatureC)
+        return "设定 \(setpoint) °C · 出风 \(supply) °C"
+    }
+
+    private func openingSummary(_ opening: Opening) -> String {
+        let title = openingDisplayTitle(opening)
+        let span = "\(UserFacingCopy.displayNumber(opening.s0.value))–\(UserFacingCopy.displayNumber(opening.s1.value)) m"
+        return "\(title) · \(span)"
+    }
+
+    private func furnitureSummary(_ box: ObstacleBox, index: Int) -> String {
+        let title = UserFacingCopy.furnitureTitle(index: index)
+        return "\(title) · 左右 \(UserFacingCopy.displayNumber(box.origin.x)) · 前后 \(UserFacingCopy.displayNumber(box.origin.y)) m"
+    }
+
+    private func seatSummary(_ seat: Seat) -> String {
+        let title = seatDisplayTitle(seat)
+        return "\(title) · 左右 \(UserFacingCopy.displayNumber(seat.position.x)) · 前后 \(UserFacingCopy.displayNumber(seat.position.y)) m"
+    }
+
+    private func terminalSummary(_ terminal: AirTerminal, isSupply: Bool) -> String {
+        let title = UserFacingCopy.terminalTitle(isSupply: isSupply)
+        let wall = UserFacingCopy.wallTitle(terminal.wall)
+        let span = "\(UserFacingCopy.displayNumber(terminal.s0.value))–\(UserFacingCopy.displayNumber(terminal.s1.value)) m"
+        return "\(title) · \(wall) \(span)"
+    }
+
     private func openingDisplayTitle(_ opening: Opening) -> String {
         UserFacingCopy.openingTitle(for: opening, in: store.project?.geometry?.openings ?? [])
     }
@@ -396,15 +714,60 @@ public struct RoomEditorForm: View {
 
     @ViewBuilder
     private func sizeField(_ title: String, value: Binding<Double>, pathHint: String) -> some View {
-        VStack(alignment: .leading) {
-            TextField("\(title) m", value: value, format: InspectorNumberFormat.twoPlaces)
-                .accessibilityLabel("\(title)，米")
+        VStack(alignment: .leading, spacing: 2) {
+            NumericField(title, value: value, unit: "m")
             if let issue = store.fieldIssues.first(where: { $0.path == pathHint }) {
                 Text(issue.message)
                     .font(.footnote)
                     .accessibilityLabel(issue.message)
             }
         }
+    }
+
+    private var roomSizeIsDirty: Bool {
+        let geometry = store.project?.geometry
+        return inspectorValuesDiffer(sizeX, geometry?.sizeX.value ?? 0)
+            || inspectorValuesDiffer(sizeY, geometry?.sizeY.value ?? 0)
+            || inspectorValuesDiffer(sizeZ, geometry?.sizeZ.value ?? 0)
+    }
+
+    private var northYawIsDirty: Bool {
+        inspectorValuesDiffer(northYaw, store.project?.geometry?.northYawDegrees.value ?? 0)
+    }
+
+    private var occupantCountIsDirty: Bool {
+        inspectorValuesDiffer(occupantCount, store.project?.occupancy?.occupantCount.value ?? 0)
+    }
+
+    private var occupiedHoursAreDirty: Bool {
+        let schedule = store.project?.occupancy?.schedule
+        return occupiedStart != (schedule?.start ?? "08:00")
+            || occupiedEnd != (schedule?.end ?? "18:00")
+    }
+
+    private var temperaturesAreDirty: Bool {
+        guard let hvac = store.project?.hvac else { return false }
+        return inspectorValuesDiffer(setpointC, hvac.setpointC.value)
+            || inspectorValuesDiffer(supplyTemperatureC, hvac.supplyTemperatureC.value)
+    }
+
+    private var tariffIsDirty: Bool {
+        let stored = store.project?.costAssumptions
+        let trimmedPrice = tariffPriceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let priceDirty: Bool
+        if trimmedPrice.isEmpty {
+            priceDirty = stored?.pricePerKWh != nil
+        } else if let drafted = Double(trimmedPrice) {
+            priceDirty = stored?.pricePerKWh.map { inspectorValuesDiffer(drafted, $0) } ?? true
+        } else {
+            priceDirty = true
+        }
+        let currencyDirty = tariffCurrency.trimmingCharacters(in: .whitespacesAndNewlines)
+            != (stored?.currency ?? "HKD")
+        let sourceDirty = tariffSource != (stored?.source ?? .assumed)
+        let referenceDirty = tariffReference.trimmingCharacters(in: .whitespacesAndNewlines)
+            != (stored?.reference ?? "")
+        return priceDirty || currencyDirty || sourceDirty || referenceDirty
     }
 
     private func refreshFromStore() {
@@ -415,6 +778,8 @@ public struct RoomEditorForm: View {
         occupantCount = store.project?.occupancy?.occupantCount.value ?? 0
         occupiedStart = store.project?.occupancy?.schedule?.start ?? "08:00"
         occupiedEnd = store.project?.occupancy?.schedule?.end ?? "18:00"
+        setpointC = store.project?.hvac?.setpointC.value ?? 26
+        supplyTemperatureC = store.project?.hvac?.supplyTemperatureC.value ?? 16
         if let tariff = store.project?.costAssumptions {
             tariffPriceText = tariff.pricePerKWh.map(UserFacingCopy.displayNumber) ?? ""
             tariffCurrency = tariff.currency
@@ -431,6 +796,7 @@ public struct RoomEditorForm: View {
     private func addOpening(kind: OpeningKind) {
         let prefix = kind == .window ? "W" : "D"
         let existing = store.project?.geometry?.openings.map(\.id) ?? []
+        let id = ProjectDraft.nextPrefixedID(prefix: prefix, existing: existing)
         // New windows get the template-level 80 W/m² (office/classroom preset)
         // so adding a window reaches BOTH engines: L1 area drives the bill,
         // the declared flux drives the L2 field. Marked assumed, not measured.
@@ -438,7 +804,7 @@ public struct RoomEditorForm: View {
             ? PhysicalQuantity(value: 80, unit: "W/m2", source: .assumed)
             : nil
         store.applyOpening(
-            id: ProjectDraft.nextPrefixedID(prefix: prefix, existing: existing),
+            id: id,
             kind: kind,
             wall: .xMax,
             s0: 0.5,
@@ -448,24 +814,73 @@ public struct RoomEditorForm: View {
             source: .user,
             heatFluxWm2: defaultWindowFlux
         )
+        show(.opening(id))
     }
 
     private func addObstacle() {
         let existing = store.project?.geometry?.obstacles.map(\.id) ?? []
+        let id = ProjectDraft.nextPrefixedID(prefix: "F", existing: existing)
         store.applyObstacle(
-            id: ProjectDraft.nextPrefixedID(prefix: "F", existing: existing),
+            id: id,
             origin: Position3D(x: 1, y: 1, z: 0),
             size: Position3D(x: 1.2, y: 0.7, z: 0.75)
         )
+        show(.obstacle(id))
     }
 
     private func addSeat() {
         let existing = store.project?.occupancy?.seats.map(\.id) ?? []
+        let id = ProjectDraft.nextPrefixedID(prefix: "S", existing: existing)
         store.applySeat(
-            id: ProjectDraft.nextPrefixedID(prefix: "S", existing: existing),
+            id: id,
             position: Position3D(x: 1.5, y: 1.5, z: 1.1),
             source: .user
         )
+        show(.seat(id))
+    }
+}
+
+/// Draft numbers and stored quantities can differ by binary noise after formatting.
+private func inspectorValuesDiffer(_ draft: Double, _ stored: Double) -> Bool {
+    abs(draft - stored) > 0.000_001
+}
+
+/// Apply control. A leading dot means the fields above it are edited and not written yet.
+private struct ApplyButton: View {
+    let title: String
+    var isDirty: Bool
+    var accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(isDirty ? "• \(title)" : title, action: action)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityHint(isDirty ? "有修改还没应用" : "")
+    }
+}
+
+private struct InspectorRow: View {
+    let title: String
+    var isSelected = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Color.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(isSelected ? Color.accentColor : nil)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint("在右侧显示这一项")
     }
 }
 
@@ -507,7 +922,6 @@ private struct OpeningEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(displayTitle)
             Picker("类型", selection: $kind) {
                 ForEach(OpeningKind.allCases, id: \.self) { item in
                     Text(item.editorLabel).tag(item)
@@ -525,14 +939,17 @@ private struct OpeningEditor: View {
                     .font(.footnote)
                     .accessibilityLabel("开口错误 \(issue.message)")
             }
-            Button("应用开口") {
-                onApply(kind, wall, s0, s1, z0, z1, source)
-            }
-            .accessibilityLabel("应用\(displayTitle)，单位米")
+            ApplyButton(
+                title: "应用开口",
+                isDirty: isDirty,
+                accessibilityLabel: "应用\(displayTitle)，单位米",
+                action: apply
+            )
             Button("删除开口", role: .destructive, action: onDelete)
                 .accessibilityLabel("删除\(displayTitle)")
         }
         .padding(.vertical, 4)
+        .onSubmit(apply)
         .onChange(of: opening) { _, updated in
             kind = updated.kind
             wall = updated.wall
@@ -542,6 +959,20 @@ private struct OpeningEditor: View {
             z1 = updated.z1.value
             source = updated.s0.source
         }
+    }
+
+    private var isDirty: Bool {
+        kind != opening.kind
+            || wall != opening.wall
+            || source != opening.s0.source
+            || inspectorValuesDiffer(s0, opening.s0.value)
+            || inspectorValuesDiffer(s1, opening.s1.value)
+            || inspectorValuesDiffer(z0, opening.z0.value)
+            || inspectorValuesDiffer(z1, opening.z1.value)
+    }
+
+    private func apply() {
+        onApply(kind, wall, s0, s1, z0, z1, source)
     }
 }
 
@@ -581,7 +1012,6 @@ private struct ObstacleEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(displayTitle)
             NumericField("左右", value: $originX, unit: "m")
             NumericField("前后", value: $originY, unit: "m")
             NumericField("离地", value: $originZ, unit: "m")
@@ -593,17 +1023,17 @@ private struct ObstacleEditor: View {
                     .font(.footnote)
                     .accessibilityLabel(issue.message)
             }
-            Button("应用家具") {
-                onApply(
-                    Position3D(x: originX, y: originY, z: originZ),
-                    Position3D(x: sizeX, y: sizeY, z: sizeZ)
-                )
-            }
-            .accessibilityLabel("应用\(displayTitle)，单位米")
+            ApplyButton(
+                title: "应用家具",
+                isDirty: isDirty,
+                accessibilityLabel: "应用\(displayTitle)，单位米",
+                action: apply
+            )
             Button("删除家具", role: .destructive, action: onDelete)
                 .accessibilityLabel("删除\(displayTitle)")
         }
         .padding(.vertical, 4)
+        .onSubmit(apply)
         .onChange(of: box) { _, updated in
             originX = updated.origin.x
             originY = updated.origin.y
@@ -612,6 +1042,22 @@ private struct ObstacleEditor: View {
             sizeY = updated.size.y
             sizeZ = updated.size.z
         }
+    }
+
+    private var isDirty: Bool {
+        inspectorValuesDiffer(originX, box.origin.x)
+            || inspectorValuesDiffer(originY, box.origin.y)
+            || inspectorValuesDiffer(originZ, box.origin.z)
+            || inspectorValuesDiffer(sizeX, box.size.x)
+            || inspectorValuesDiffer(sizeY, box.size.y)
+            || inspectorValuesDiffer(sizeZ, box.size.z)
+    }
+
+    private func apply() {
+        onApply(
+            Position3D(x: originX, y: originY, z: originZ),
+            Position3D(x: sizeX, y: sizeY, z: sizeZ)
+        )
     }
 }
 
@@ -647,7 +1093,6 @@ private struct SeatEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(displayTitle)
             NumericField("左右", value: $x, unit: "m")
             NumericField("前后", value: $y, unit: "m")
             NumericField("坐姿高度", value: $z, unit: "m")
@@ -657,20 +1102,34 @@ private struct SeatEditor: View {
                     .font(.footnote)
                     .accessibilityLabel(issue.message)
             }
-            Button("应用座位") {
-                onApply(Position3D(x: x, y: y, z: z), source)
-            }
-            .accessibilityLabel("应用\(displayTitle)，单位米")
+            ApplyButton(
+                title: "应用座位",
+                isDirty: isDirty,
+                accessibilityLabel: "应用\(displayTitle)，单位米",
+                action: apply
+            )
             Button("删除座位", role: .destructive, action: onDelete)
                 .accessibilityLabel("删除\(displayTitle)")
         }
         .padding(.vertical, 4)
+        .onSubmit(apply)
         .onChange(of: seat) { _, updated in
             x = updated.position.x
             y = updated.position.y
             z = updated.position.z
             source = updated.source
         }
+    }
+
+    private var isDirty: Bool {
+        source != seat.source
+            || inspectorValuesDiffer(x, seat.position.x)
+            || inspectorValuesDiffer(y, seat.position.y)
+            || inspectorValuesDiffer(z, seat.position.z)
+    }
+
+    private func apply() {
+        onApply(Position3D(x: x, y: y, z: z), source)
     }
 }
 
@@ -707,7 +1166,6 @@ private struct TerminalEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
             WallPicker(wall: $wall)
             SourcePicker(source: $source)
             NumericField("沿墙起点", value: $s0, unit: "m")
@@ -719,12 +1177,15 @@ private struct TerminalEditor: View {
                     .font(.footnote)
                     .accessibilityLabel(issue.message)
             }
-            Button("应用\(title)") {
-                onApply(wall, s0, s1, z0, z1, source)
-            }
-            .accessibilityLabel("应用\(title)，沿墙位置单位米")
+            ApplyButton(
+                title: "应用\(title)",
+                isDirty: isDirty,
+                accessibilityLabel: "应用\(title)，沿墙位置单位米",
+                action: apply
+            )
         }
         .padding(.vertical, 4)
+        .onSubmit(apply)
         .onChange(of: terminal) { _, updated in
             wall = updated.wall
             s0 = updated.s0.value
@@ -733,6 +1194,19 @@ private struct TerminalEditor: View {
             z1 = updated.z1.value
             source = updated.s0.source
         }
+    }
+
+    private var isDirty: Bool {
+        wall != terminal.wall
+            || source != terminal.s0.source
+            || inspectorValuesDiffer(s0, terminal.s0.value)
+            || inspectorValuesDiffer(s1, terminal.s1.value)
+            || inspectorValuesDiffer(z0, terminal.z0.value)
+            || inspectorValuesDiffer(z1, terminal.z1.value)
+    }
+
+    private func apply() {
+        onApply(wall, s0, s1, z0, z1, source)
     }
 }
 
@@ -772,15 +1246,21 @@ private struct SupplyFlowEditor: View {
             LabeledContent("出风口面积", value: UserFacingCopy.displayQuantity(hvac.supply.patchAreaM2, unit: "m²"))
                 .accessibilityLabel("出风口面积 \(UserFacingCopy.displayNumber(hvac.supply.patchAreaM2)) 平方米")
             NumericField("出风速度", value: $speed, unit: "m/s")
-            Button("应用出风速度") {
+            ApplyButton(
+                title: "应用出风速度",
+                isDirty: inspectorValuesDiffer(speed, hvac.supplySpeedMs.value),
+                accessibilityLabel: "应用出风速度，单位米每秒，并按面积重算风量"
+            ) {
                 onApplySpeed(speed)
             }
-            .accessibilityLabel("应用出风速度，单位米每秒，并按面积重算风量")
             NumericField("出风量", value: $airflow, unit: "m3/s")
-            Button("应用出风量") {
+            ApplyButton(
+                title: "应用出风量",
+                isDirty: inspectorValuesDiffer(airflow, hvac.supplyAirflowM3s.value),
+                accessibilityLabel: "应用出风量，单位立方米每秒"
+            ) {
                 onApplyAirflow(airflow)
             }
-            .accessibilityLabel("应用出风量，单位立方米每秒")
             Button("按速度×面积重算风量", action: onRecompute)
                 .accessibilityLabel("按速度乘面积重算出风量")
             if let airflowIssue {
@@ -789,10 +1269,13 @@ private struct SupplyFlowEditor: View {
                     .accessibilityLabel(airflowIssue.message)
             }
             NumericField("室外新风", value: $outdoorAir, unit: "m3/s")
-            Button("应用室外新风") {
+            ApplyButton(
+                title: "应用室外新风",
+                isDirty: inspectorValuesDiffer(outdoorAir, hvac.outdoorAirM3s.value),
+                accessibilityLabel: "应用室外新风，与回风口分开，单位立方米每秒"
+            ) {
                 onApplyOutdoorAir(outdoorAir)
             }
-            .accessibilityLabel("应用室外新风，与回风口分开，单位立方米每秒")
         }
         .padding(.vertical, 4)
         .onChange(of: hvac) { _, updated in
@@ -815,8 +1298,18 @@ private struct NumericField: View {
     }
 
     var body: some View {
-        TextField("\(title) \(unit)", value: $value, format: InspectorNumberFormat.twoPlaces)
-            .accessibilityLabel("\(title)，\(unit)")
+        LabeledContent(title) {
+            HStack(spacing: 6) {
+                TextField(title, value: $value, format: InspectorNumberFormat.twoPlaces)
+                    .multilineTextAlignment(.trailing)
+                    .labelsHidden()
+                Text(unit)
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)，\(unit)")
     }
 }
 

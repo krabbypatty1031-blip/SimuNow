@@ -9,6 +9,8 @@ public struct WorkspaceView: View {
     @State private var store: WorkspaceStore
     @State private var isOpeningPackage = false
     @State private var isSavingPackage = false
+    /// Selected room row. The sidebar keeps the list; the inspector shows only this item.
+    @State private var inspectorPage = InspectorPage.list
     /// Shared camera yaw for the comparison page: one lens for all candidates.
     @State private var comparisonYaw: Double = -0.6
 
@@ -19,12 +21,19 @@ public struct WorkspaceView: View {
     public var body: some View {
         @Bindable var store = store
         NavigationSplitView {
-            List(WorkspaceDestination.allCases, selection: $store.selection) { destination in
-                Label(destination.title, systemImage: destination.symbol)
-                    .tag(destination)
+            List(selection: $store.selection) {
+                Section {
+                    ForEach(WorkspaceDestination.allCases) { destination in
+                        Label(destination.title, systemImage: destination.symbol)
+                            .tag(destination)
+                    }
+                }
+                #if os(macOS)
+                RoomEditorForm(store: store, page: $inspectorPage, column: .sidebar)
+                #endif
             }
             .navigationTitle("SimuNow")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+            .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 420)
         } detail: {
             detail
                 .navigationTitle(store.selection?.title ?? "SimuNow")
@@ -72,9 +81,16 @@ public struct WorkspaceView: View {
         .onAppear {
             store.restoreEngineBookmarks()
         }
-        .inspector(isPresented: .constant(true)) {
-            RoomEditorForm(store: store)
-                .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+        .inspector(isPresented: Binding(
+            get: { inspectorPage != .list },
+            set: { isPresented in
+                if !isPresented {
+                    inspectorPage = .list
+                }
+            }
+        )) {
+            RoomEditorForm(store: store, page: $inspectorPage, column: .detail)
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 420)
         }
         #endif
     }

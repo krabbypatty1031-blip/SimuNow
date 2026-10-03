@@ -512,6 +512,8 @@ public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
     public var hvac: HVACModel?
     /// Optional demo tariff. Old drafts omit it; a missing price is not 0 HKD.
     public var costAssumptions: CostAssumptions?
+    /// Typical-year calendar day for the pinned Hong Kong EPW. Missing means 15 July.
+    public var weather: WeatherDay?
 
     public init(id: UUID = UUID(), name: String, spaceType: SpaceType = .office) {
         self.schemaVersion = 1
@@ -524,6 +526,7 @@ public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
         self.occupancy = nil
         self.hvac = nil
         self.costAssumptions = nil
+        self.weather = nil
     }
 
     public init(
@@ -533,7 +536,8 @@ public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
         geometry: RoomGeometry,
         occupancy: OccupancyModel,
         hvac: HVACModel,
-        costAssumptions: CostAssumptions? = nil
+        costAssumptions: CostAssumptions? = nil,
+        weather: WeatherDay? = nil
     ) {
         self.schemaVersion = 2
         self.id = id
@@ -545,6 +549,7 @@ public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
         self.occupancy = occupancy
         self.hvac = hvac
         self.costAssumptions = costAssumptions
+        self.weather = weather
     }
 
     /// True only when geometry, occupancy and HVAC are all present. Does not mean engines can run.
@@ -554,7 +559,7 @@ public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case schemaVersion, id, name, spaceType, lengthUnit, coordinateSystem
-        case geometry, occupancy, hvac, costAssumptions
+        case geometry, occupancy, hvac, costAssumptions, weather
     }
 
     /// Omit missing partitions so v1 identity JSON does not grow null placeholders.
@@ -570,6 +575,7 @@ public struct ProjectDraft: Codable, Equatable, Identifiable, Sendable {
         try container.encodeIfPresent(occupancy, forKey: .occupancy)
         try container.encodeIfPresent(hvac, forKey: .hvac)
         try container.encodeIfPresent(costAssumptions, forKey: .costAssumptions)
+        try container.encodeIfPresent(weather, forKey: .weather)
     }
 
     /// First unused `prefix + n` so adding after a delete cannot overwrite a remaining object.

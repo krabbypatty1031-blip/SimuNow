@@ -43,9 +43,37 @@ class L1AccountingTests(unittest.TestCase):
         self.assertAlmostEqual(elec["value"], 6334.87 / 3.0)
         self.assertEqual(elec["method"], "equivalent_ideal_loads")
         self.assertEqual(result["period"]["kind"], "representative_day")
+        self.assertEqual(result["period"]["start"], "07-15")
         self.assertEqual(result["weatherHash"], "epw-hash")
         self.assertEqual(result["supplyTemperatureC"], 16)
         self.assertEqual(result["setpointC"], 26)
+        window = next(item for item in result["metrics"] if item["name"] == "window_heat_w")
+        opaque = next(item for item in result["metrics"] if item["name"] == "opaque_heat_w")
+        self.assertTrue(window["omitted"])
+        self.assertTrue(opaque["omitted"])
+
+    def test_january_period_and_envelope_metrics(self):
+        draft = json.loads(json.dumps(OFFICE))
+        draft["weather"] = {"month": 1, "day": 15, "source": "user"}
+        result = evaluate_l1(
+            IDENTITY,
+            draft,
+            {
+                "weatherPath": "weather/CHN_Hong.Kong.SAR.450070_CityUHK.epw",
+                "weatherHash": "epw-hash",
+                "coolingLoadW": 2000,
+                "windowHeatW": 390,
+                "opaqueHeatW": 200,
+            },
+        )
+        self.assertEqual(result["period"]["start"], "01-15")
+        self.assertEqual(result["period"]["end"], "01-15")
+        window = next(item for item in result["metrics"] if item["name"] == "window_heat_w")
+        opaque = next(item for item in result["metrics"] if item["name"] == "opaque_heat_w")
+        self.assertEqual(window["value"], 390)
+        self.assertEqual(opaque["value"], 200)
+        self.assertFalse(window["omitted"])
+        self.assertEqual(opaque["method"], "energyplus_opaque_conduction")
 
     def test_absolute_weather_path_is_rejected(self):
         with self.assertRaises(TaskProtocolError) as raised:

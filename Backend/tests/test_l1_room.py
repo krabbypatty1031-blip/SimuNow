@@ -43,6 +43,15 @@ class L1RoomMappingTests(unittest.TestCase):
         self.assertEqual(room["schedule"]["occupancy"]["end"], "18:00")
         self.assertEqual(len(OFFICE["occupancy"]["seats"]), 8)
         self.assertEqual(room["gains"]["n_people"]["value"], len(OFFICE["occupancy"]["seats"]))
+        self.assertEqual(room["l1"]["run_month"]["value"], 7)
+        self.assertEqual(room["l1"]["run_day"]["value"], 15)
+
+    def test_january_weather_moves_run_period(self):
+        draft = deepcopy(OFFICE)
+        draft["weather"] = {"month": 1, "day": 15, "source": "user"}
+        room = project_to_l1_room(draft)
+        self.assertEqual(room["l1"]["run_month"]["value"], 1)
+        self.assertEqual(room["l1"]["run_day"]["value"], 15)
 
     def test_second_window_adds_area_to_l1(self):
         # ADR-017: every window must reach the engine. The IDF takes ONE

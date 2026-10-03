@@ -5,8 +5,14 @@ from __future__ import annotations
 import json
 
 from .task import TaskProtocolError, is_safe_snapshot_path, sha256_hex
+from .weather import mmdd, resolved_weather
 
 REPRESENTATIVE_DAY = {"kind": "representative_day", "start": "07-15", "end": "07-15"}
+
+
+def representative_day(draft: dict) -> dict:
+    stamp = mmdd(*resolved_weather(draft))
+    return {"kind": "representative_day", "start": stamp, "end": stamp}
 
 
 def schedule_hash(draft: dict) -> str | None:
@@ -46,13 +52,17 @@ def evaluate_l1(identity: dict, draft: dict, context: dict) -> dict:
     cop = hvac["cop"]["value"]
     electricity = cooling / cop if cooling is not None and cop > 0 else None
     omit_loads = cooling is None or electricity is None
+    window_heat = context.get("windowHeatW")
+    opaque_heat = context.get("opaqueHeatW")
+    omit_window = window_heat is None
+    omit_opaque = opaque_heat is None
     occupancy_schedule = (draft.get("occupancy") or {}).get("schedule")
     return {
         "schemaVersion": 1,
         "identity": identity,
         "state": "succeeded",
         "quality": "notEvaluated",
-        "period": REPRESENTATIVE_DAY,
+        "period": representative_day(draft),
         "weatherPath": weather_path,
         "weatherHash": context.get("weatherHash") if has_weather else None,
         "supplyTemperatureC": hvac["supplyTemperatureC"]["value"],
@@ -84,6 +94,24 @@ def evaluate_l1(identity: dict, draft: dict, context: dict) -> dict:
                 "method": "not_modeled",
                 "fidelity": "l1",
                 "omitted": True,
+            },
+            {
+                "name": "window_heat_w",
+                "value": None if omit_window else window_heat,
+                "unit": "W",
+                "method": "energyplus_window_heat",
+                "fidelity": "l1",
+                "omitted": omit_window,
+                "reason": None if not omit_window else "EnergyPlus did not report window heat for this run",
+            },
+            {
+                "name": "opaque_heat_w",
+                "value": None if omit_opaque else opaque_heat,
+                "unit": "W",
+                "method": "energyplus_opaque_conduction",
+                "fidelity": "l1",
+                "omitted": omit_opaque,
+                "reason": None if not omit_opaque else "EnergyPlus did not report opaque conduction for this run",
             },
         ],
     }

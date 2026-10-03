@@ -241,17 +241,13 @@ enum RoomEntityBuilder {
     private static func addSeatLabel(_ sample: SeatSample, seat: SeatScene, to root: Entity, scene: RoomScene) {
         let text = RoomDisplayLayout.seatLabelText(seat: seat, sample: sample)
         guard let font = platformLabelFont() else { return }
-        let mesh: MeshResource
-        do {
-            mesh = try MeshResource.generateText(
-                text,
-                extrusionDepth: SeatLabelStyle.extrusionPt,
-                font: font
-            )
-        } catch {
-            // A failed text mesh leaves the room and mannequin untouched.
-            return
-        }
+        // Current RealityKit generateText is non-throwing (the old try/catch
+        // was dead code and tripped the unreachable-catch warning).
+        let mesh = MeshResource.generateText(
+            text,
+            extrusionDepth: SeatLabelStyle.extrusionPt,
+            font: font
+        )
         let scale = SeatLabelStyle.worldScale
         // Text bounds in metres (font units scaled down), used to centre the board.
         let textM = mesh.bounds.extents * scale

@@ -58,6 +58,9 @@ public struct RoomEditorForm: View {
     @State private var occupantCount: Double = 0
     @State private var occupiedStart = "08:00"
     @State private var occupiedEnd = "18:00"
+    // Same Double binding as occupant count: the inspector integer format is Float64.
+    @State private var weatherMonth: Double = 7
+    @State private var weatherDay: Double = 15
     @State private var tariffPriceText = "1.2"
     @State private var tariffCurrency = "HKD"
     @State private var tariffSource: ParameterSource = .assumed
@@ -168,6 +171,12 @@ public struct RoomEditorForm: View {
             refreshFromStore()
         }
         .onChange(of: store.project?.occupancy?.schedule?.start) { _, _ in
+            refreshFromStore()
+        }
+        .onChange(of: store.project?.weather?.month) { _, _ in
+            refreshFromStore()
+        }
+        .onChange(of: store.project?.weather?.day) { _, _ in
             refreshFromStore()
         }
         .onChange(of: store.language) { _, _ in
@@ -516,10 +525,12 @@ public struct RoomEditorForm: View {
 
     @ViewBuilder
     private var occupancyEditor: some View {
-        LabeledContent(copy.occupants) {
-            TextField(copy.occupants, value: $occupantCount, format: InspectorNumberFormat.integer)
+        LabeledContent {
+            TextField("", value: $occupantCount, format: InspectorNumberFormat.integer)
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
+        } label: {
+            Text(verbatim: copy.occupants)
         }
         .accessibilityLabel(copy.occupants)
         ApplyButton(
@@ -532,16 +543,20 @@ public struct RoomEditorForm: View {
         Text(copy.occupantSeatHint)
             .font(.footnote)
             .foregroundStyle(.secondary)
-        LabeledContent(copy.occupiedStart) {
-            TextField(copy.occupiedStart, text: $occupiedStart)
+        LabeledContent {
+            TextField("", text: $occupiedStart)
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
+        } label: {
+            Text(verbatim: copy.occupiedStart)
         }
         .accessibilityLabel(copy.occupiedStartAccessibility)
-        LabeledContent(copy.occupiedEnd) {
-            TextField(copy.occupiedEnd, text: $occupiedEnd)
+        LabeledContent {
+            TextField("", text: $occupiedEnd)
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
+        } label: {
+            Text(verbatim: copy.occupiedEnd)
         }
         .accessibilityLabel(copy.occupiedEndAccessibility)
         ApplyButton(
@@ -552,6 +567,32 @@ public struct RoomEditorForm: View {
             store.applyOccupiedHours(start: occupiedStart, end: occupiedEnd)
         }
         Text(copy.occupiedHoursHint)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        LabeledContent {
+            TextField("", value: $weatherMonth, format: InspectorNumberFormat.integer)
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+        } label: {
+            Text(verbatim: copy.weatherMonth)
+        }
+        .accessibilityLabel(copy.weatherMonth)
+        LabeledContent {
+            TextField("", value: $weatherDay, format: InspectorNumberFormat.integer)
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+        } label: {
+            Text(verbatim: copy.weatherDayOfMonth)
+        }
+        .accessibilityLabel(copy.weatherDayOfMonth)
+        ApplyButton(
+            title: copy.applyWeatherDay,
+            isDirty: weatherDayIsDirty,
+            accessibilityLabel: copy.applyWeatherDay
+        ) {
+            store.applyWeatherDay(month: Int(weatherMonth.rounded()), day: Int(weatherDay.rounded()))
+        }
+        Text(copy.weatherDayHint)
             .font(.footnote)
             .foregroundStyle(.secondary)
     }
@@ -835,6 +876,11 @@ public struct RoomEditorForm: View {
         inspectorValuesDiffer(occupantCount, store.project?.occupancy?.occupantCount.value ?? 0)
     }
 
+    private var weatherDayIsDirty: Bool {
+        let stored = store.project?.resolvedWeather
+        return Int(weatherMonth.rounded()) != stored?.month || Int(weatherDay.rounded()) != stored?.day
+    }
+
     private var occupiedHoursAreDirty: Bool {
         let schedule = store.project?.occupancy?.schedule
         return occupiedStart != (schedule?.start ?? "08:00")
@@ -874,6 +920,8 @@ public struct RoomEditorForm: View {
         occupantCount = store.project?.occupancy?.occupantCount.value ?? 0
         occupiedStart = store.project?.occupancy?.schedule?.start ?? "08:00"
         occupiedEnd = store.project?.occupancy?.schedule?.end ?? "18:00"
+        weatherMonth = Double(store.project?.resolvedWeather.month ?? 7)
+        weatherDay = Double(store.project?.resolvedWeather.day ?? 15)
         setpointC = store.project?.hvac?.setpointC.value ?? 26
         supplyTemperatureC = store.project?.hvac?.supplyTemperatureC.value ?? 16
         if let tariff = store.project?.costAssumptions {

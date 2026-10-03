@@ -180,7 +180,13 @@ def run_l1_task(argv: list[str] | None = None) -> int:
             "weatherPath": weather_rel,
             "weatherHash": weather_hash,
             "coolingLoadW": cooling,
+            "windowHeatW": parsed.get("window_heat_w") if parsed.get("energyplus_completed") else None,
+            "opaqueHeatW": parsed.get("opaque_heat_w") if parsed.get("energyplus_completed") else None,
         },
+    )
+    (run_dir / "boundary.json").write_text(
+        json.dumps(l1.boundary_json(room, parsed), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
     if not parsed.get("energyplus_completed") or cooling is None:
         result["state"] = "failed"

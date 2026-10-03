@@ -362,6 +362,21 @@ extension ProjectDraft {
         return allFieldIssues()
     }
 
+    /// Typical-year month/day on the pinned Hong Kong EPW. 29 Feb is refused.
+    @discardableResult
+    public mutating func applyWeatherDay(month: Int, day: Int, source: ParameterSource) -> [FieldIssue] {
+        guard WeatherDay.isValid(month: month, day: day) else {
+            return [FieldIssue(path: "weather", message: "代表日须是典型年的合法月日，不能选 2 月 29 日")]
+        }
+        weather = WeatherDay(
+            month: month,
+            day: day,
+            source: source,
+            reference: weather?.reference ?? WeatherDay.cityUHKTypical.reference
+        )
+        return allFieldIssues()
+    }
+
     @discardableResult
     public mutating func removeSeat(id: String) -> [FieldIssue] {
         guard var occupancy else { return allFieldIssues() }

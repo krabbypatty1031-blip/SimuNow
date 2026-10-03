@@ -167,6 +167,16 @@ def _window_xy(room: dict[str, Any]) -> tuple[float, float, float, float]:
     return y0, y0 + width, z0, z1
 
 
+def run_period_md(room: dict[str, Any]) -> tuple[int, int]:
+    """Typical-year month/day. Missing keys stay 15 July so P1 fixtures do not drift."""
+    block = room.get("l1") or {}
+    if "run_month" not in block or "run_day" not in block:
+        return 7, 15
+    month = int(qty(block["run_month"]))
+    day = int(qty(block["run_day"]))
+    return month, day
+
+
 def write_idf(room: dict[str, Any], dest: Path) -> Path:
     """Legal 25.2 IDF: DualSetpoint 4, empty Space Name, Ideal Loads connections."""
     dest = Path(dest)
@@ -190,6 +200,7 @@ def write_idf(room: dict[str, Any], dest: Path) -> Path:
     floor_a = lx * ly
     digest = input_hash(room)
     extra_schedules, occupancy_schedule, hvac_schedule = _schedule_names(room)
+    run_month, run_day = run_period_md(room)
     # Empty availability keeps Ideal Loads always on (P1 rooms with no clock window).
     hvac_availability = hvac_schedule if hvac_schedule else ""
     LOGGER.info("write IDF dest=%s hash=%s", dest.name, digest[:12])
@@ -209,7 +220,7 @@ SimulationControl, No, No, No, No, Yes, No, 1;
 GlobalGeometryRules, UpperLeftCorner, CounterClockWise, World;
 
 ! Begin/End Year slots stay empty (EnergyPlus 9.6+).
-RunPeriod, SummerDay, 7, 15, , 7, 15, , Thursday, Yes, Yes, No, Yes, Yes;
+RunPeriod, WeatherDay, {run_month}, {run_day}, , {run_month}, {run_day}, , Thursday, Yes, Yes, No, Yes, Yes;
 
 ScheduleTypeLimits, Fraction, 0.0, 1.0, CONTINUOUS;
 ScheduleTypeLimits, Temperature, , , CONTINUOUS;
@@ -266,6 +277,9 @@ Output:Variable, *, Zone Mean Air Temperature, Hourly;
 Output:Variable, *, Zone Ideal Loads Supply Air Total Cooling Energy, Hourly;
 Output:Variable, *, Zone Ideal Loads Supply Air Total Cooling Rate, Hourly;
 Output:Variable, *, Surface Inside Face Temperature, Hourly;
+Output:Variable, *, Zone Windows Total Heat Gain Rate, Hourly;
+Output:Variable, *, Zone Windows Total Heat Loss Rate, Hourly;
+Output:Variable, *, Surface Inside Face Conduction Heat Transfer Rate, Hourly;
 Output:VariableDictionary, Regular;
 """
     dest.write_text(idf, encoding="utf-8")

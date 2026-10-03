@@ -48,3 +48,23 @@ import SimuCore
     #expect(room.supplySpeedMs == 0.8)
     #expect(room.supplyTemperatureC == 16)
 }
+
+@Test func currentL1EnvelopeLeavesAssumptionsHonest() throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let l1 = try L1Accounting.evaluate(
+        identity: RunIdentity(scenarioID: UUID(), inputHash: "snap"),
+        draft: draft,
+        context: L1DayContext(
+            weatherPath: "weather/HK.epw",
+            weatherHash: "h",
+            coolingLoadW: 6000,
+            windowHeatW: 390,
+            opaqueHeatW: 200
+        )
+    )
+    let room = try L2RoomMapping.map(draft: draft, l1: l1)
+    #expect(!room.assumptions.contains("omitted: envelope_u_value"))
+    #expect(room.assumptions.contains("opaque envelope heat is the EnergyPlus day mean, spread on the walls patch"))
+    #expect(room.assumptions.contains("window flux is the EnergyPlus day mean, spread by glazed area"))
+    #expect(!room.omitted.contains("envelope_u_value"))
+}

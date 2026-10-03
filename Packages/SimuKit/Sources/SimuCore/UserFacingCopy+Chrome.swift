@@ -409,6 +409,7 @@ extension UserFacingCopy {
         switch field {
         case "occupantCount": t("Occupants", zh: "人数")
         case "occupiedHours": t("Occupied hours", zh: "使用时间")
+        case "weatherDay": t("Weather day", zh: "天气日期")
         case "setpointC": t("Setpoint", zh: "设定温度")
         case "supplyTemperatureC": t("Supply-air temperature", zh: "出风温度")
         case "supplyWall": t("Supply-outlet wall", zh: "出风口所在墙")
@@ -443,6 +444,10 @@ extension UserFacingCopy {
             "\(label) from \(from) \(unit) to \(to) \(unit)",
             zh: "\(label)从 \(from) \(unit) 改为 \(to) \(unit)"
         )
+    }
+
+    public func pairChangedWeatherDay(from: String, to: String) -> String {
+        t("Weather day from \(from) to \(to)", zh: "天气日期从 \(from) 改为 \(to)")
     }
 
     public func pairChangedOccupiedHours(fromStart: String, fromEnd: String, toStart: String, toEnd: String) -> String {
@@ -485,6 +490,10 @@ extension UserFacingCopy {
 
     public func draftPeopleAndHours(people: String, start: String, end: String) -> String {
         t("\(people) people, \(start)–\(end) occupied", zh: "\(people) 人，\(start)–\(end) 使用")
+    }
+
+    public func draftWeatherDay(_ mmdd: String) -> String {
+        t("Weather day \(mmdd) on the Hong Kong typical year", zh: "天气日期 \(mmdd)（香港典型年）")
     }
 
     public func draftPeopleOnly(_ people: String) -> String {
@@ -613,6 +622,17 @@ extension UserFacingCopy {
 
     public var occupiedHoursHint: String {
         t("The hours are for the chosen day, not the whole year.", zh: "时段是选定的一天，不是全年。")
+    }
+
+    public var weatherDay: String { t("Weather day", zh: "天气日期") }
+    public var weatherMonth: String { t("Month", zh: "月") }
+    public var weatherDayOfMonth: String { t("Day", zh: "日") }
+    public var applyWeatherDay: String { t("Apply weather day", zh: "应用天气日期") }
+    public var weatherDayHint: String {
+        t(
+            "This is a day on the Hong Kong typical weather year, not today's forecast. Electricity uses that day. Seat temperatures use that day's window and wall heat only after you run the day's electricity estimate, then view the seats again.",
+            zh: "这是香港典型气象年里的一天，不是今天的预报。电费用这一天。座位要先估算这一天用电，再点一次查看座位，才会用上这天的窗热和墙热。"
+        )
     }
 
     public var noACInstalled: String { t("No air conditioner is installed yet.", zh: "还没有安装空调。") }
@@ -1238,6 +1258,7 @@ extension UserFacingCopy {
     public var mismatchHours: String { t("occupied hours", zh: "占用时段") }
     public var mismatchSetpoint: String { t("setpoint", zh: "设定温度") }
     public var mismatchSupply: String { t("supply-air temperature", zh: "送风温度") }
+    public var mismatchWeatherDay: String { t("weather day", zh: "天气日期") }
 
     public var recommendCannotCompareTitle: String { t("Not ready to compare", zh: "还不能比较") }
     public var recommendCannotCompareDetail: String {

@@ -117,6 +117,7 @@ def mass_energy_from_fluxes(
     q_lights_w: float,
     q_equip_w: float,
     q_window_w: float,
+    q_opaque_w: float = 0.0,
     q_inlet_cond_w: float,
     mass_gate: float,
     energy_gate: float,
@@ -138,7 +139,7 @@ def mass_energy_from_fluxes(
     # Conduction into the domain relieves the return stream by the same amount:
     # h_out = h_in + q_into + q_inlet_cond_w  =>  extraction below.
     q_extracted = h_out - h_in - q_inlet_cond_w
-    q_into = q_people_w + q_lights_w + q_equip_w + q_window_w
+    q_into = q_people_w + q_lights_w + q_equip_w + q_window_w + q_opaque_w
     mixed_cup_w = rho * cp * vdot_in * (t_return_k - t_supply_k)
     residual = q_extracted - q_into
     scale = max(abs(q_extracted), abs(q_into), 1.0)
@@ -176,6 +177,7 @@ def mass_energy_from_fluxes(
                 "q_lights": q_lights_w,
                 "q_equip": q_equip_w,
                 "q_window": q_window_w,
+                "q_opaque": q_opaque_w,
                 "q_inlet_cond": q_inlet_cond_w,
                 "q_into": q_into,
             },

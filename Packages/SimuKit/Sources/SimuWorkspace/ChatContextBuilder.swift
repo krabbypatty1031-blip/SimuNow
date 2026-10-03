@@ -27,6 +27,8 @@ enum ChatContextBuilder {
                 lines.append(copy.draftPeopleOnly(people))
             }
         }
+        // Always the resolved typical-year day: missing weather is still 15 July.
+        lines.append(copy.draftWeatherDay(draft.resolvedWeather.mmdd))
         if let hvac = draft.hvac {
             var hvacLine: [String] = []
             hvacLine.append(copy.draftSetpoint(UserFacingCopy.displayNumber(hvac.setpointC.value)))

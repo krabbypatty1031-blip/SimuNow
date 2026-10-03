@@ -23,6 +23,8 @@ def _basis_mismatch(left: dict, right: dict) -> str | None:
         reasons.append("设定温度")
     if left.get("supplyTemperatureC") != right.get("supplyTemperatureC"):
         reasons.append("送风温度")
+    if left.get("weatherMonth") != right.get("weatherMonth") or left.get("weatherDay") != right.get("weatherDay"):
+        reasons.append("天气日期")
     if not reasons:
         return None
     return "口径不同（" + "、".join(reasons) + "）"
@@ -76,6 +78,19 @@ def _input_changes(first: dict, second: dict) -> list[dict]:
         left_basis.get("occupantCount"), right_basis.get("occupantCount"),
         lambda a, b: f"人数从 {a:.2f} 人改为 {b:.2f} 人",
     )
+    left_day = f"{int(left_basis.get('weatherMonth') or 7):02d}-{int(left_basis.get('weatherDay') or 15):02d}"
+    right_day = f"{int(right_basis.get('weatherMonth') or 7):02d}-{int(right_basis.get('weatherDay') or 15):02d}"
+    if left_day != right_day:
+        changes.append(
+            {
+                "field": "weatherDay",
+                "label": "天气日期",
+                "fromValue": None,
+                "toValue": None,
+                "unit": "",
+                "sentence": f"天气日期从 {left_day} 改为 {right_day}",
+            }
+        )
     # Occupied hours carry clock strings, not one number; the sentence holds the exact times.
     if (
         left_basis.get("occupiedStart") != right_basis.get("occupiedStart")

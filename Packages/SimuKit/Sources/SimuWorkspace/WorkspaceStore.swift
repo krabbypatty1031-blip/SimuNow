@@ -136,7 +136,9 @@ public final class WorkspaceStore {
     }
 
     public func freshness(of result: SimulationResult?) -> ResultFreshness? {
-        guard let result, let hash = currentInputHash() else { return nil }
+        guard let result else { return nil }
+        let isL2 = lastL2Result?.identity.runID == result.identity.runID
+        guard let hash = isL2 ? currentL2InputHash() : currentInputHash() else { return nil }
         return result.identity.freshness(relativeTo: hash)
     }
 
@@ -154,6 +156,13 @@ public final class WorkspaceStore {
     public func currentInputHash() -> String? {
         guard let project else { return nil }
         return InputSnapshotHash.sha256Hex(encodeSnapshot(project))
+    }
+
+    /// The L2 worker hash: draft plus a current L1 sidecar. Stale L1 is left off
+    /// so seats keep the draft flux instead of inventing weather heat.
+    public func currentL2InputHash() -> String? {
+        guard let project else { return nil }
+        return InputSnapshotHash.sha256Hex(encodeSnapshot(project, attachingCurrentL1: true))
     }
 
     public var isPhysicalModelComplete: Bool {
@@ -497,6 +506,12 @@ public final class WorkspaceStore {
         project = draft
     }
 
+    public func applyWeatherDay(month: Int, day: Int) {
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
+        fieldIssues = draft.applyWeatherDay(month: month, day: day, source: .user)
+        project = draft
+    }
+
     public func applyOutdoorAirM3s(_ value: Double) {
         var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyOutdoorAirM3s(value, source: .user)
@@ -654,7 +669,7 @@ public final class WorkspaceStore {
         }
         isSubmitting = true
         runMessage = nil
-        let snapshot = encodeSnapshot(project)
+        let snapshot = encodeSnapshot(project, attachingCurrentL1: true)
         let digest = InputSnapshotHash.sha256Hex(snapshot)
         let request = SimulationRequest(
             identity: RunIdentity(runID: UUID(), scenarioID: project.id, inputHash: digest),
@@ -896,6 +911,7 @@ public final class WorkspaceStore {
     /// Day cost is the L1 power at this moment. No L1 leaves it omitted.
     public func pinCurrentAsCandidate(named name: String? = nil) {
         guard canPinCandidate, let result = pinnableResult, let project else { return }
+        let weather = project.resolvedWeather
         let basis = CandidateRun.ComparisonBasis(
             occupantCount: project.occupancy?.occupantCount.value ?? 0,
             occupiedStart: project.occupancy?.schedule?.start
@@ -903,7 +919,9 @@ public final class WorkspaceStore {
             occupiedEnd: project.occupancy?.schedule?.end
                 ?? project.hvac?.schedule?.end ?? "",
             setpointC: project.hvac?.setpointC.value ?? 0,
-            supplyTemperatureC: project.hvac?.supplyTemperatureC.value ?? 0
+            supplyTemperatureC: project.hvac?.supplyTemperatureC.value ?? 0,
+            weatherMonth: weather.month,
+            weatherDay: weather.day
         )
         let record = CandidateRun(
             name: name?.isEmpty == false ? name! : copy.defaultSchemeName(candidateRuns.count + 1),
@@ -1010,7 +1028,10 @@ public final class WorkspaceStore {
     /// stale. Freshness is independent of the record's own quality.
     /// This is the pinned run (L2 when that was what pin froze), not the L1 watts.
     public func candidateFreshness(_ record: CandidateRun) -> ResultFreshness {
-        guard let hash = currentInputHash() else { return .stale }
+        // An L2 pin carries a different run than its frozen L1. Compare that
+        // identity to the L2 snapshot (draft + current L1 heat), not the L1 hash.
+        let isL2Pin = record.l1Identity.map { $0.runID != record.identity.runID } ?? false
+        guard let hash = isL2Pin ? currentL2InputHash() : currentInputHash() else { return .stale }
         return record.identity.inputHash == hash ? .current : .stale
     }
 
@@ -1184,15 +1205,30 @@ public final class WorkspaceStore {
 
     /// Physics snapshot. The demo tariff is applied after L1, so it is not
     /// part of the run hash: editing the price must not mark watts stale.
-    private func encodeSnapshot(_ draft: ProjectDraft) -> Data {
+    private func encodeSnapshot(_ draft: ProjectDraft, attachingCurrentL1: Bool = false) -> Data {
         var physics = draft
         physics.costAssumptions = nil
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return (try? encoder.encode(physics)) ?? Data()
+        guard let data = try? encoder.encode(physics) else { return Data() }
+        // A current L1 result rides with the L2 snapshot so window/wall heat
+        // can enter the case. Stale L1 is not attached — L2 then keeps the
+        // draft assumption instead of inventing weather flux.
+        guard attachingCurrentL1,
+              l1Freshness == .current,
+              let l1 = lastL1Result,
+              var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let l1Data = try? encoder.encode(l1),
+              let l1Object = try? JSONSerialization.jsonObject(with: l1Data) else {
+            return data
+        }
+        object["_l1Result"] = l1Object
+        return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? data
     }
 
-    private static let l1MetricNames: Set<String> = ["q_cool_w", "p_elec_w", "annual_kwh"]
+    private static let l1MetricNames: Set<String> = [
+        "q_cool_w", "p_elec_w", "annual_kwh", "window_heat_w", "opaque_heat_w"
+    ]
 
     public func metricText(named name: String) -> String {
         if Self.l1MetricNames.contains(name) {

@@ -136,6 +136,24 @@ class PairDiffTests(unittest.TestCase):
         self.assertIsNone(hours["toValue"])
         self.assertIn("使用时间从 08:00–18:00 改为 09:00–18:00", hours["sentence"])
 
+    def test_weather_day_change_is_basis_mismatch(self):
+        from simunow_worker.models.recommend import pair_diff
+
+        july = _candidate(runID="11111111-1111-1111-1111-111111111111")
+        jan_basis = dict(july["basis"])
+        jan_basis["weatherMonth"] = 1
+        jan_basis["weatherDay"] = 15
+        january = _candidate(
+            name="一月",
+            runID="22222222-2222-2222-2222-222222222222",
+            basis=jan_basis,
+        )
+        diff = pair_diff([july, january])
+        self.assertEqual(diff["basisMismatchReason"], "口径不同（天气日期）")
+        day = next(change for change in diff["inputChanges"] if change["field"] == "weatherDay")
+        self.assertIsNone(day["fromValue"])
+        self.assertIn("天气日期从 07-15 改为 01-15", day["sentence"])
+
 
 class EvidenceTests(unittest.TestCase):
     def test_evidence_carries_pair_diff_and_schema_keys(self):

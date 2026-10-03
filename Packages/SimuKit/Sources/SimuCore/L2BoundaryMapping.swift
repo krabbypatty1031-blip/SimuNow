@@ -28,6 +28,8 @@ public struct L2Boundary: Equatable, Sendable {
     /// Recirculated return = supply − outdoor. Not a measured return-air meter.
     public var recirculatedAirM3s: Double
     public var windowHeatFluxWm2: Double
+    /// EnergyPlus day-mean opaque conduction into the zone. Nil when L1 omitted it.
+    public var opaqueHeatW: Double?
     public var lightingW: Double
     public var equipmentW: Double
     public var occupantSensibleW: Double
@@ -43,7 +45,20 @@ public enum L2BoundaryMapping {
             throw L2BoundaryError.incompleteProject
         }
         let supply = l1?.supplyTemperatureC ?? hvac.supplyTemperatureC.value
-        let windowFlux = geometry.openings.first(where: { $0.kind == .window })?.heatFluxWm2?.value ?? 0
+        let windows = geometry.openings.filter { $0.kind == .window }
+        let windowArea = windows.reduce(0.0) { $0 + $1.patchAreaM2 }
+        let draftWindowWatts = windows.reduce(0.0) { $0 + ($1.heatFluxWm2?.value ?? 0) * $1.patchAreaM2 }
+        let l1Window = l1?.metric(named: "window_heat_w")
+        let l1Opaque = l1?.metric(named: "opaque_heat_w")
+        let windowFlux: Double
+        if let l1Window, !l1Window.omitted, let watts = l1Window.value, windowArea > 0 {
+            windowFlux = watts / windowArea
+        } else if windowArea > 0 {
+            windowFlux = draftWindowWatts / windowArea
+        } else {
+            windowFlux = geometry.openings.first(where: { $0.kind == .window })?.heatFluxWm2?.value ?? 0
+        }
+        let opaqueHeat = (l1Opaque?.omitted == false) ? l1Opaque?.value : nil
         let occupantCount = occupancy.occupantCount.value
         // Per-person sensible × count once. Seats locate people; they are not a second watt source.
         let occupantSensible = occupantCount * occupancy.occupantSensibleW.value
@@ -57,6 +72,7 @@ public enum L2BoundaryMapping {
             outdoorAirM3s: outdoor,
             recirculatedAirM3s: max(0, supplyFlow - outdoor),
             windowHeatFluxWm2: windowFlux,
+            opaqueHeatW: opaqueHeat,
             lightingW: occupancy.lightingW.value,
             equipmentW: occupancy.equipmentW.value,
             occupantSensibleW: occupantSensible,
@@ -66,7 +82,7 @@ public enum L2BoundaryMapping {
                 L2HeatSource(name: "lighting", watts: occupancy.lightingW.value),
                 L2HeatSource(name: "equipment", watts: occupancy.equipmentW.value)
             ],
-            omitted: ["envelope_u_value"]
+            omitted: opaqueHeat == nil ? ["envelope_u_value"] : []
         )
     }
 

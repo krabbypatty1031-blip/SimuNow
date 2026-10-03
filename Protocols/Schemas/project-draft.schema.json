@@ -40,7 +40,8 @@
     "geometry": { "$ref": "#/$defs/geometry" },
     "occupancy": { "$ref": "#/$defs/occupancy" },
     "hvac": { "$ref": "#/$defs/hvac" },
-    "costAssumptions": { "$ref": "#/$defs/costAssumptions" }
+    "costAssumptions": { "$ref": "#/$defs/costAssumptions" },
+    "weather": { "$ref": "#/$defs/weatherDay" }
   },
   "if": {
     "properties": {
@@ -231,6 +232,19 @@
       "properties": {
         "pricePerKWh": { "type": "number", "minimum": 0 },
         "currency": { "type": "string", "minLength": 1 },
+        "source": {
+          "enum": ["scan", "measured", "manufacturer", "user", "preset", "assumed"]
+        },
+        "reference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "weatherDay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["month", "day", "source"],
+      "properties": {
+        "month": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "day": { "type": "integer", "minimum": 1, "maximum": 31 },
         "source": {
           "enum": ["scan", "measured", "manufacturer", "user", "preset", "assumed"]
         },

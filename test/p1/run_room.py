@@ -467,6 +467,7 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
         # approximation. A room without windows[] rectangles is an honest
         # error, never a silent 0 W glazed wall.
         q_window_w=window_total_w(room),
+        q_opaque_w=qty(room["opaque_heat_w"]) if "opaque_heat_w" in room else 0.0,
         q_inlet_cond_w=q_inlet_cond_w,
         mass_gate=qty(room["quality_gates"]["mass_rel"]),
         energy_gate=qty(room["quality_gates"]["energy_rel"]),

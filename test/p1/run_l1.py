@@ -138,6 +138,12 @@ def parse_l1_outputs(out_dir: Path, room: dict[str, Any]) -> dict[str, Any]:
             avg = _mean(values)
             if avg is not None:
                 face_t[key] = avg
+    gain_name, gain_vals = _column(columns, "zone windows total heat gain rate")
+    loss_name, loss_vals = _column(columns, "zone windows total heat loss rate")
+    window_heat = None
+    if gain_vals:
+        window_heat = (_mean(gain_vals) or 0.0) - (_mean(loss_vals) or 0.0)
+    opaque_heat = _opaque_conduction_w(columns)
     LOGGER.info("L1 completed=%s q_cool_w=%s zone_t=%s", completed, q_cool, _mean(t_vals) if t_vals else None)
     return {
         "energyplus_completed": completed,
@@ -151,14 +157,41 @@ def parse_l1_outputs(out_dir: Path, room: dict[str, Any]) -> dict[str, Any]:
         "capacity_note": "未做设备容量校核",
         "zone_mean_air_c": _mean(t_vals) if t_vals else None,
         "q_cool_from": q_from,
+        "window_heat_w": window_heat,
+        "opaque_heat_w": opaque_heat,
         "period_hours": 24,
         "csv_columns": {
             "zone_t": t_name,
             "cooling_rate": rate_name,
             "cooling_energy": energy_name,
+            "window_gain": gain_name,
+            "window_loss": loss_name,
         },
         "inside_face_t_c": face_t,
     }
+
+
+def _opaque_conduction_w(columns: dict[str, list[float]]) -> float | None:
+    """Sum hourly-mean inside-face conduction on opaque surfaces.
+
+    Window surfaces stay out: their heat is the Zone Windows Total series.
+    Missing columns return None so a 0 W winter day is not confused with
+    'EnergyPlus did not write the variable'.
+    """
+    total = 0.0
+    found = False
+    for name, values in columns.items():
+        hay = name.lower()
+        if "inside face conduction heat transfer rate" not in hay or not values:
+            continue
+        if "eastwin" in hay or "window" in hay:
+            continue
+        avg = _mean(values)
+        if avg is None:
+            continue
+        total += avg
+        found = True
+    return total if found else None
 
 
 def boundary_json(room: dict[str, Any], parsed: dict[str, Any]) -> dict[str, Any]:
@@ -200,16 +233,37 @@ def boundary_json(room: dict[str, Any], parsed: dict[str, Any]) -> dict[str, Any
                 }
             )
     window_area = qty(room["l1"]["window_area_m2"])
-    faces.append(
-        {
-            "name": "window",
-            "bc_kind": "heat_flux",
-            "q_w_m2": l1_window_w(room) / max(window_area, 1e-9),
-            "q_w": l1_window_w(room),
-            "area_m2": window_area,
-            "source": "L1 UA_window*ΔT + SHGC*solar*A; not combined with a Dirichlet T",
-        }
-    )
+    measured = parsed.get("window_heat_w")
+    window_w = None
+    window_source = "window heat omitted; L2 must not invent weather flux"
+    if measured is not None:
+        window_w = measured
+        window_source = "EnergyPlus Zone Windows Total Heat Gain−Loss hourly mean"
+    else:
+        try:
+            window_w = l1_window_w(room)
+            window_source = "L1 UA_window*ΔT + SHGC*solar*A; not combined with a Dirichlet T"
+        except (KeyError, TypeError):
+            window_w = None
+    if window_w is None:
+        faces.append(
+            {
+                "name": "window",
+                "bc_kind": "heat_flux",
+                "source": window_source,
+            }
+        )
+    else:
+        faces.append(
+            {
+                "name": "window",
+                "bc_kind": "heat_flux",
+                "q_w_m2": window_w / max(window_area, 1e-9),
+                "q_w": window_w,
+                "area_m2": window_area,
+                "source": window_source,
+            }
+        )
     kinds = {face["name"]: face["bc_kind"] for face in faces}
     LOGGER.debug("boundary kinds %s", kinds)
     return {

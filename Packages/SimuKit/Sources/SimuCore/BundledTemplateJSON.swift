@@ -120,6 +120,12 @@ enum BundledTemplateJSON {
         "reference": "representative-day system-on hours, not annual"
       }
     },
+    "weather": {
+      "month": 7,
+      "day": 15,
+      "source": "assumed",
+      "reference": "Hong Kong CityUHK typical meteorological year, not a live forecast"
+    },
     "costAssumptions": {
       "pricePerKWh": 1.2,
       "currency": "HKD",
@@ -252,6 +258,12 @@ enum BundledTemplateJSON {
         "source": "assumed",
         "reference": "representative-day system-on hours, not annual"
       }
+    },
+    "weather": {
+      "month": 7,
+      "day": 15,
+      "source": "assumed",
+      "reference": "Hong Kong CityUHK typical meteorological year, not a live forecast"
     },
     "costAssumptions": {
       "pricePerKWh": 1.2,

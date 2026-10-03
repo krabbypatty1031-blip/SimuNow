@@ -153,6 +153,18 @@ def run_l2_task(argv: list[str] | None = None) -> int:
     snapshot = Path(args.snapshot).read_bytes()
     validate_request(request, snapshot)
     draft = json.loads(snapshot.decode("utf-8"))
+    # Sidecar from a current L1 result. Not a user-editable draft field.
+    l1_result = draft.pop("_l1Result", None)
+    if not isinstance(l1_result, dict):
+        sidecar = run_dir / "l1-result.json"
+        if sidecar.is_file():
+            try:
+                loaded = json.loads(sidecar.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                loaded = None
+            l1_result = loaded if isinstance(loaded, dict) else None
+        else:
+            l1_result = None
 
     sys.stderr.write("run-l2 start run-dir=runs/%s\n" % run_dir.name)
     sys.stderr.flush()
@@ -160,7 +172,7 @@ def run_l2_task(argv: list[str] | None = None) -> int:
 
     identity = request["identity"]
     try:
-        room = project_to_l2_room(draft)
+        room = project_to_l2_room(draft, l1=l1_result)
     except (ValueError, KeyError, TypeError) as exc:
         _emit(_event(request, 1, "failed", "failed", {"message": f"incomplete project: {exc}"}))
         return 1

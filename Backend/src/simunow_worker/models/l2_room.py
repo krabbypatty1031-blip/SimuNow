@@ -8,7 +8,52 @@ the solver input.
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from simunow_worker.models.project import patch_area_m2
+
+
+def l1_metric_w(l1: dict | None, name: str) -> float | None:
+    """Read a non-omitted watt metric. A reported 0 W is kept; missing stays None."""
+    if not l1:
+        return None
+    for item in l1.get("metrics") or []:
+        if item.get("name") != name or item.get("omitted"):
+            continue
+        value = item.get("value")
+        if value is None:
+            return None
+        return float(value)
+    return None
+
+
+def apply_l1_envelope(draft: dict, l1: dict | None) -> dict:
+    """Copy the draft and replace window fluxes so ΣqA equals L1 window heat.
+
+    Does not invent weather heat when L1 omitted the metric. Opaque watts
+    are attached as `_opaqueHeatW` for the case writer only.
+    """
+    if not l1:
+        return draft
+    window_w = l1_metric_w(l1, "window_heat_w")
+    opaque_w = l1_metric_w(l1, "opaque_heat_w")
+    if window_w is None and opaque_w is None:
+        return draft
+    out = deepcopy(draft)
+    geometry = out.get("geometry") or {}
+    windows = [item for item in geometry.get("openings", []) if item.get("kind") == "window"]
+    area = sum(patch_area_m2(item) for item in windows)
+    if window_w is not None and area > 0:
+        flux = window_w / area
+        for item in windows:
+            item["heatFluxWm2"] = {
+                "value": flux,
+                "unit": "W/m2",
+                "source": "l1_energyplus",
+            }
+    if opaque_w is not None:
+        out["_opaqueHeatW"] = opaque_w
+    return out
 
 _WALL_X = {
     "xMin": lambda size: 0.0,
@@ -202,8 +247,9 @@ def _window_rects(windows: list[dict], size: tuple[float, float, float], hvac: d
 
 
 
-def project_to_l2_room(draft: dict) -> dict:
+def project_to_l2_room(draft: dict, l1: dict | None = None) -> dict:
     """Build a P1-shaped L2 room. Supply T is the coil, not the zone setpoint."""
+    draft = apply_l1_envelope(draft, l1)
     geometry = draft.get("geometry")
     occupancy = draft.get("occupancy")
     hvac = draft.get("hvac")
@@ -253,7 +299,16 @@ def project_to_l2_room(draft: dict) -> dict:
                 "furniture surfaces are solid and adiabatic; thermal mass is not modeled",
                 "furniture blocks whole cells selected by cell centre; box edges snap to the mesh",
             ] if obstacles else [] ),
-            "omitted: envelope_u_value",
+            *(
+                ["opaque envelope heat is the EnergyPlus day mean, spread on the walls patch"]
+                if draft.get("_opaqueHeatW") is not None
+                else ["omitted: envelope_u_value"]
+            ),
+            *(
+                ["window flux is the EnergyPlus day mean, spread by glazed area"]
+                if l1_metric_w(l1, "window_heat_w") is not None
+                else ["window flux is the draft assumption until a current L1 result exists"]
+            ),
             "wall temperatures are not invented from UA",
             "supply band spans the full wall; velocity scaled to preserve project supply m3/s",
             "each window enters at its own wall, span and height; total window W is the sum over windows",
@@ -315,7 +370,11 @@ def project_to_l2_room(draft: dict) -> dict:
                 "z1_m": {"value": rect["z1"], "unit": "m", "source": "project"},
                 # Per-rectangle flux: this patch injects q x its own area.
                 # A merged rectangle carries ΣW / bbox area so W is conserved.
-                "q_w_m2": {"value": rect["q"], "unit": "W/m2", "source": "project"},
+                "q_w_m2": {
+                    "value": rect["q"],
+                    "unit": "W/m2",
+                    "source": "l1_energyplus" if l1_metric_w(l1, "window_heat_w") is not None else "project",
+                },
                 "area_m2": {
                     "value": (rect["s1"] - rect["s0"]) * (rect["z1"] - rect["z0"]),
                     "unit": "m2",
@@ -374,6 +433,17 @@ def project_to_l2_room(draft: dict) -> dict:
         },
         # Summed glazed area over all windows, matching the L1 window area.
         "window_area_m2": {"value": window_area, "unit": "m2", "source": "project"},
+        **(
+            {
+                "opaque_heat_w": {
+                    "value": float(draft["_opaqueHeatW"]),
+                    "unit": "W",
+                    "source": "l1_energyplus",
+                }
+            }
+            if draft.get("_opaqueHeatW") is not None
+            else {}
+        ),
         "solver": {
             "end_time": _assumed(4000, "1"),
             "monitor_n": _assumed(20, "1"),

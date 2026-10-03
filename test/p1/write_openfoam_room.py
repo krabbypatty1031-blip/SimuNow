@@ -215,6 +215,20 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
     kappa = rho * cp * (nu / pr)
     # Per-window gradients: each patch injects q_i over its own rectangle.
     window_gradients = [qty(item["q_w_m2"]) / kappa for item in windows]
+    opaque_w = qty(room["opaque_heat_w"]) if "opaque_heat_w" in room else 0.0
+    # Box shell minus glazed rectangles and the full-span supply/return bands.
+    opaque_area = max(
+        2.0 * (lx * span + lx * height + span * height)
+        - window_area_m2(room)
+        - span * (supply_z1 - supply_z0)
+        - span * (return_z1 - return_z0),
+        1e-6,
+    )
+    walls_t = (
+        f"    walls {{ type fixedGradient; gradient uniform {opaque_w / kappa / opaque_area:.8g}; }}"
+        if abs(opaque_w) > 1e-9
+        else "    walls { type zeroGradient; }"
+    )
     window_patches = [f"window{index}" for index in range(len(windows))]
     volume = lx * span * height
     # Internal gains spread over the FLUID volume: blocked cells no longer
@@ -612,7 +626,7 @@ boundaryField
     inlet {{ type fixedValue; value uniform {t_supply}; }}
     outlet {{ type zeroGradient; }}
 {window_t}
-    walls {{ type zeroGradient; }}
+{walls_t}
 }}
 """,
     )

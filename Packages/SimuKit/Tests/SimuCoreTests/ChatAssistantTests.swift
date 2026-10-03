@@ -179,6 +179,14 @@ import SimuReporting
     #expect(chineseSummary.contains("家具 2 件：桌子×1、椅子×1"))
 }
 
+@Test func chatDraftSummaryCarriesTypicalYearDay() throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let summary = try #require(ChatContextBuilder.draftSummary(for: draft))
+    #expect(summary.contains("Weather day 07-15"))
+    let chinese = try #require(ChatContextBuilder.draftSummary(for: draft, copy: .chinese))
+    #expect(chinese.contains("天气日期 07-15"))
+}
+
 /// The store flow: context freezes the pinned evidence, a stubbed reply
 /// joins the thread, and a missing assistant still speaks a fixed note.
 @MainActor

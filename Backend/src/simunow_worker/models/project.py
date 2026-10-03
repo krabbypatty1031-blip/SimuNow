@@ -12,7 +12,7 @@ IDENTITY_KEYS = (
 )
 PHYSICAL_KEYS = ("geometry", "occupancy", "hvac")
 # Tariff is not a solver input. Keep it on the draft so a saved package round-trips.
-OPTIONAL_KEYS = ("costAssumptions",)
+OPTIONAL_KEYS = ("costAssumptions", "weather")
 
 
 def parse_project(payload: dict) -> dict:

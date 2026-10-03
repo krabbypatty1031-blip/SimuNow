@@ -41,6 +41,20 @@ private func basis(
     #expect(supply?.contains("supply-air temperature") == true)
 }
 
+@Test func differentWeatherDayBlocksComparison() {
+    let january = CandidateRun.ComparisonBasis(
+        occupantCount: 8,
+        occupiedStart: "09:00",
+        occupiedEnd: "18:00",
+        setpointC: 26,
+        supplyTemperatureC: 16,
+        weatherMonth: 1,
+        weatherDay: 15
+    )
+    let reason = CandidateRun.basisMismatch(basis(), january)
+    #expect(reason?.contains("weather day") == true)
+}
+
 /// The pinned record is a frozen copy: metric values and slice survive as
 /// evidence of the run, not as live views of the project.
 @Test func candidateRunRoundTripsThroughCodable() throws {

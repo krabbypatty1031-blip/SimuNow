@@ -351,6 +351,36 @@ class FurnitureMappingTests(unittest.TestCase):
             project_to_l2_room(draft)
         self.assertIn("leaves the room box", str(caught.exception))
 
+    def test_l1_envelope_replaces_window_flux_and_writes_opaque(self):
+        from simunow_worker.models.l2_room import apply_l1_envelope
+
+        l1 = {
+            "metrics": [
+                {"name": "window_heat_w", "value": 390.0, "omitted": False},
+                {"name": "opaque_heat_w", "value": 200.0, "omitted": False},
+            ]
+        }
+        patched = apply_l1_envelope(OFFICE, l1)
+        window = next(item for item in patched["geometry"]["openings"] if item["kind"] == "window")
+        self.assertAlmostEqual(window["heatFluxWm2"]["value"], 200.0)
+        self.assertEqual(window["heatFluxWm2"]["source"], "l1_energyplus")
+        original = next(item for item in OFFICE["geometry"]["openings"] if item["kind"] == "window")
+        self.assertEqual(original["heatFluxWm2"]["value"], 80.0)
+        room = project_to_l2_room(OFFICE, l1)
+        self.assertAlmostEqual(room["windows"][0]["q_w_m2"]["value"], 200.0)
+        self.assertEqual(room["windows"][0]["q_w_m2"]["source"], "l1_energyplus")
+        self.assertAlmostEqual(room["opaque_heat_w"]["value"], 200.0)
+        self.assertIn(
+            "opaque envelope heat is the EnergyPlus day mean, spread on the walls patch",
+            room["assumptions"],
+        )
+        self.assertNotIn("omitted: envelope_u_value", room["assumptions"])
+
+    def test_missing_l1_keeps_draft_window_flux(self):
+        room = project_to_l2_room(OFFICE, None)
+        self.assertAlmostEqual(room["windows"][0]["q_w_m2"]["value"], 80.0)
+        self.assertNotIn("opaque_heat_w", room)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,9 @@ import SimuWorkspace
 @Test func metricAndStateTitlesHideSolverNames() {
     #expect(UserFacingCopy.metricTitle("q_cool_w") == "Cooling demand")
     #expect(UserFacingCopy.metricTitle("p_elec_w") == "AC electric power")
+    #expect(UserFacingCopy.metricTitle("window_heat_w") == "Window heat this day")
+    #expect(UserFacingCopy.metricTitle("opaque_heat_w") == "Wall and roof heat this day")
+    #expect(UserFacingCopy.chinese.metricTitle("window_heat_w") == "这一天的窗热")
     #expect(UserFacingCopy.metricTitle("seat_t_c_min") == "Coolest seat")
     #expect(UserFacingCopy.metricTitle("seat_t_c_max") == "Warmest seat")
     #expect(UserFacingCopy.metricTitle("seat_u_mag_max") == "Highest seat air speed")

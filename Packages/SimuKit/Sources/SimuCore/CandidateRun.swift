@@ -63,27 +63,51 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
     }
 
     /// Non-geometry inputs that must match before two candidates may be
-    /// compared side by side. Weather is shared per representative day in
-    /// this phase, so it is not a per-run field yet.
+    /// compared side by side. The typical-year calendar day is part of the
+    /// weather basis; different days cannot be compared as the same day.
     public struct ComparisonBasis: Codable, Equatable, Sendable {
         public var occupantCount: Double
         public var occupiedStart: String
         public var occupiedEnd: String
         public var setpointC: Double
         public var supplyTemperatureC: Double
+        /// Typical-year month. Old pins without the field decode as July.
+        public var weatherMonth: Int
+        /// Typical-year day. Old pins without the field decode as the 15th.
+        public var weatherDay: Int
 
         public init(
             occupantCount: Double,
             occupiedStart: String,
             occupiedEnd: String,
             setpointC: Double,
-            supplyTemperatureC: Double
+            supplyTemperatureC: Double,
+            weatherMonth: Int = 7,
+            weatherDay: Int = 15
         ) {
             self.occupantCount = occupantCount
             self.occupiedStart = occupiedStart
             self.occupiedEnd = occupiedEnd
             self.setpointC = setpointC
             self.supplyTemperatureC = supplyTemperatureC
+            self.weatherMonth = weatherMonth
+            self.weatherDay = weatherDay
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case occupantCount, occupiedStart, occupiedEnd, setpointC, supplyTemperatureC
+            case weatherMonth, weatherDay
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            occupantCount = try container.decode(Double.self, forKey: .occupantCount)
+            occupiedStart = try container.decode(String.self, forKey: .occupiedStart)
+            occupiedEnd = try container.decode(String.self, forKey: .occupiedEnd)
+            setpointC = try container.decode(Double.self, forKey: .setpointC)
+            supplyTemperatureC = try container.decode(Double.self, forKey: .supplyTemperatureC)
+            weatherMonth = try container.decodeIfPresent(Int.self, forKey: .weatherMonth) ?? 7
+            weatherDay = try container.decodeIfPresent(Int.self, forKey: .weatherDay) ?? 15
         }
     }
 
@@ -107,6 +131,9 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         }
         if a.supplyTemperatureC != b.supplyTemperatureC {
             mismatches.append(copy.mismatchSupply)
+        }
+        if a.weatherMonth != b.weatherMonth || a.weatherDay != b.weatherDay {
+            mismatches.append(copy.mismatchWeatherDay)
         }
         guard !mismatches.isEmpty else { return nil }
         return copy.basisMismatch(mismatches)

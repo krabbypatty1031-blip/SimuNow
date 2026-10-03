@@ -99,6 +99,44 @@ actor RecordingL1Client: L1TaskClient {
 }
 
 @MainActor
+@Test func applyWeatherDayMarksL1StaleAndBoundaryUsesMeasuredHeat() async throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let result = try L1Accounting.evaluate(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        draft: draft,
+        context: L1DayContext(
+            weatherPath: "weather/HK.epw",
+            weatherHash: "h",
+            coolingLoadW: 6000,
+            windowHeatW: 390,
+            opaqueHeatW: 200
+        )
+    )
+    let client = RecordingL1Client()
+    await client.prepare(result: result, events: [
+        SimulationEvent(
+            runID: result.identity.runID,
+            scenarioID: draft.id,
+            inputHash: "pending",
+            sequence: 0,
+            timestamp: "2026-10-03T00:00:00Z",
+            eventType: .completed,
+            stage: .succeeded,
+            payload: SimulationEventPayload(message: "l1 completed")
+        )
+    ])
+    let store = WorkspaceStore(l1Client: client)
+    store.loadOfficeTemplate()
+    await store.submitL1()
+    #expect(abs((store.lastBoundary?.windowHeatFluxWm2 ?? 0) - 200) < 1e-9)
+    #expect(store.lastBoundary?.opaqueHeatW == 200)
+    #expect(store.resultFreshness == .current)
+    store.applyWeatherDay(month: 1, day: 15)
+    #expect(store.project?.resolvedWeather.mmdd == "01-15")
+    #expect(store.resultFreshness == .stale)
+}
+
+@MainActor
 @Test func failedSubmitDoesNotChangeOccupantCountOrInventWatts() async throws {
     let draft = try ProjectTemplates.bundled(named: "office").project
     var failed = try L1Accounting.evaluate(

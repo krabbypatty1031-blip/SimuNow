@@ -6,6 +6,7 @@ Does not invent opaque UA or SHGC. Those stay omitted until the project models t
 from __future__ import annotations
 
 from simunow_worker.models.project import patch_area_m2
+from simunow_worker.models.weather import resolved_weather
 
 _WALL_X = {
     "xMin": lambda size: 0.0,
@@ -56,6 +57,7 @@ def project_to_l1_room(draft: dict) -> dict:
     )
     supply_wall = hvac["supply"]["wall"]
     window_wall = window["wall"]
+    run_month, run_day = resolved_weather(draft)
     return {
         "name": draft.get("name", "room"),
         "kind": "room",
@@ -123,6 +125,9 @@ def project_to_l1_room(draft: dict) -> dict:
             # raise the IDF window load (and with it the electricity cost).
             "window_area_m2": {"value": window_area, "unit": "m2", "source": "project"},
             "cop": _qty(hvac["cop"]),
+            # Typical-year RunPeriod. Missing draft.weather stays 15 July.
+            "run_month": {"value": run_month, "unit": "1", "source": "project"},
+            "run_day": {"value": run_day, "unit": "1", "source": "project"},
         },
         # Clock window only. Missing schedule must not become a 24h occupied day here.
         "schedule": {

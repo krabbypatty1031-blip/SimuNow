@@ -120,6 +120,22 @@ public struct CandidatePairDiff: Codable, Equatable, Sendable {
         )
         // Occupied hours carry clock strings, not one number; the sentence
         // holds the exact times and the guard collects them from the pair.
+        if first.basis.weatherMonth != second.basis.weatherMonth
+            || first.basis.weatherDay != second.basis.weatherDay {
+            changes.append(
+                InputChange(
+                    field: "weatherDay",
+                    label: copy.pairDiffLabel("weatherDay"),
+                    fromValue: nil,
+                    toValue: nil,
+                    unit: "",
+                    sentence: copy.pairChangedWeatherDay(
+                        from: String(format: "%02d-%02d", first.basis.weatherMonth, first.basis.weatherDay),
+                        to: String(format: "%02d-%02d", second.basis.weatherMonth, second.basis.weatherDay)
+                    )
+                )
+            )
+        }
         if first.basis.occupiedStart != second.basis.occupiedStart
             || first.basis.occupiedEnd != second.basis.occupiedEnd {
             changes.append(

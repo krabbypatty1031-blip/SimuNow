@@ -128,6 +128,24 @@ class ProjectModelTests(unittest.TestCase):
         draft = parse_project(payload)
         self.assertNotIn("comfort", draft["occupancy"])
 
+    def test_schema_weather_is_optional(self):
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        self.assertNotIn("weather", schema["required"])
+        self.assertIn("weather", schema["properties"])
+        day = schema["$defs"]["weatherDay"]
+        self.assertIn("month", day["required"])
+        self.assertIn("day", day["required"])
+        self.assertIn("source", day["required"])
+
+    def test_v2_fixture_resolves_missing_weather_to_july(self):
+        from simunow_worker.models.project import parse_project
+        from simunow_worker.models.weather import resolved_weather
+
+        payload = json.loads((FIXTURES / "project-v2-office.json").read_text(encoding="utf-8"))
+        draft = parse_project(payload)
+        self.assertNotIn("weather", draft)
+        self.assertEqual(resolved_weather(draft), (7, 15))
+
 
 if __name__ == "__main__":
     unittest.main()

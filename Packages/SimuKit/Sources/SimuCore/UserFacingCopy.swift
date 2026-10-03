@@ -193,6 +193,8 @@ public struct UserFacingCopy: Sendable, Equatable {
         case "q_cool_w": t("Cooling demand", zh: "制冷需求")
         case "p_elec_w": t("AC electric power", zh: "空调用电功率")
         case "annual_kwh": t("Yearly electricity", zh: "全年用电")
+        case "window_heat_w": t("Window heat this day", zh: "这一天的窗热")
+        case "opaque_heat_w": t("Wall and roof heat this day", zh: "这一天的墙和屋顶热")
         case "seat_t_c_min": t("Coolest seat", zh: "座位最凉")
         case "seat_t_c_max": t("Warmest seat", zh: "座位最热")
         case "seat_u_mag_max": t("Highest seat air speed", zh: "座位最大风速")

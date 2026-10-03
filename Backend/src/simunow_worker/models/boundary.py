@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from simunow_worker.models.l2_room import l1_metric_w
 from simunow_worker.models.project import patch_area_m2
 
 
@@ -35,10 +36,16 @@ def map_l2_boundary(draft: dict, l1: dict | None = None) -> dict:
     # flux contributes area but 0 W. A single window keeps its own value.
     windows = _windows(geometry)
     window_area = sum(patch_area_m2(item) for item in windows)
-    window_w = sum(
-        ((item.get("heatFluxWm2") or {}).get("value") or 0.0) * patch_area_m2(item) for item in windows
-    )
-    flux = window_w / window_area if window_area > 0 else 0.0
+    l1_window_w = l1_metric_w(l1, "window_heat_w")
+    l1_opaque_w = l1_metric_w(l1, "opaque_heat_w")
+    if l1_window_w is not None and window_area > 0:
+        window_w = l1_window_w
+        flux = window_w / window_area
+    else:
+        window_w = sum(
+            ((item.get("heatFluxWm2") or {}).get("value") or 0.0) * patch_area_m2(item) for item in windows
+        )
+        flux = window_w / window_area if window_area > 0 else 0.0
     occupant_count = occupancy["occupantCount"]["value"]
     # Per-person sensible × count once. Seats locate people; they are not a second watt source.
     occupant_sensible = occupant_count * occupancy["occupantSensibleW"]["value"]
@@ -53,6 +60,7 @@ def map_l2_boundary(draft: dict, l1: dict | None = None) -> dict:
         # Recirculated return = supply − outdoor. Not a measured return-air meter.
         "recirculatedAirM3s": max(0.0, supply_flow - outdoor),
         "windowHeatFluxWm2": flux,
+        "opaqueHeatW": l1_opaque_w,
         "lightingW": occupancy["lightingW"]["value"],
         "equipmentW": occupancy["equipmentW"]["value"],
         "occupantSensibleW": occupant_sensible,
@@ -62,5 +70,5 @@ def map_l2_boundary(draft: dict, l1: dict | None = None) -> dict:
             {"name": "lighting", "watts": occupancy["lightingW"]["value"]},
             {"name": "equipment", "watts": occupancy["equipmentW"]["value"]},
         ],
-        "omitted": ["envelope_u_value"],
+        "omitted": [] if l1_opaque_w is not None else ["envelope_u_value"],
     }

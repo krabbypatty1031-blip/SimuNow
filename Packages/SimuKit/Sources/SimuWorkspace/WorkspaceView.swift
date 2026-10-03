@@ -402,6 +402,12 @@ public struct WorkspaceView: View {
                     LabeledContent(store.copy.dayCost) {
                         staleMarkedValue(store.dayCostText(), stale: store.l1Freshness == .stale)
                     }
+                    LabeledContent(store.copy.metricTitle("window_heat_w")) {
+                        staleMarkedValue(store.metricText(named: "window_heat_w"), stale: store.l1Freshness == .stale)
+                    }
+                    LabeledContent(store.copy.metricTitle("opaque_heat_w")) {
+                        staleMarkedValue(store.metricText(named: "opaque_heat_w"), stale: store.l1Freshness == .stale)
+                    }
                     LabeledContent(store.copy.metricTitle("seat_t_c_min"), value: store.metricText(named: "seat_t_c_min"))
                     LabeledContent(store.copy.metricTitle("seat_t_c_max"), value: store.metricText(named: "seat_t_c_max"))
                     ForEach(SeatFeasibility.comparisonRows(metrics: store.lastL2Result?.metrics ?? [], copy: store.copy), id: \.label) { row in

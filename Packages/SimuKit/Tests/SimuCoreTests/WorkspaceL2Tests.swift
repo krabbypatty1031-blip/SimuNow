@@ -174,6 +174,14 @@ actor RecordingL2Client: L2TaskClient {
     #expect(store.lastL1Result?.metric(named: "q_cool_w")?.value == 6000)
     #expect(store.lastL1Result?.metric(named: "p_elec_w")?.value == 2000)
     #expect(store.lastL2Result?.metric(named: "seat_t_c_min")?.value == 25.08)
+    let snapshot = try #require(await l2Client.lastSnapshot)
+    let object = try #require(JSONSerialization.jsonObject(with: snapshot) as? [String: Any])
+    #expect(object["_l1Result"] != nil)
+    store.applyOccupantCount(10)
+    await store.submitL2()
+    let staleSnapshot = try #require(await l2Client.lastSnapshot)
+    let staleObject = try #require(JSONSerialization.jsonObject(with: staleSnapshot) as? [String: Any])
+    #expect(staleObject["_l1Result"] == nil)
 }
 
 @MainActor

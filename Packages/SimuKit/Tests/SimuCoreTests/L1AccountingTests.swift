@@ -47,6 +47,30 @@ import SimuCore
     #expect(result.period?.kind == "representative_day")
     #expect(result.period?.start == "07-15")
     #expect(result.period?.end == "07-15")
+    #expect(result.metric(named: "window_heat_w")?.omitted == true)
+    #expect(result.metric(named: "opaque_heat_w")?.omitted == true)
+}
+
+@Test func januaryWeatherMovesRepresentativePeriodAndKeepsEnvelopeWatts() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    #expect(draft.applyWeatherDay(month: 1, day: 15, source: .user).isEmpty)
+    let result = try L1Accounting.evaluate(
+        identity: RunIdentity(scenarioID: UUID(), inputHash: "snap"),
+        draft: draft,
+        context: L1DayContext(
+            weatherPath: "weather/CHN_Hong.Kong.SAR.450070_CityUHK.epw",
+            weatherHash: "epw-hash",
+            coolingLoadW: 2000,
+            windowHeatW: 390,
+            opaqueHeatW: 200
+        )
+    )
+    #expect(result.period?.start == "01-15")
+    #expect(result.period?.end == "01-15")
+    #expect(result.metric(named: "window_heat_w")?.value == 390)
+    #expect(result.metric(named: "opaque_heat_w")?.value == 200)
+    #expect(result.metric(named: "window_heat_w")?.omitted == false)
+    #expect(result.metric(named: "opaque_heat_w")?.method == "energyplus_opaque_conduction")
 }
 
 @Test func l1ResultKeepsSetpointSeparateFromSupplyTemperature() throws {

@@ -5,6 +5,7 @@
 `schemaVersion` 2 增加 `geometry` / `occupancy` / `hvac` 三分区；开口与风口用墙面局部坐标 `s0`/`s1` 加 `z0`/`z1`；送风同时给速度与体积流量。
 `occupancy.comfort`（`mrtC` / `rhPct` / `clo` / `met`）可选；缺任一键则 L2 PMV omitted + reason，不填 0。教室模板另披露「儿童人群未单独评价」。
 `costAssumptions`（`pricePerKWh` / `currency` / `source` / `reference`）可选。缺电价、缺 `p_elec_w` 或缺占用时段时代表日电费 omitted，不填 0。默认演示价 1.2 HKD/kWh，source=`assumed`。不含有值的 `annual_kwh` 或 `payback_years`。改造费为「待报价」。
+`weather`（`month` / `day` / `source` / `reference`）可选。缺省仍是香港 CityUHK 典型年 7 月 15 日，不是今天的预报，也不能选 2 月 29 日。该日进入 EnergyPlus `RunPeriod`；L1 解析当天窗热与不透明围护导热。当前且新鲜的 L1 才把这两项写入 L2 窗通量与墙面热流；缺 L1 或 L1 已过期时 L2 保持草稿假定通量，不编造天气热流。一天结果仍不是全年 EnergyPlus。不同天气日期是对比口径差异。
 不确定量可带可选 `reference` 与 `uncertainty`，空字符串不当作出处。
 三分区齐全时 `hasCompletePhysicalModel` 为真，仍不表示引擎已接入。
 JSON 使用 Swift Codable camelCase，任务消息的 CodingKeys 显式写出。worker `doctor` 仍是独立探测，snake_case。P3-01 事件流是 JSONL，乱序 sequence / 截断行 / 错 runID 必须拒绝。

@@ -61,6 +61,25 @@ class BoundaryTests(unittest.TestCase):
         self.assertAlmostEqual(mapped["windowHeatFluxWm2"], total_w / total_area)
         self.assertNotEqual(mapped["windowHeatFluxWm2"], 80.0)
 
+    def test_l1_window_heat_replaces_draft_flux(self):
+        l1 = {
+            "metrics": [
+                {"name": "window_heat_w", "value": 390.0, "omitted": False},
+                {"name": "opaque_heat_w", "value": 200.0, "omitted": False},
+            ]
+        }
+        mapped = map_l2_boundary(OFFICE, l1)
+        self.assertAlmostEqual(mapped["windowHeatFluxWm2"], 200.0)
+        self.assertEqual(mapped["opaqueHeatW"], 200.0)
+        self.assertEqual(mapped["omitted"], [])
+
+    def test_omitted_l1_window_does_not_invent_flux(self):
+        l1 = {"metrics": [{"name": "window_heat_w", "value": None, "omitted": True}]}
+        mapped = map_l2_boundary(OFFICE, l1)
+        self.assertEqual(mapped["windowHeatFluxWm2"], 80)
+        self.assertIsNone(mapped["opaqueHeatW"])
+        self.assertIn("envelope_u_value", mapped["omitted"])
+
 
 if __name__ == "__main__":
     unittest.main()

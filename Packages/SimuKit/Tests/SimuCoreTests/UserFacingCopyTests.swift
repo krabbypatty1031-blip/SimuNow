@@ -91,9 +91,13 @@ import SimuWorkspace
 
 @Test func destinationTitlesAreUserGoals() {
     #expect(WorkspaceDestination.workspace.title == "布置房间")
-    #expect(WorkspaceDestination.runs.title == "用电与舒适")
+    #expect(WorkspaceDestination.runs.title == "计算结果")
     #expect(WorkspaceDestination.scenarios.title == "方案对比")
     #expect(WorkspaceDestination.reports.title == "导出报告")
+    // The enum case order drives the sidebar order via CaseIterable; anchor the
+    // workflow sequence (estimate, then compare estimates) so a reorder cannot
+    // slip in silently.
+    #expect(WorkspaceDestination.allCases == [.workspace, .runs, .scenarios, .reports])
     for destination in WorkspaceDestination.allCases {
         #expect(!UserFacingCopy.containsForbiddenDefaultToken(destination.title))
     }

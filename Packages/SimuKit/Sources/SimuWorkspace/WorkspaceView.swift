@@ -255,7 +255,7 @@ public struct WorkspaceView: View {
         if store.activeRun == nil && store.lastL1Result == nil && store.lastL2Result == nil {
             VStack(spacing: 16) {
                 EmptyStateView(
-                    "用电与舒适",
+                    "计算结果",
                     symbol: "waveform.path",
                     message: "布置好房间后，在这里估算这一天用电，并查看座位冷热。"
                 )

@@ -977,7 +977,9 @@ public final class WorkspaceStore {
 }
 
 public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
-    case workspace, scenarios, runs, reports
+    // Case order is the sidebar order: 布置房间 → 计算结果 → 方案对比 → 导出报告
+    // (estimate before comparing estimates; 2026-10-04 swap of runs and scenarios).
+    case workspace, runs, scenarios, reports
 
     public var id: String { rawValue }
 
@@ -985,7 +987,7 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .workspace: "布置房间"
         case .scenarios: "方案对比"
-        case .runs: "用电与舒适"
+        case .runs: "计算结果"
         case .reports: "导出报告"
         }
     }

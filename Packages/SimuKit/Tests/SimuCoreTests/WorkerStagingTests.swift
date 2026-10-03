@@ -104,6 +104,7 @@ private func repoRoot() -> URL {
     ) as? [String: Any]
     #expect(plist?["com.apple.security.app-sandbox"] as? Bool == true)
     #expect(plist?["com.apple.security.temporary-exception.sbpl"] == nil)
+    #expect(plist?["com.apple.security.cs.disable-library-validation"] == nil)
 }
 
 @Test func macDebugEntitlementsSkipSandboxForEngineExec() throws {
@@ -115,6 +116,7 @@ private func repoRoot() -> URL {
         format: nil
     ) as? [String: Any]
     #expect(plist?["com.apple.security.app-sandbox"] == nil)
+    #expect(plist?["com.apple.security.cs.disable-library-validation"] as? Bool == true)
 }
 
 @MainActor

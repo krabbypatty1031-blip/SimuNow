@@ -107,7 +107,8 @@ import SimuSimulation
     #expect(text.contains("com.apple.security.app-sandbox"))
     #expect(text.contains("<true/>"))
     #expect(text.contains("com.apple.security.files.bookmarks.app-scope"))
-    #expect(text.contains("com.apple.security.cs.disable-library-validation"))
-    #expect(text.contains("com.apple.security.app-sandbox"))
+    // Hardened Runtime library validation stays on. The Debug entitlement
+    // is the only place that disables it for EnergyPlus dylibs.
+    #expect(!text.contains("com.apple.security.cs.disable-library-validation"))
     #expect(!text.contains("com.apple.security.app-sandbox</key>\n    <false/>"))
 }

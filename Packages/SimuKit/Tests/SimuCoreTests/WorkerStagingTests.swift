@@ -77,6 +77,84 @@ private func repoRoot() -> URL {
     #expect(!staged.path.lowercased().contains("/desktop/"))
 }
 
+#if canImport(Darwin)
+/// Regression anchor (2026-10-03 hand test): macOS quarantines executables a
+/// sandboxed app copies into its own container (agent = the app, "created
+/// without user consent"), and the sandbox then denies exec and dylib loads
+/// of the quarantined unnotarized engine with EPERM (kernel Quarantine deny
+/// plus process-exec* deny). Staging must strip the mark from every staged
+/// regular file - including read-only dylibs - on every stage call, not only
+/// on the copy that created the tree.
+@Test func stagingStripsQuarantineFromStagedEngineFiles() throws {
+    let fm = FileManager.default
+    let source = fm.temporaryDirectory.appendingPathComponent("simunow-q-engines-\(UUID().uuidString)", isDirectory: true)
+    let energyPlus = source.appendingPathComponent("EnergyPlus", isDirectory: true)
+    try fm.createDirectory(at: energyPlus, withIntermediateDirectories: true)
+    try fm.createDirectory(at: source.appendingPathComponent("weather", isDirectory: true), withIntermediateDirectories: true)
+    let binary = energyPlus.appendingPathComponent("energyplus")
+    try Data("#!/bin/sh\nexit 0\n".utf8).write(to: binary)
+    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+    // A read-only dylib covers the 444 chmod path a real engine tree has.
+    let dylib = energyPlus.appendingPathComponent("libintl.8.dylib")
+    try Data("dylib".utf8).write(to: dylib)
+    try fm.setAttributes([.posixPermissions: 0o444], ofItemAtPath: dylib.path)
+    let wrapper = source.appendingPathComponent("openfoam.sh")
+    try Data("#!/bin/sh\nexit 0\n".utf8).write(to: wrapper)
+    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wrapper.path)
+    try Data("epw".utf8).write(to: source.appendingPathComponent("weather/x.epw"))
+
+    let runtime = fm.temporaryDirectory.appendingPathComponent("simunow-q-stage-\(UUID().uuidString)", isDirectory: true)
+    try WorkerTreeStaging.stageEngines(from: source, into: runtime)
+    let staged = WorkerTreeStaging.enginesURL(in: runtime)
+    // Quarantine what landed, then re-stage: the EnergyPlus copy is skipped
+    // (binary present with x bits), so the strip must also cover files the
+    // walk finds already staged, plus the always re-copied wrapper.
+    let marks = [
+        LocalEngineProbe.energyPlusURL(in: staged),
+        staged.appendingPathComponent("EnergyPlus/libintl.8.dylib"),
+        staged.appendingPathComponent("openfoam.sh"),
+    ]
+    for url in marks {
+        try setQuarantineFlag(atPath: url.path)
+        #expect(hasQuarantineFlag(atPath: url.path))
+    }
+    try WorkerTreeStaging.stageEngines(from: source, into: runtime)
+    for url in marks {
+        #expect(!hasQuarantineFlag(atPath: url.path))
+    }
+    // The 444 dylib keeps its read-only mode after the strip borrows the write bit.
+    #expect(try fm.attributesOfItem(atPath: marks[1].path)[.posixPermissions] as? Int == 0o444)
+}
+
+private func setQuarantineFlag(atPath path: String) throws {
+    // setxattr needs the owner-write bit, same as removexattr. The system
+    // quarantines while writing the file; this test writes the mark while
+    // the file is writable, then restores the read-only mode so the strip
+    // path faces the same 444-plus-quarantine shape the real tree had.
+    let fm = FileManager.default
+    let original = (try fm.attributesOfItem(atPath: path)[.posixPermissions] as? Int) ?? 0o644
+    if original & 0o200 == 0 {
+        try fm.setAttributes([.posixPermissions: original | 0o200], ofItemAtPath: path)
+    }
+    defer {
+        if original & 0o200 == 0 {
+            try? fm.setAttributes([.posixPermissions: original], ofItemAtPath: path)
+        }
+    }
+    let value = "0081;6ac09f5b;TestAgent;"
+    let rc = value.withCString { v in
+        path.withCString { p in
+            setxattr(p, "com.apple.quarantine", v, value.utf8.count, 0, 0)
+        }
+    }
+    #expect(rc == 0, "test could not quarantine \(path)")
+}
+
+private func hasQuarantineFlag(atPath path: String) -> Bool {
+    getxattr(path, "com.apple.quarantine", nil, 0, 0, 0) >= 0
+}
+#endif
+
 #if os(macOS)
 @Test func pythonResolverReturnsAStartableInterpreterOrHonestNil() {
     // Default resolution must only return an interpreter that actually

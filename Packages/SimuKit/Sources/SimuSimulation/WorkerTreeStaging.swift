@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#endif
 
 /// Copy worker scripts into a container-owned tree. Never writes Desktop paths into project.json.
 public enum WorkerTreeStaging {
@@ -93,11 +96,61 @@ public enum WorkerTreeStaging {
             try? FileManager.default.removeItem(at: stagedWrapper)
             try FileManager.default.copyItem(at: wrapper, to: stagedWrapper)
         }
+        // Copying engine files into the app container makes macOS quarantine
+        // them (agent = this app, "created without user consent"), and the
+        // sandbox then denies exec and dylib loads of the quarantined
+        // unnotarized engine (2026-10-03 hand test: kernel Quarantine deny +
+        // process-exec* deny -> EPERM). Clear the mark staging caused, so the
+        // run - not the probe - stays the evidence. Walk runs whether or not
+        // the EnergyPlus copy was skipped, because the wrapper is always
+        // re-copied and re-quarantined here.
+        try stripQuarantineRecursively(at: dest)
     }
 
     public static func enginesURL(in runtimeRoot: URL) -> URL {
         runtimeRoot.appendingPathComponent("test/engines", isDirectory: true)
     }
+
+    #if canImport(Darwin)
+    /// Quarantine attribute macOS (Tahoe) puts on executables an app writes
+    /// into its own container. Apple-only, so the strip is Apple-only too.
+    private static let quarantineAttributeName = "com.apple.quarantine"
+
+    /// Strip quarantine from one regular file. Read-only engine files (444
+    /// dylibs) need the owner-write bit to remove an attribute; the original
+    /// mode is restored afterwards. Missing files and symlinks are skipped:
+    /// exec and dyld evaluate the resolved target, which the walk covers.
+    private static func stripQuarantine(fromRegularFileAt path: String) throws {
+        var st = stat()
+        // S_ISREG spelled with S_IFMT bits: the C macro is not visible in Swift.
+        guard lstat(path, &st) == 0, st.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { return }
+        // Probe first: most staged files never carry the attribute, and one
+        // getxattr per file keeps the walk cheap for the 7000+ file engine tree.
+        guard getxattr(path, quarantineAttributeName, nil, 0, 0, 0) >= 0 else { return }
+        let originalMode = st.st_mode
+        let addedWriteBit = originalMode & mode_t(S_IWUSR) == 0
+        if addedWriteBit, chmod(path, originalMode | mode_t(S_IWUSR)) != 0 {
+            throw StagingError.quarantineNotStripped((path as NSString).lastPathComponent)
+        }
+        defer { if addedWriteBit { _ = chmod(path, originalMode) } }
+        if removexattr(path, quarantineAttributeName, 0) != 0 {
+            throw StagingError.quarantineNotStripped((path as NSString).lastPathComponent)
+        }
+    }
+
+    /// Walk the staged engines tree and strip quarantine from regular files.
+    private static func stripQuarantineRecursively(at root: URL) throws {
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
+            throw StagingError.missingWorkerFile(root.lastPathComponent)
+        }
+        while let url = walker.nextObject() as? URL {
+            try stripQuarantine(fromRegularFileAt: url.path)
+        }
+    }
+    #else
+    /// Non-Apple platforms never quarantine an app's own staged files.
+    private static func stripQuarantineRecursively(at root: URL) throws {}
+    #endif
 
     private static func replaceDirectory(from source: URL, to dest: URL) throws {
         let fm = FileManager.default
@@ -113,11 +166,14 @@ public enum WorkerTreeStaging {
 
     public enum StagingError: Error, Equatable, LocalizedError {
         case missingWorkerFile(String)
+        case quarantineNotStripped(String)
 
         public var errorDescription: String? {
             switch self {
             case .missingWorkerFile(let name):
                 "运行时缺少 \(name)，无法提交代表日 L1。"
+            case .quarantineNotStripped(let name):
+                "引擎文件 \(name) 的隔离标记无法清除，App 内无法启动引擎。"
             }
         }
     }

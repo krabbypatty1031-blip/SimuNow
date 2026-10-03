@@ -7,6 +7,7 @@ here: numbers are copied from the candidate dicts, and a missing quote stays
 
 from __future__ import annotations
 
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from simunow_worker.models.feasibility import AIR_HIGH_C, AIR_LOW_C
@@ -256,7 +257,25 @@ def _evidence_run(candidate: dict) -> dict[str, Any]:
         row["supplyZ0M"] = candidate["supplyZ0"]
     if candidate.get("supplyZ1") is not None:
         row["supplyZ1M"] = candidate["supplyZ1"]
+    row["occupiedDaysPerYear"] = 365
+    if row.get("dayEnergyKWh") is not None:
+        row["annualEnergyKWh"] = _annual_energy(row["dayEnergyKWh"])
+    if row.get("dayCost") is not None:
+        row["annualCost"] = _annual_cost(row["dayCost"])
     return row
+
+
+def _round_half_up(value: float, places: int) -> float:
+    quant = Decimal("1").scaleb(-places)
+    return float(Decimal(str(value)).quantize(quant, rounding=ROUND_HALF_UP))
+
+
+def _annual_energy(day_kwh: float) -> float:
+    return _round_half_up(day_kwh * 365, 5)
+
+
+def _annual_cost(day_cost: float) -> float:
+    return _round_half_up(day_cost * 365, 3)
 
 
 def build_evidence(candidates: list[dict]) -> dict[str, Any]:

@@ -61,15 +61,15 @@
 | 三维气流叠加 | 已通（质量门控 + 示意循环 + 进/出风文字标注） | 质量通过才写 `field-flow.json`：坐姿高度速度箭头 + 从求解进口积出的稳态流线。圆点沿流线循环，周期是显示约定（约 3.6 s），不是物理过境时间，也不是开机降温。箭头长度仍是显示放大。三维/画布在求解真实进口/出口的整墙带高度放「送风」「回风」文字标注（与 `write_openfoam_room` 整墙带宽一致）；图例与「计算过程」写明速度按风量缩放、空调外形只标位置。开启「减少动态效果」时只保留静态路径与标注。旧 L2 run 没有该文件时只显示温度切片。钉版 L1/L2 数字未重跑。 |
 | 计算文件夹选择反馈 | 已通（检查器） | 「计算准备」移到项目区下方并默认展开。选完后顶部「计算」显示结果与文件夹名（仅 basename）。取消写「没有选择文件夹」；不合格文件夹说明缺能耗程序/副本，不再复用未选时的闲置句。路径不进界面。 |
 | 多窗合并投影（ADR-018） | 已通（添加/修改窗进双引擎） | 四个投影（`l1_room`/`l2_room`/`boundary`/`p1_mapping`）从「只取第一扇」改为合并全部窗：L1 窗面积求和进单一东墙窗、L2 带通量=Σ窗W÷带面积（总 W 守恒）、DTO 面积加权平均。Swift `applyOpening` 缺省保留已存热通量（「应用开口」不再抹掉模板 80 W/m²），`addOpening` 给新窗默认 80 W/m²（`assumed`）。`Backend/tests` 126 全绿（新增多窗 4 例）；`Scripts/check.sh test` 184 全绿（新增保留/显式热通量 2 例）；`mac`/`ios` BUILD SUCCEEDED。引擎实测（`Artifacts/sensitivity/window_add.json`，本地）：baseline 单窗逐位不漂移（3099.3 W / 12.397 HKD / 24.43–24.73 °C）；追加带通量窗 → 3159.0 W / 12.636 HKD / 25.36–25.65 °C（钱与温度都动）；追加无通量窗 → 钱动（面积）、座位温度逐位不变（声明的 0 W）。未声明通量的窗不进 L2 场；窗沿墙位置仍不进 case（满墙带简化照旧披露） |
-| DeepSeek 对比说明（ADR-019） | 已通（自动化） | `DeepSeekReportClient` 钉官方 `https://api.deepseek.com/chat/completions`、`deepseek-chat`。密钥 `DEEPSEEK_API_KEY` / `SIMUNOW_REPORT_API_KEY` / 钥匙串，不进 project.json。无密钥或请求失败不写替身 PDF。证据外数字整段拒用；两位小数展示值允许。Mac Core Graphics 排模型章节 + 本地「计算依据/详细编号」。Release 沙盒仍开，仅加 `network.client`。`NarratorGuardTests` / `ReportEvidenceTests` / `WorkspaceReportTests` 通过；`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。未用真实密钥打官方接口，不能宣称 API 连通已交付。 |
+| DeepSeek 对比说明（ADR-019 / ADR-020） | 已通（自动化） | 提示词 `ReportWriterSkill`：EnergyPlus/OpenFOAM 四节、方案一/二、全年电费；证据包含窗/室内均温/气流/代表日×365。无密钥不写 PDF。守卫仍拒证据外数字。未宣称官方连通已交付。 |
 
 ## 下一步
 
-方案 A 三维视口已落地（[3D-realitykit-viewport](../Phases/3D-realitykit-viewport/3D-realitykit-viewport.md)），示意网格与质量门控气流已接到现有草稿对象。下一步是 App Debug 手测三维：拖转、捏合、有场才上色、重跑 L2 后看到箭头/流线、增删窗/人/空调后视口更新、对比两列同朝向。不做点选/三维拖柄，除非另开方案 B/C。对比说明由 DeepSeek 根据冻结 run 写正文，附录数字仍来自证据包；无密钥不能导出。质量失败或使用条件不同不能当有效建议导出。这一天电费不是全年电费，改造费仍是「待报价」，没有回收期。合适的座位不是实测满意率，无场不写 0%。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
+方案 A 三维视口已落地（[3D-realitykit-viewport](../Phases/3D-realitykit-viewport/3D-realitykit-viewport.md)），示意网格与质量门控气流已接到现有草稿对象。下一步是 App Debug 手测三维：拖转、捏合、有场才上色、重跑 L2 后看到箭头/流线、增删窗/人/空调后视口更新、对比两列同朝向。不做点选/三维拖柄，除非另开方案 B/C。对比说明由 DeepSeek 根据冻结 run 写正文（ADR-020：点名 EnergyPlus/OpenFOAM、对比方案并给出全年电费）；附录数字仍来自证据包；无密钥不能导出。质量失败或使用条件不同不能当有效建议导出。改造费仍是「待报价」，没有回收期。无场不写 0%。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
 
 ## P5 阶段结论
 
-阶段门已满足：Mac 固定同口径两候选后可出达标比例（模型）、代表日演示电费、运行/舒适/改造三卡和可追溯证据 PDF。**ADR-019 补录**：导出对比说明改为 DeepSeek 写正文，无密钥不再写证据表。质量失败场座位 omitted，不能当有效建议导出。手测配置是 **SimuNowMac Debug**（`SimuNowMacDebug.entitlements` 关 sandbox + 关 library validation）；Release 仍沙盒且保持 library validation，不能宣称沙盒产品能 exec EnergyPlus/OpenFOAM。一天结果不推全年，改造「待报价」，不出回收期。
+阶段门已满足：Mac 固定同口径两候选后可出达标比例（模型）、代表日演示电费、运行/舒适/改造三卡和可追溯证据 PDF。**ADR-019 / ADR-020**：导出对比说明由 DeepSeek 写正文，四节覆盖 EnergyPlus/OpenFOAM、方案对比（含全年电费）与建议；无密钥不再写证据表。质量失败场座位 omitted，不能当有效建议导出。手测配置是 **SimuNowMac Debug**（`SimuNowMacDebug.entitlements` 关 sandbox + 关 library validation）；Release 仍沙盒且保持 library validation，不能宣称沙盒产品能 exec EnergyPlus/OpenFOAM。改造「待报价」，不出回收期。
 
 ## P4 阶段结论
 

@@ -202,6 +202,21 @@
 影响：`l2_room.py` 默认 mesh/nu 改为 `_ladder(24/20/18)`、`_ladder(0.003)`（source `p4_07b_ladder`），assumptions 加两条（阶梯选中披露 + 有效粘度非分子粘度）；`test/p1/fixtures/room_p1.json` 同步；`test_room.py` kappa 复算改为从 room 读 nu（不再硬编码 0.006）；钉版 `result-l2`/`field-slice-l2` 再重钉（A 后 8 座位 24.42–24.71 °C / PMV 0.16–0.21 / 切片 23.376–25.448 → B 后 25.157–25.314 °C / PMV 0.29–0.32 / PPD 7.1% / 切片 23.826–26.124 °C）。nu 仍是湍流代有效粘度（laminar 求解器不变），assumptions 如实披露；坐高座位温差零点几度是座位离窗 ≥1.5 m 的真实物理，不是红斑弱的缺陷。
 验证（2026-10-03）：六档阶梯全过五门禁且逐档记录（mass 3.7e-8–3.3e-6、energy 0.015%–1.12%）；`Backend/tests` + `test/p1` 183 passed（含真跑引擎钉版复算 576 格点）、Swift 184 passed、mac/iOS 编译过；App 通道重钉 run（`p4-07b/repin/`）state succeeded / quality passed；App 手测（SimuNowMac Debug）红斑紧贴窗框、远窗侧偏蓝、数字与钉版一致（`verification.md`「P4 App 手测」F 行）。
 
+## ADR-020：对比说明按真实结果陈述 EnergyPlus/OpenFOAM、方案对比与全年电费（已接受）
+
+日期：2026-10-03。
+背景：用户要求 DeepSeek 报告（1）展示 EnergyPlus/OpenFOAM 计算结果及窗、室内平均温度、气流的影响；（2）对比方案一/方案二的优劣、能耗与全年电费；（3）给出建议；并把数据当作真实结果，不再另加免责说明。
+备选：(a) 只改提示词、让模型自己乘 365——守卫会拒掉证据外数字；(b) 把 `annual_kwh` 写进 L1 结果——破坏代表日会计契约；(c) 在冻结 `EvidenceRun` 上增加窗/场/代表日×365 的报告层字段，提示词要求四节并禁止免责套话。
+选择：(c)。
+
+- 提示词源：`ReportWriterSkill.systemPrompt`；维护规范：`.cursor/skills/llm-report/SKILL.md`。
+- 报告层全年用电/电费 = 代表日 × 365 占用日，半入规则与日值相同。L1 指标 `annual_kwh` 仍 omitted。
+- 正文必须点名 EnergyPlus、OpenFOAM；附录印窗、室内均温、气流、全年电费；电价印数值，不印「比赛演示假设，非真实电价」。
+- 改造仍无报价则写待报价，不出回收期。
+
+影响：用户可见报告将代表日外推为全年费用；这是报告层口径，不是新的 EnergyPlus 年模拟。
+验证：`annualTotalsScaleTheRepresentativeDay`（3770.8588 kWh / 4524.905）；证据包拷贝窗/均温/气流/年值；DeepSeek 请求 system 消息等于 `ReportWriterSkill.systemPrompt`；守卫放行证据内全年电费。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

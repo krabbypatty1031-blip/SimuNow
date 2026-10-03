@@ -112,11 +112,11 @@ import PDFKit
     try await store.writeEvidencePDF(to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("办公室送风对比"))
+    #expect(text.contains("Office supply-air comparison"))
     #expect(text.contains("DeepSeek"))
     #expect(text.contains(pair.low.identity.runID.uuidString))
     #expect(text.contains(pair.high.identity.runID.uuidString))
-    #expect(text.contains("全年电费"))
+    #expect(text.contains("yearly electricity cost"))
     #expect(text.contains("EnergyPlus"))
     #expect(text.contains("OpenFOAM"))
     #expect(!text.contains("比赛演示假设，非真实电价"))
@@ -133,14 +133,14 @@ import PDFKit
 
 private struct StubReportGenerator: ReportGenerator {
     func generate(_ evidence: ReportEvidence) async -> GeneratedReport? {
-        let names = evidence.candidates.map(\.name).joined(separator: "、")
+        let names = evidence.candidates.map(\.name).joined(separator: ", ")
         let first = evidence.candidates[0]
-        let ratio = first.seatPassRatio.map(UserFacingCopy.displayNumber) ?? "还没有"
+        let ratio = first.seatPassRatio.map(UserFacingCopy.displayNumber) ?? UserFacingCopy.english.notYet
         let dayCostText: String
         if let value = first.dayCost, let currency = first.currency {
             dayCostText = "\(UserFacingCopy.displayNumber(value)) \(currency)"
         } else {
-            dayCostText = "还没有"
+            dayCostText = UserFacingCopy.english.notYet
         }
         let annualText: String
         if let value = first.annualCost, let currency = first.currency {
@@ -148,32 +148,32 @@ private struct StubReportGenerator: ReportGenerator {
         } else {
             annualText = dayCostText
         }
-        let cooling = first.coolingW.map(UserFacingCopy.displayNumber) ?? "还没有"
+        let cooling = first.coolingW.map(UserFacingCopy.displayNumber) ?? UserFacingCopy.english.notYet
         let mean = first.indoorMeanC.map(UserFacingCopy.displayNumber)
             ?? first.seatTMinC.map(UserFacingCopy.displayNumber)
-            ?? "还没有"
+            ?? UserFacingCopy.english.notYet
         return GeneratedReport(
-            title: "办公室送风对比",
-            summary: "这次对比了\(names)。方案一全年电费 \(annualText)。",
+            title: "Office supply-air comparison",
+            summary: "This comparison covers \(names). Scheme 1 yearly electricity cost \(annualText).",
             sections: [
                 ReportSection(
                     heading: ReportWriterSkill.energyPlusHeading,
-                    body: "EnergyPlus 制冷量 \(cooling) W，全年电费 \(annualText)。"
+                    body: "EnergyPlus cooling power \(cooling) W, yearly electricity cost \(annualText)."
                 ),
                 ReportSection(
                     heading: ReportWriterSkill.openFOAMHeading,
-                    body: "OpenFOAM 室内温度 \(mean) °C。"
+                    body: "OpenFOAM indoor temperature \(mean) °C."
                 ),
                 ReportSection(
                     heading: ReportWriterSkill.comparisonHeading,
-                    body: "方案一合适的座位 \(ratio)，代表日电费 \(dayCostText)。"
+                    body: "Scheme 1 seats within range \(ratio), representative-day cost \(dayCostText)."
                 ),
                 ReportSection(
                     heading: ReportWriterSkill.adviceHeading,
-                    body: "建议采用方案一。"
+                    body: "Adopt Scheme 1."
                 ),
             ],
-            caveats: ["采用低送风口。"]
+            caveats: ["Adopt the lower supply opening."]
         )
     }
 }

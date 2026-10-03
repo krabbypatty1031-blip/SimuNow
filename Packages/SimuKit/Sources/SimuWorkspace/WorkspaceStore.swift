@@ -546,7 +546,7 @@ public final class WorkspaceStore {
     public var isReportGeneratorConfigured: Bool {
         if reportGenerator != nil { return true }
         guard allowEnvironmentGenerator else { return false }
-        return DeepSeekReportClient.configuredFromEnvironment() != nil
+        return DeepSeekReportClient.configuredFromEnvironment(language: copy.language) != nil
     }
 
     /// Empty pin list stays an empty state. Failed-only packs explain why export is hidden.
@@ -564,7 +564,7 @@ public final class WorkspaceStore {
     private func resolvedReportGenerator() -> (any ReportGenerator)? {
         if let reportGenerator { return reportGenerator }
         guard allowEnvironmentGenerator else { return nil }
-        return DeepSeekReportClient.configuredFromEnvironment()
+        return DeepSeekReportClient.configuredFromEnvironment(language: copy.language)
     }
 
     /// Card run IDs jump back to the comparison page, which still shows the frozen record.

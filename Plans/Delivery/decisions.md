@@ -222,7 +222,8 @@
 日期：2026-10-03。
 背景：界面需要英语与中文，且切换后立即生效；默认英语。
 备选：(a) Apple String Catalog + 随系统语言，改语言需重启；(b) 应用内 `UserFacingCopy` 目录 + UserDefaults，默认英语。
-选择：(b)。存储层仍用中文物理 token（温度门、演示电价出处等），显示层翻译。DeepSeek 提示词本阶段仍为中文。
+选择：(b)。存储层仍用中文物理 token（温度门、演示电价出处等），显示层翻译。
+**补录（2026-10-04）**：DeepSeek 提示词按 `AppLanguage` 分支；默认英语写英文四节，中文界面写原中文四节。`DeepSeekReportClient(language:)` 在导出时取 `WorkspaceStore.copy.language`。守卫拒绝句同样随语言。
 影响：Mac 左侧栏滚到底、iOS 目的地列表底部提供语言选项。测试默认英语，避免 UserDefaults 串扰。
 
 ## 待决定

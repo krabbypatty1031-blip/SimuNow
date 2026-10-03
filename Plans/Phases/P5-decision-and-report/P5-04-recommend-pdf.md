@@ -34,7 +34,7 @@
 **PDF 两层：**
 
 1. **证据层（必须）**：表内数字 = `ReportEvidence` 字段。含 run ID、inputHash、quality、座位带、达标比例、代表日 kWh/HKD、舒适假设、电价 reference。
-2. **说明层（DeepSeek，ADR-019 / ADR-020）**：`ReportGenerator.generate(evidence)` → 标题、总述、四节（EnergyPlus、OpenFOAM、方案对比、建议）。官方 `POST https://api.deepseek.com/chat/completions`。密钥 `DEEPSEEK_API_KEY` 或 `SIMUNOW_REPORT_API_KEY` 或钥匙串。无密钥不能导出。提示词见 `ReportWriterSkill`。
+2. **说明层（DeepSeek，ADR-019 / ADR-020）**：`ReportGenerator.generate(evidence)` → 标题、总述、四节。英文：EnergyPlus energy results / OpenFOAM airflow and temperature / Scheme comparison / Recommendations。中文：EnergyPlus 能耗结果 / OpenFOAM 气流与温度 / 方案对比 / 建议。官方 `POST https://api.deepseek.com/chat/completions`。密钥 `DEEPSEEK_API_KEY` 或 `SIMUNOW_REPORT_API_KEY` 或钥匙串。无密钥不能导出。提示词见 `ReportWriterSkill.systemPrompt(for:)`，语言取界面 `AppLanguage`。
 
 叙述守卫：从 prose 抽出的数字必须是证据包数值集合的子集（允许 run ID 短前缀、两位小数展示值、单位换算后的已列值）。否则该段丢弃并注明未采用。无密钥 / 网络失败 → 不写 PDF。
 

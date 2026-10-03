@@ -950,6 +950,12 @@ extension UserFacingCopy {
     public var pdfDeepSeekCaption: String {
         t("The following text was prepared by DeepSeek from the calculation results.", zh: "以下正文由 DeepSeek 根据计算结果整理。")
     }
+    public var narrationRejected: String {
+        t(
+            "Narration was not used (contains figures outside the evidence)",
+            zh: "叙述未采用（含证据外数字）"
+        )
+    }
     public var pdfNoComfortAssumptions: String { t("No comfort assumptions yet", zh: "还没有舒适假设") }
     public func pdfTariff(_ price: String, currency: String) -> String {
         t("Electricity price \(price) \(currency)/kWh", zh: "电价 \(price) \(currency)/kWh")

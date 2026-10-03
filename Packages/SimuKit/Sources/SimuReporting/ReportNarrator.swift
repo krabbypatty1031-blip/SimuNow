@@ -49,28 +49,40 @@ public protocol ReportGenerator: Sendable {
 /// Drops any paragraph whose numbers are not already in the evidence pack.
 /// Run-ID prefixes are not treated as invented measurements.
 public enum NarrationGuard: Sendable {
-    public static let rejection = "叙述未采用（含证据外数字）"
+    public static let rejection = UserFacingCopy.english.narrationRejected
 
-    public static func filter(_ report: GeneratedReport, evidence: ReportEvidence) -> GeneratedReport {
+    public static func rejection(_ copy: UserFacingCopy) -> String {
+        copy.narrationRejected
+    }
+
+    public static func filter(
+        _ report: GeneratedReport,
+        evidence: ReportEvidence,
+        copy: UserFacingCopy = .english
+    ) -> GeneratedReport {
         GeneratedReport(
-            title: sanitize(report.title, evidence: evidence),
-            summary: sanitize(report.summary, evidence: evidence),
+            title: sanitize(report.title, evidence: evidence, copy: copy),
+            summary: sanitize(report.summary, evidence: evidence, copy: copy),
             sections: report.sections.map { section in
                 ReportSection(
-                    heading: sanitize(section.heading, evidence: evidence),
-                    body: sanitize(section.body, evidence: evidence)
+                    heading: sanitize(section.heading, evidence: evidence, copy: copy),
+                    body: sanitize(section.body, evidence: evidence, copy: copy)
                 )
             },
-            caveats: report.caveats.map { sanitize($0, evidence: evidence) }
+            caveats: report.caveats.map { sanitize($0, evidence: evidence, copy: copy) }
         )
     }
 
     /// Keep the paragraph only when every extracted number is listed, or sits inside a run-ID prefix.
-    static func sanitize(_ paragraph: String, evidence: ReportEvidence) -> String {
+    static func sanitize(
+        _ paragraph: String,
+        evidence: ReportEvidence,
+        copy: UserFacingCopy = .english
+    ) -> String {
         let allowed = numericValues(in: evidence)
         let masked = maskRunIDPrefixes(paragraph, evidence: evidence)
         guard let expression = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#) else {
-            return rejection
+            return rejection(copy)
         }
         let range = NSRange(masked.startIndex..<masked.endIndex, in: masked)
         let tokens = expression.matches(in: masked, range: range).compactMap { match -> String? in
@@ -80,7 +92,7 @@ public enum NarrationGuard: Sendable {
         for token in tokens {
             guard let value = Decimal(string: token, locale: Locale(identifier: "en_US_POSIX")),
                   allowed.contains(value) else {
-                return rejection
+                return rejection(copy)
             }
         }
         return paragraph

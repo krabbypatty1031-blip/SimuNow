@@ -24,7 +24,7 @@ public enum EvidencePDFAssembler {
         to url: URL
     ) throws {
         #if os(macOS)
-        let guarded = NarrationGuard.filter(report, evidence: evidence)
+        let guarded = NarrationGuard.filter(report, evidence: evidence, copy: copy)
         try writePDF(report: guarded, evidence: evidence, copy: copy, to: url)
         #else
         throw EvidencePDFError.unsupportedPlatform

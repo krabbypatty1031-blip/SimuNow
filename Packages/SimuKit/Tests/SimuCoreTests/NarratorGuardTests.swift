@@ -55,9 +55,16 @@ import PDFKit
     try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("叙述未采用（含证据外数字）"))
+    #expect(text.contains(NarrationGuard.rejection))
     #expect(!text.contains("37"))
     #expect(text.contains(evidence.candidates[0].runID.uuidString))
+
+    let zhURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("simunow-guard-zh-\(UUID().uuidString).pdf")
+    try EvidencePDFAssembler.write(evidence: evidence, report: report, copy: .chinese, to: zhURL)
+    defer { try? FileManager.default.removeItem(at: zhURL) }
+    let zhText = try #require(PDFDocument(url: zhURL)?.string)
+    #expect(zhText.contains(NarrationGuard.rejection(.chinese)))
     #endif
 }
 
@@ -149,7 +156,8 @@ import PDFKit
     #expect(prompt.contains(ReportWriterSkill.openFOAMHeading))
     #expect(prompt.contains(ReportWriterSkill.comparisonHeading))
     #expect(prompt.contains(ReportWriterSkill.adviceHeading))
-    #expect(prompt.contains("全年电费"))
+    #expect(prompt.contains("yearly electricity cost"))
+    #expect(!prompt.contains("全年电费"))
     #expect(!prompt.contains("不得推算全年电费"))
     #expect(!prompt.contains("不是全年电费"))
     let logText = lines.withLock { $0.joined(separator: "\n") }
@@ -172,6 +180,41 @@ import PDFKit
     #expect(text.contains("DeepSeek"))
     #expect(text.contains("Calculation basis"))
     #endif
+}
+
+/// Chinese UI language sends the Chinese system prompt, including the four Chinese headings.
+@Test func deepSeekRequestUsesChinesePromptWhenLanguageIsChinese() async throws {
+    let evidence = try narratorEvidence()
+    let requests = OSAllocatedUnfairLock(initialState: [URLRequest]())
+    let client = DeepSeekReportClient(
+        language: .chinese,
+        keyProvider: { "sk-test-simunow-not-a-real-key" },
+        transport: { request in
+            requests.withLock { $0.append(request) }
+            let payload = #"{"title":"t","summary":"s","sections":[],"caveats":[]}"#
+            let envelope: [String: Any] = ["choices": [["message": ["content": payload]]]]
+            let data = try JSONSerialization.data(withJSONObject: envelope)
+            let response = HTTPURLResponse(
+                url: request.url ?? DeepSeekReportClient.officialBaseURL,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (data, response)
+        }
+    )
+    _ = try #require(await client.generate(evidence))
+    let request = try #require(requests.withLock { $0.first })
+    let body = try JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any]
+    let messages = try #require(body?["messages"] as? [[String: Any]])
+    let prompt = try #require(messages.first?["content"] as? String)
+    #expect(prompt == ReportWriterSkill.systemPrompt(for: .chinese))
+    #expect(prompt.contains(ReportWriterSkill.energyPlusHeading(for: .chinese)))
+    #expect(prompt.contains(ReportWriterSkill.openFOAMHeading(for: .chinese)))
+    #expect(prompt.contains(ReportWriterSkill.comparisonHeading(for: .chinese)))
+    #expect(prompt.contains(ReportWriterSkill.adviceHeading(for: .chinese)))
+    #expect(prompt.contains("全年电费"))
+    #expect(!prompt.contains("yearly electricity cost"))
 }
 
 private func officeDraft() throws -> ProjectDraft {

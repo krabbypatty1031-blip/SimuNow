@@ -1,10 +1,8 @@
 import SwiftUI
 import SimuCore
 
-/// Fixed physical palette for temperature slices. The range comes from the
-/// field's own valid-cell statistics, so two candidates with the same range
-/// show comparable colours; each run states its range in the legend instead
-/// of quietly renormalizing (P4-06 pins the shared range).
+/// Fixed physical palette for temperature slices. A shared comparison
+/// range wins; otherwise the field uses its own passed min/max.
 public struct SlicePalette: Equatable, Sendable {
     /// Coldest valid cell in the field, degrees Celsius.
     public var minC: Double

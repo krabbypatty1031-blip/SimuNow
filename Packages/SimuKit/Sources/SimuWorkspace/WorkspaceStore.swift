@@ -605,9 +605,7 @@ public final class WorkspaceStore {
         candidateRuns.removeAll { $0.identity.runID == runID }
     }
 
-    /// Shared physical colour range across all quality-passed candidate
-    /// slices. Candidates never renormalise individually to hide differences.
-    /// nil when no candidate has a quality-passed slice with valid stats.
+    /// Shared physical colour range: joint min/max of quality-passed slices.
     public var comparisonPaletteRange: (minC: Double, maxC: Double)? {
         let slices = candidateRuns.compactMap(\.slice).filter { $0.quality == "passed" }
         let mins = slices.compactMap(\.stats.minC)

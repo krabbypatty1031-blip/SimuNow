@@ -102,7 +102,12 @@ public struct WorkspaceView: View {
             emptyProjectPane
         } else {
             // The slice only exists for a quality-passed L2 run; nil draws no fake color.
-            SimulationViewport(draft: store.project, field: store.lastFieldSlice, flow: store.lastFlowOverlay)
+            SimulationViewport(
+                draft: store.project,
+                field: store.lastFieldSlice,
+                flow: store.lastFlowOverlay,
+                sharedPalette: nil
+            )
         }
         #else
         NavigationStack {
@@ -110,7 +115,12 @@ public struct WorkspaceView: View {
                 if store.project == nil {
                     emptyProjectPane
                 } else {
-                    SimulationViewport(draft: store.project, field: store.lastFieldSlice, flow: store.lastFlowOverlay)
+                    SimulationViewport(
+                        draft: store.project,
+                        field: store.lastFieldSlice,
+                        flow: store.lastFlowOverlay,
+                        sharedPalette: nil
+                    )
                 }
                 NavigationLink("编辑房间") {
                     RoomEditorForm(store: store)

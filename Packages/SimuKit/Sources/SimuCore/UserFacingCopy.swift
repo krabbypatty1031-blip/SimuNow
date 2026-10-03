@@ -279,4 +279,5 @@ public enum UserFacingCopy: Sendable {
     public static func displayRange(_ min: Double, _ max: Double, unit: String) -> String {
         "\(displayNumber(min)) – \(displayNumber(max)) \(unit)"
     }
+
 }

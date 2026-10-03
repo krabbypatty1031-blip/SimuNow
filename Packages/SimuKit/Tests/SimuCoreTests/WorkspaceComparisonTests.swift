@@ -154,6 +154,7 @@ import SimuWorkspace
     // One store must show them together; move B's record into A's store.
     storeA.candidateRuns.append(contentsOf: storeB.candidateRuns)
     let range = storeA.comparisonPaletteRange
+    // Joint span of both passed slices, not each field's own rainbow.
     #expect(range?.minC == 24.0)
     #expect(range?.maxC == 26.0)
     #expect(storeA.candidatesShareBasis == true)

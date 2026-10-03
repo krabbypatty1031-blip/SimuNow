@@ -2,7 +2,7 @@ import SwiftUI
 import SimuCore
 
 private struct UserFacingCopyKey: EnvironmentKey {
-    static let defaultValue = UserFacingCopy.english
+    static let defaultValue = UserFacingCopy.environmentDefault
 }
 
 extension EnvironmentValues {

@@ -115,6 +115,8 @@ import SimuWorkspace
 @Test func appLanguageDefaultsToChineseAndPersistsInASuite() {
     // Merge decision 2026-10-04: the app ships Chinese-first; English is a toggle.
     #expect(AppLanguage.default == .chinese)
+    #expect(AppLanguage.chinese.locale.identifier == "zh-Hans")
+    #expect(AppLanguage.english.locale.identifier == "en")
     let suiteName = "simunow.tests.appLanguage.\(UUID().uuidString)"
     let suite = UserDefaults(suiteName: suiteName)!
     defer { suite.removePersistentDomain(forName: suiteName) }
@@ -133,8 +135,34 @@ import SimuWorkspace
     store.language = .chinese
     #expect(store.copy.destinationTitle("runs") == "计算结果")
     #expect(store.engineStatus.contains("计算准备") || store.engineStatus.contains("还不能估算"))
+    // Inspector field labels (2026-10-04 live: macOS .inspector kept
+    // English "Wall" / "Apply 出风口" after the toggle because child
+    // editors read the environment default, not store.copy). The copy
+    // the inspector must be given is this one.
+    #expect(store.copy.wall == "墙面")
+    #expect(store.copy.wallTitle(.xMin) == "左墙")
+    #expect(store.copy.source == "来源")
+    #expect(store.copy.sourceTitle(.preset) == "模板预设")
+    #expect(store.copy.startAlongWall == "沿墙起点")
+    #expect(store.copy.endAlongWall == "沿墙终点")
+    #expect(store.copy.heightAboveFloor == "离地高度")
+    #expect(store.copy.topHeight == "上沿高度")
+    #expect(store.copy.terminalTitle(isSupply: true) == "出风口")
+    #expect(store.copy.applyNamed("出风口") == "应用出风口")
     store.language = .english
     #expect(store.copy.destinationTitle("runs") == "Calculation results")
+    #expect(store.copy.wall == "Wall")
+    #expect(store.copy.applyNamed("Supply outlet") == "Apply Supply outlet")
+}
+
+/// The SwiftUI environment key defaults to English. macOS `.inspector`
+/// (and sheets) do not inherit a custom environment unless the presenting
+/// view reapplies it, so a language toggle that only sets the root
+/// environment leaves the right-hand editor on this default.
+@Test func userFacingCopyEnvironmentDefaultIsEnglish() {
+    #expect(UserFacingCopy.environmentDefault.language == .english)
+    #expect(UserFacingCopy.environmentDefault.wall == "Wall")
+    #expect(UserFacingCopy.environmentDefault.applyNamed("出风口") == "Apply 出风口")
 }
 
 @Test func storedAssumptionNotesDisplayInTheUILanguage() throws {

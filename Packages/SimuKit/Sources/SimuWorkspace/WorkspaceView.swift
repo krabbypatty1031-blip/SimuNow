@@ -170,6 +170,7 @@ public struct WorkspaceView: View {
                 }
         }
         .environment(\.userFacingCopy, store.copy)
+        .environment(\.locale, store.language.locale)
         .fileImporter(
             isPresented: $isOpeningPackage,
             allowedContentTypes: [.folder, .json],
@@ -178,7 +179,10 @@ public struct WorkspaceView: View {
             handleImportedURL(result)
         }
         .sheet(isPresented: $isChatPresented) {
+            // Sheets are a separate tree; re-apply so SNer follows the toggle.
             ChatPanel(store: store)
+                .environment(\.userFacingCopy, store.copy)
+                .environment(\.locale, store.language.locale)
         }
         .fileImporter(
             isPresented: $isSavingPackage,
@@ -200,6 +204,8 @@ public struct WorkspaceView: View {
             }
         )) {
             RoomEditorForm(store: store, page: $inspectorPage, column: .detail)
+                .environment(\.userFacingCopy, store.copy)
+                .environment(\.locale, store.language.locale)
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 420)
         }
         #endif

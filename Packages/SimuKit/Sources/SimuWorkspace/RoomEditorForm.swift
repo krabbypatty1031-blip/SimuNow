@@ -1,6 +1,7 @@
 import SwiftUI
 import SimuCore
 import SimuDesignSystem
+import SimuVisualization
 
 /// Which room item is open. The list stays in the sidebar; the editor uses the other column.
 enum InspectorPage: Hashable {
@@ -81,6 +82,19 @@ public struct RoomEditorForm: View {
     }
 
     public var body: some View {
+        // Push store.copy into the environment here, not only at the
+        // window root: macOS `.inspector` is a separate tree and falls
+        // back to UserFacingCopy.environmentDefault (English). Child
+        // editors (WallPicker / NumericField / ApplyButton) read the
+        // environment, so a language toggle that only updates the
+        // section title (store.copy) left the fields in English.
+        columnContent
+            .environment(\.userFacingCopy, copy)
+            .environment(\.locale, store.language.locale)
+    }
+
+    @ViewBuilder
+    private var columnContent: some View {
         switch column {
         case .sidebar:
             listColumn
@@ -941,7 +955,12 @@ private struct ApplyButton: View {
     @Environment(\.userFacingCopy) private var copy
 
     var body: some View {
-        Button(isDirty ? "• \(title)" : title, action: action)
+        // Verbatim: `Button("• \(title)")` is a LocalizedStringKey and the
+        // system locale can rewrite an already-translated title (live
+        // hand-test 2026-10-04: "Apply 出风口" rendered as "Applyly出风口").
+        Button(action: action) {
+            Text(verbatim: isDirty ? "• \(title)" : title)
+        }
             .accessibilityLabel(accessibilityLabel)
             .accessibilityHint(isDirty ? copy.unsavedEditsHint : "")
     }
@@ -1406,15 +1425,17 @@ private struct NumericField: View {
     }
 
     var body: some View {
-        LabeledContent(title) {
+        LabeledContent {
             HStack(spacing: 6) {
-                TextField(title, value: $value, format: InspectorNumberFormat.twoPlaces)
+                TextField("", value: $value, format: InspectorNumberFormat.twoPlaces, prompt: Text(verbatim: title))
                     .multilineTextAlignment(.trailing)
                     .labelsHidden()
-                Text(unit)
+                Text(verbatim: unit)
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }
+        } label: {
+            Text(verbatim: title)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(copy.numericFieldAccessibility(title, unit: unit))
@@ -1426,10 +1447,12 @@ private struct WallPicker: View {
     @Environment(\.userFacingCopy) private var copy
 
     var body: some View {
-        Picker(copy.wall, selection: $wall) {
+        Picker(selection: $wall) {
             ForEach(WallFace.allCases, id: \.self) { face in
-                Text(copy.wallTitle(face)).tag(face)
+                Text(verbatim: copy.wallTitle(face)).tag(face)
             }
+        } label: {
+            Text(verbatim: copy.wall)
         }
         .accessibilityLabel(copy.wall)
     }
@@ -1440,10 +1463,12 @@ private struct SourcePicker: View {
     @Environment(\.userFacingCopy) private var copy
 
     var body: some View {
-        Picker(copy.source, selection: $source) {
+        Picker(selection: $source) {
             ForEach(ParameterSource.allCases, id: \.self) { item in
-                Text(copy.sourceTitle(item)).tag(item)
+                Text(verbatim: copy.sourceTitle(item)).tag(item)
             }
+        } label: {
+            Text(verbatim: copy.source)
         }
         .accessibilityLabel(copy.parameterSource)
     }

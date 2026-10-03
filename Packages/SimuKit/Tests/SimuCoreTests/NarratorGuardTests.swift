@@ -189,6 +189,9 @@ import PDFKit
     #expect(englishPrompt.contains("view and conclusion"))
     #expect(englishPrompt.contains("what it means for the user"))
     #expect(englishPrompt.contains("yearly electricity cost"))
+    #expect(englishPrompt.contains("for the bill or for how the seats feel"))
+    #expect(englishPrompt.contains("do not invent predicted numbers"))
+    #expect(englishPrompt.contains("EnergyPlus with the bill"))
     #expect(!englishPrompt.contains("不得推算全年电费"))
     #expect(!englishPrompt.contains("不是全年电费"))
     #expect(englishPrompt.contains("heading field of each section must be exactly"))
@@ -196,6 +199,9 @@ import PDFKit
     let chinesePrompt = ReportWriterSkill.systemPrompt(for: .chinese)
     #expect(chinesePrompt.contains("顾问"))
     #expect(chinesePrompt.contains(ReportWriterSkill.planSummaryHeading(for: .chinese)))
+    #expect(chinesePrompt.contains("为了电费还是为了体感"))
+    #expect(chinesePrompt.contains("不要编预测数字"))
+    #expect(chinesePrompt.contains("电费用 EnergyPlus"))
     let logText = lines.withLock { $0.joined(separator: "\n") }
     #expect(!logText.contains(secret))
 

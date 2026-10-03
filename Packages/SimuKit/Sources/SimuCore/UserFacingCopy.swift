@@ -65,6 +65,11 @@ public struct UserFacingCopy: Sendable, Equatable {
 
     public static let english = UserFacingCopy(language: .english)
     public static let chinese = UserFacingCopy(language: .chinese)
+    /// What `@Environment(\.userFacingCopy)` reads when no ancestor set it.
+    /// macOS `.inspector` and sheets must re-inject `store.copy`; otherwise
+    /// the right-hand editor stays on this English default after a language
+    /// toggle (live hand-test 2026-10-04).
+    public static let environmentDefault = UserFacingCopy.english
 
     public init(language: AppLanguage = .english) {
         self.language = language

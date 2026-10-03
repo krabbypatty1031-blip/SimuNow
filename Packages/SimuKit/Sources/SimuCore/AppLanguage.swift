@@ -9,6 +9,11 @@ public enum AppLanguage: String, CaseIterable, Codable, Sendable, Identifiable, 
 
     public var id: String { rawValue }
 
+    /// SwiftUI / Foundation locale that matches this UI language. Applied
+    /// next to `userFacingCopy` so system widgets and LocalizedStringKey
+    /// lookups follow the in-app toggle, not only the OS language.
+    public var locale: Locale { Locale(identifier: rawValue) }
+
     /// Name of this language in that language, so the picker is readable before the UI switches.
     public var nativeName: String {
         switch self {

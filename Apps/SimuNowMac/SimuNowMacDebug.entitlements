@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Debug hand-test only. App Sandbox cannot exec user-selected
+         EnergyPlus (2026-10-03: process-exec deny; temporary-exception.sbpl
+         crashes libsecinit at launch). Release keeps sandbox via
+         SimuNowMac.entitlements. Production path is a signed helper. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

@@ -94,18 +94,27 @@ private func repoRoot() -> URL {
     #expect(env["SIMUNOW_ENGINES_ROOT"] == "/tmp/engines")
 }
 
-@Test func macEntitlementsKeepSandboxAndAllowProcessExec() throws {
-    // User-selected file R/W does not grant process-exec (2026-10-03 hand
-    // test: kernel deny process-exec* of user-selected EnergyPlus). The
-    // temporary exception widens exec without turning the file sandbox off.
+@Test func macReleaseEntitlementsKeepSandbox() throws {
+    // Release keeps the file sandbox. temporary-exception.sbpl is not used:
+    // on this OS it crashes libsecinit at launch (2026-10-03 hand test).
     let url = repoRoot().appendingPathComponent("Apps/SimuNowMac/SimuNowMac.entitlements")
     let plist = try PropertyListSerialization.propertyList(
         from: Data(contentsOf: url),
         format: nil
     ) as? [String: Any]
     #expect(plist?["com.apple.security.app-sandbox"] as? Bool == true)
-    let lines = (plist?["com.apple.security.temporary-exception.sbpl"] as? [String]) ?? []
-    #expect(lines.contains { $0.contains("process-exec") })
+    #expect(plist?["com.apple.security.temporary-exception.sbpl"] == nil)
+}
+
+@Test func macDebugEntitlementsSkipSandboxForEngineExec() throws {
+    // Debug hand-test only: App Sandbox denies process-exec of
+    // user-selected EnergyPlus, and the sbpl exception aborts launch.
+    let url = repoRoot().appendingPathComponent("Apps/SimuNowMac/SimuNowMacDebug.entitlements")
+    let plist = try PropertyListSerialization.propertyList(
+        from: Data(contentsOf: url),
+        format: nil
+    ) as? [String: Any]
+    #expect(plist?["com.apple.security.app-sandbox"] == nil)
 }
 
 @MainActor

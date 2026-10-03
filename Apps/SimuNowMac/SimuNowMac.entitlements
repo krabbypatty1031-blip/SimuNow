@@ -10,24 +10,5 @@
     <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
-    <!-- User-selected file R/W does not grant process-exec. 2026-10-03 hand
-         test: kernel deny(1) process-exec* of the user-selected EnergyPlus
-         binary (no quarantine this time). Production path is a signed helper;
-         this temporary exception keeps the file sandbox and only widens
-         exec/fork plus the Docker Desktop unix socket L2 needs. -->
-    <key>com.apple.security.temporary-exception.sbpl</key>
-    <array>
-        <string>(allow process-exec*)</string>
-        <string>(allow process-fork)</string>
-        <string>(allow network-outbound (unix-socket))</string>
-    </array>
-    <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
-    <array>
-        <string>/var/run/docker.sock</string>
-    </array>
-    <key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
-    <array>
-        <string>/.docker/run/docker.sock</string>
-    </array>
 </dict>
 </plist>

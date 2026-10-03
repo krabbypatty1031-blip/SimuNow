@@ -38,6 +38,7 @@ def generate():
     configs = {name: ref(f"Configurations/{name}.xcconfig", "text.xcconfig") for name in ("Shared", "macOS", "iOS")}
     root_refs = list(sources.values()) + [assets] + list(configs.values())
     root_refs.append(ref("Apps/SimuNowMac/SimuNowMac.entitlements", "text.plist.entitlements"))
+    root_refs.append(ref("Apps/SimuNowMac/SimuNowMacDebug.entitlements", "text.plist.entitlements"))
     for path in ("README.md", "AGENTS.md"):
         root_refs.append(ref(path, "net.daringfireball.markdown"))
     for path in ("Plans", "Protocols", "Backend", "Fixtures", "Scripts", "Packages/SimuKit"):
@@ -79,7 +80,12 @@ def generate():
         build_configs = []
         for mode in ("Debug", "Release"):
             sdk = 'SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; COMBINE_HIDPI_IMAGES = YES;' if platform == "macOS" else 'SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;'
-            build_configs.append(obj(f"{name}-{mode}", f"isa = XCBuildConfiguration; baseConfigurationReference = {configs[platform]}; buildSettings = {{ {sdk} }}; name = {mode};"))
+            # Debug Mac hand-test skips the file sandbox so user-selected
+            # EnergyPlus can exec. Release keeps SimuNowMac.entitlements.
+            extra = ""
+            if name == "SimuNowMac" and mode == "Debug":
+                extra = " CODE_SIGN_ENTITLEMENTS = Apps/SimuNowMac/SimuNowMacDebug.entitlements;"
+            build_configs.append(obj(f"{name}-{mode}", f"isa = XCBuildConfiguration; baseConfigurationReference = {configs[platform]}; buildSettings = {{ {sdk}{extra} }}; name = {mode};"))
         config_list = obj(f"{name}-config-list", f"isa = XCConfigurationList; buildConfigurations = ({','.join(build_configs)},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;")
         target = obj(name, f'isa = PBXNativeTarget; buildConfigurationList = {config_list}; buildPhases = ({",".join(phases)},); buildRules = (); dependencies = (); name = {name}; packageProductDependencies = ({package_product},); productName = SimuNow; productReference = {product}; productType = "com.apple.product-type.application";')
         targets.append(target)

@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-03",
+  "slide": 7,
+  "source": "AGENTS.md",
+  "sourceSha256": "e6cf3a86907577879f16d95a17a1a789536bd7aaf45eb5ccc1cc6630d4cd6946",
+  "snapshot": "Artifacts/PitchDeck-LocalPreview/AGENTS.source.md",
+  "image": "PitchAssets/local-preview-office.png",
+  "promptSet": "PitchAssets/local-preview-imagegen-prompts.json",
+  "status": "Product concept under development",
+  "analysisBasis": [
+    "rulePreview",
+    "simplifiedEstimate"
+  ],
+  "numericalVerification": "Later optional extension",
+  "computedResults": null
+}

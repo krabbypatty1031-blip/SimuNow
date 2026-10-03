@@ -89,12 +89,14 @@ public enum EstimateComparisonBuilder {
         .onChange(of:input){_,_ in buildTask?.cancel();buildID=UUID();busy=false;if snapshot != nil {error="输入或侧文件已更新；下方为原固定比较，需重新冻结后评价当前方案。"}}
     }
     private func build() {
-        let frozen=input,registry=store.modelRegistry;busy=true;error=nil
+        let frozen=input,registry=store.modelRegistry,instance=store.documentInstanceID;busy=true;error=nil
         buildTask?.cancel();buildID=UUID();let token=buildID
         buildTask=Task { defer{if buildID==token{busy=false}};do {
             let worker=Task.detached{try EstimateComparisonBuilder.build(frozen,registry:registry)}
             let value=try await withTaskCancellationHandler(operation:{try await worker.value},onCancel:{worker.cancel()})
-            guard !Task.isCancelled,buildID==token,input==frozen else{return};snapshot=value
+            guard !Task.isCancelled,buildID==token,input==frozen else{return}
+            try store.validateNativeDocumentContext(instanceID:instance,sidefileRevision:frozen.revision)
+            snapshot=value
         }catch{if !Task.isCancelled,buildID==token{self.error=error.localizedDescription}} }
     }
 }

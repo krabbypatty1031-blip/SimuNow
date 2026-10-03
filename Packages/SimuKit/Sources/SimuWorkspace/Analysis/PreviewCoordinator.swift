@@ -183,4 +183,11 @@ public final class PreviewCoordinator {
         currentScenarioID = nil
         readiness = nil
     }
+    public func resetSession() {
+        stop()
+        enabled = false
+        lastInput = nil
+        inputFailure = nil
+        analysis.resetSession()
+    }
 }

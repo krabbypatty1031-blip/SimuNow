@@ -13,6 +13,8 @@ public final class WorkspaceStore {
     public private(set) var templateID: String?
     public private(set) var templateVersion: Int?
     public private(set) var revision: UInt64 = 0
+    public private(set) var documentInstanceID = UUID()
+    public private(set) var nativeSidefileRevision = UUID()
     public private(set) var analysisConfiguration: AnalysisConfigurationStore?
     public private(set) var capturedInput: ScenarioInputSnapshot?
     public var presentedError: String?
@@ -28,6 +30,9 @@ public final class WorkspaceStore {
     private var redoHistory: [WorkspaceHistoryEntry] = []
     @ObservationIgnored public var onDocumentChange: (@MainActor (WorkspaceProjectState) -> Void)?
     @ObservationIgnored public var validateDocumentChange: (@MainActor (WorkspaceProjectState) throws -> Void)?
+    @ObservationIgnored public var validateNativeDocumentBinding: (@MainActor @Sendable (UUID, UUID?) throws -> Void)?
+    @ObservationIgnored private var integrityCache: (revision: UInt64, report: ValidationReport)?
+    @ObservationIgnored private var selectedReportCache: (revision: UInt64, scenarioID: UUID, report: ValidationReport)?
 
     public init(simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
                 modelRegistry: ModelRegistry = .builtIn, projectValidator: ProjectValidator = ProjectValidator(),
@@ -52,22 +57,49 @@ public final class WorkspaceStore {
     /// separately for input preparation so unfinished candidates do not block it.
     public var integrityReport: ValidationReport {
         guard let project else { return .init(issues: []) }
-        return report(for: project)
+        if let cached = integrityCache, cached.revision == revision { return cached.report }
+        let value = report(for: project)
+        integrityCache = (revision, value)
+        return value
     }
     public var selectedScenarioReport: ValidationReport {
         guard var projected = project, let id = selectedScenarioID,
               let index = projected.scenarios.firstIndex(where: { $0.id == id }) else {
             return .init(issues: [.init(code: "scenario_required", path: "/scenarios", blocks: [.inputPreparation], message: "选择一个方案。")])
         }
+        if let cached = selectedReportCache, cached.revision == revision, cached.scenarioID == id { return cached.report }
         projected.scenarios = [projected.scenarios[index]]
         let result = report(for: projected)
-        return .init(issues: result.issues.map { issue in
+        let value = ValidationReport(issues: result.issues.map { issue in
             let prefix = "/scenarios/0"
             let path = issue.path == prefix || issue.path.hasPrefix(prefix + "/")
                 ? "/scenarios/\(index)" + issue.path.dropFirst(prefix.count) : issue.path
             return .init(code: issue.code, path: path, entityID: issue.entityID,
                          severity: issue.severity, blocks: issue.blocks, message: issue.message)
         })
+        selectedReportCache = (revision, id, value)
+        return value
+    }
+
+    public func updateNativeDocumentContext(instanceID: UUID, sidefileRevision: UUID) {
+        if documentInstanceID != instanceID {
+            preview.resetSession()
+            estimates.resetSession()
+            undoHistory.removeAll()
+            redoHistory.removeAll()
+            capturedInput = nil
+            revision &+= 1
+        }
+        documentInstanceID = instanceID
+        nativeSidefileRevision = sidefileRevision
+    }
+
+    /// Check both local session state and the latest native binding. The latter
+    /// catches replacements before SwiftUI has delivered its onChange callback.
+    public func validateNativeDocumentContext(instanceID: UUID, sidefileRevision: UUID? = nil) throws {
+        guard documentInstanceID == instanceID else { throw NativeDocumentSessionError.replaced }
+        if let sidefileRevision, nativeSidefileRevision != sidefileRevision { throw NativeDocumentSessionError.attachmentsChanged }
+        try validateNativeDocumentBinding?(instanceID, sidefileRevision)
     }
 
     /// Installs a document read by the document layer. This also accepts repairable
@@ -133,12 +165,18 @@ public final class WorkspaceStore {
     }
 
     public func undo() {
-        guard let previous = undoHistory.popLast(), let project else { return }
+        guard let previous = undoHistory.last, let project else { return }
+        do { try validateDocumentChange?(previous.state) }
+        catch { presentedError = error.localizedDescription; return }
+        undoHistory.removeLast()
         redoHistory.append(.init(name: previous.name, state: state(for: project)))
         install(previous.state)
     }
     public func redo() {
-        guard let next = redoHistory.popLast(), let project else { return }
+        guard let next = redoHistory.last, let project else { return }
+        do { try validateDocumentChange?(next.state) }
+        catch { presentedError = error.localizedDescription; return }
+        redoHistory.removeLast()
         undoHistory.append(.init(name: next.name, state: state(for: project)))
         install(next.state)
     }

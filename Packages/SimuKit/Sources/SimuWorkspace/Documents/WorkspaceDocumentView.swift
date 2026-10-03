@@ -37,6 +37,7 @@ public struct WorkspaceDocumentView: View {
         store.load(value.project, baselineScenarioID: value.metadata.baselineScenarioID,
                    templateID: value.metadata.templateID, templateVersion: value.metadata.templateVersion,
                    analysisConfiguration: value.analysisConfigurationData == nil ? nil : try? value.analysisConfigurationStore())
+        store.updateNativeDocumentContext(instanceID: value.documentInstanceID, sidefileRevision: value.nativeSidefileRevision)
         _store = State(initialValue: store)
     }
     public var body: some View {
@@ -45,6 +46,7 @@ public struct WorkspaceDocumentView: View {
         }, onImportJSON: { importingJSON = true }, onImportWeather: { id in
             weatherScenarioID = id; weatherRevision = store.revision; importingWeather = true
         })
+        .id(document.documentInstanceID)
         .overlay(alignment: .bottom) {
             if busy { ProgressView("正在读取文件…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)).padding() }
         }
@@ -52,6 +54,8 @@ public struct WorkspaceDocumentView: View {
         .onChange(of: document.project) { _, _ in synchronizeExternalChanges() }
         .onChange(of: document.analysisConfigurationData) { _, _ in synchronizeExternalChanges() }
         .onChange(of: document.metadata) { _, _ in synchronizeExternalChanges() }
+        .onChange(of: document.documentInstanceID) { _, _ in synchronizeExternalChanges() }
+        .onChange(of: document.nativeSidefileRevision) { _, _ in synchronizeExternalChanges() }
         .fileImporter(isPresented: $importingJSON, allowedContentTypes: [.json]) { result in
             switch result {
             case .success(let url): importJSON(url, migrating: false)
@@ -95,30 +99,52 @@ public struct WorkspaceDocumentView: View {
     private func connect() {
         // Capture the native binding alone, avoiding store -> callback -> view -> store.
         let documentBinding = $document
-        store.persistNativeAnalysis = { artifact in
-            documentBinding.wrappedValue = try documentBinding.wrappedValue.appendingNativeAnalysis(artifact,expectedProjectID: artifact.manifest.projectID)
+        let instance = document.documentInstanceID
+        store.updateNativeDocumentContext(instanceID: instance, sidefileRevision: document.nativeSidefileRevision)
+        store.validateNativeDocumentBinding = { expectedInstance, expectedRevision in
+            try documentBinding.wrappedValue.validateDocumentInstance(expectedInstance)
+            if let expectedRevision, documentBinding.wrappedValue.nativeSidefileRevision != expectedRevision {
+                throw NativeDocumentSessionError.attachmentsChanged
+            }
         }
-        store.persistCostEvaluation = { artifact in
-            documentBinding.wrappedValue = try documentBinding.wrappedValue.appendingCostEvaluation(artifact,expectedProjectID:artifact.record.projectID)
+        store.persistNativeAnalysis = { [weak store] artifact in
+            try documentBinding.wrappedValue.validateDocumentInstance(instance)
+            let next = try documentBinding.wrappedValue.appendingNativeAnalysis(artifact,expectedProjectID: artifact.manifest.projectID)
+            documentBinding.wrappedValue = next
+            store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
+        }
+        store.persistCostEvaluation = { [weak store] artifact in
+            try documentBinding.wrappedValue.validateDocumentInstance(instance)
+            let next = try documentBinding.wrappedValue.appendingCostEvaluation(artifact,expectedProjectID:artifact.record.projectID)
+            documentBinding.wrappedValue = next
+            store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
         }
         store.validateDocumentChange = { state in
+            try documentBinding.wrappedValue.validateDocumentInstance(instance)
             _ = try documentBinding.wrappedValue.applyingWorkspaceState(state)
         }
-        store.onDocumentChange = { state in
+        store.onDocumentChange = { [weak store] state in
             // The synchronous preflight immediately precedes this callback. No asynchronous writer intervenes.
-            if let next = try? documentBinding.wrappedValue.applyingWorkspaceState(state) { documentBinding.wrappedValue = next }
+            guard (try? documentBinding.wrappedValue.validateDocumentInstance(instance)) != nil else { return }
+            if let next = try? documentBinding.wrappedValue.applyingWorkspaceState(state) {
+                documentBinding.wrappedValue = next
+                store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
+            }
         }
     }
     private func synchronizeExternalChanges() {
-        guard store.project != document.project || store.baselineScenarioID != document.metadata.baselineScenarioID ||
+        let replaced = store.documentInstanceID != document.documentInstanceID
+        let inputChanged = store.project != document.project || store.baselineScenarioID != document.metadata.baselineScenarioID ||
                 store.templateID != document.metadata.templateID || store.templateVersion != document.metadata.templateVersion ||
-                store.analysisConfiguration != (document.analysisConfigurationData == nil ? nil : try? document.analysisConfigurationStore()) else { return }
+                store.analysisConfiguration != (document.analysisConfigurationData == nil ? nil : try? document.analysisConfigurationStore())
+        store.updateNativeDocumentContext(instanceID: document.documentInstanceID, sidefileRevision: document.nativeSidefileRevision)
+        guard replaced || inputChanged else { return }
         let selection = store.selectedScenarioID
         store.load(document.project, baselineScenarioID: document.metadata.baselineScenarioID,
                    templateID: document.metadata.templateID, templateVersion: document.metadata.templateVersion,
                    analysisConfiguration: document.analysisConfigurationData == nil ? nil : try? document.analysisConfigurationStore())
-        if document.project.scenarios.contains(where: { $0.id == selection }) { store.selectedScenarioID = selection }
-        notice = "文档收到外部更新，已载入最新输入。正在编辑的旧草稿仍可查看；请关闭并重新打开表单后继续修改。"
+        if !replaced, document.project.scenarios.contains(where: { $0.id == selection }) { store.selectedScenarioID = selection }
+        notice = replaced ? "已载入新的文档实例；结果和编辑会话已重新建立。" : "文档收到外部更新，已载入最新输入。正在编辑的旧草稿仍可查看；请关闭并重新打开表单后继续修改。"
         connect()
     }
     private func importJSON(_ url: URL, migrating: Bool) {
@@ -149,7 +175,8 @@ public struct WorkspaceDocumentView: View {
             defer { busy = false; weatherScenarioID = nil; weatherRevision = nil }
             do {
                 let imported = try await io.importWeather(from: url, into: original, scenarioID: id)
-                guard store.revision == revision, document.project == original.project,
+                guard store.revision == revision, document.documentInstanceID == original.documentInstanceID,
+                      document.project == original.project,
                       document.metadata == original.metadata,
                       document.preservedEntries == original.preservedEntries else {
                     throw DocumentWorkflowError.staleImport

@@ -64,13 +64,15 @@ public struct RoomWizardView: View {
                     LabeledContent("房间", value: draft.name)
                     LabeledContent("用途", value: spaceType == .office ? "办公室" : "教室")
                     LabeledContent("门窗", value: "\(openings.count) 个")
-                    Text("将创建一个基准方案。几何和物理参数可以明确标记未知；输入不完整时不能计算。")
+                    Text("将创建一个基准方案。几何和物理参数可以明确标记未知；本地预览和各类估算分别检查所需输入。")
                         .font(.caption).foregroundStyle(.secondary)
                     Text("围护暴露和边界模式尚未配置；请在使用条件中按实际情况设置。窗参数、通风与环境参数保持未知。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("未知、假设与预设") {
-                    if let project = try? buildProject() { ParameterAssumptionsView(project: project, registry: registry) }
+                Section {
+                    DisclosureGroup("查看未知、假设与预设") {
+                        if let project = try? buildProject() { ParameterAssumptionsView(project: project, registry: registry) }
+                    }
                 }
             }
             if let error { Section("请修正后继续") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
@@ -82,6 +84,7 @@ public struct RoomWizardView: View {
                 }
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("创建矩形房间")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDiscard = true } } }
         .interactiveDismissDisabled()

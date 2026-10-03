@@ -42,6 +42,7 @@ public final class ThermalEstimateCoordinator {
             guard let project=next.project,let id=next.scenarioID else { return ([:],[:],nil) }
             var requests:[AnalysisKind:LocalAnalysisRequest]=[:],reports:[AnalysisKind:AnalysisReadiness]=[:],subtotal:PowerDraftSubtotal?
             for kind in [AnalysisKind.powerEstimate,.steadyHeatBalance] {
+                if Task.isCancelled { return ([:],[:],nil) }
                 let config=next.configuration?.configuration(scenarioID:id,kind:kind)
                 let report=AnalysisReadinessEvaluator(registry:registry).evaluate(project:project,scenarioID:id,capability:AnalysisCapability(rawValue:kind.rawValue)!,configuration:config,additionalIssues:next.additionalIssues)
                 reports[kind]=report
@@ -65,7 +66,9 @@ public final class ThermalEstimateCoordinator {
     public func evaluateCost(configuration:CostEvaluationConfiguration,parent:NativeAnalysisArtifact,entries:[String:ProjectPackageEntry] = [:],persist:@escaping @MainActor @Sendable (NativeCostEvaluationArtifact)throws->Void) {
         costTask?.cancel();let token=generation;evaluatingCost=true;error=nil;costPersistence = .notSaved
         let worker=Task.detached { () throws -> (CostEvaluationRecord,NativeCostEvaluationArtifact?,String?) in
+            try Task.checkCancellation()
             let record=try CostEvaluator.evaluate(request:parent.request,result:parent.result,configuration:configuration)
+            try Task.checkCancellation()
             do { return (record,try NativeCostEvaluationCodec.make(record,parent:parent,entries:entries),nil) }
             catch { return (record,nil,String(describing:error)) }
         }
@@ -81,4 +84,9 @@ public final class ThermalEstimateCoordinator {
         }
     }
     public func stop() { generation=UUID();validationTask?.cancel();costTask?.cancel();validationTask=nil;costTask=nil;validating=false;evaluatingCost=false;power.stop();heat.stop();input=nil;prepared=[:] }
+    public func resetSession() {
+        stop()
+        power.resetSession();heat.resetSession()
+        readiness=[:];draftSubtotal=nil;cost=nil;costPersistence = .notSaved;error=nil
+    }
 }

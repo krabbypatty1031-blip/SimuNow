@@ -1,69 +1,53 @@
 # 数据与文件契约
 
-## 当前实现与扩展边界
+## 已有协议与新计划边界
 
-P0 draft/request/receipt 保留。P2-01 新增 ProjectDocument v2 与 ScenarioInputSnapshot，Swift/Python/JSON Schema、迁移与输入校验已实现，见 [项目模型 v2](../../Protocols/project-model-v2.md)。Draft 不包含几何，通过显式迁移生成未完成项目；场景快照尚不是可执行 RunInput，P3 扩展引擎与求解设置和输入哈希。
-协议文件是数值边界的唯一依据；display USDZ 只做展示，求解器使用经过简化和验证的几何。
+P2 已实现 ProjectDocument v2、ScenarioInputSnapshot v2 与 `.simunow` 包 v1，见 [项目契约](../../Protocols/project-model-v2.md) 和 [包契约](../../Protocols/project-package-v1.md)。包实际包含 project.json、metadata.json、天气 assets 和保留的不透明附件；不把旧目标目录布局描述为当前实现。
 
-## 项目包
+继续复用完整输入、来源和快照。P0 SimulationRequest 目前仅有 identity/fidelity，RunReceipt 没有数值结果；不能直接承载本地方法。本页命名均为N1待实现的设计，未发布schema。详细字段、canonical字节约定、事件/缓存/包预算以[AI执行规范](10-ai-execution-guide.md)为准，实施时在独立协议中最终冻结。
 
-```text
-Project.simunow/
-  project.json                  当前项目、schema 与参数来源
-  geometry/                     语义面、障碍物、坐标转换
-  assets/room.usdz               可选展示资产
-  scenarios/<scenario-id>.json   设计变量和约束覆盖
-  measurements/                 匿名温湿度/风速/CO2/功率
-  runs/<run-id>/
-    input.json                  不可变物理输入快照
-    status.json                 状态快照
-    events.jsonl                单行事件流
-    results.json                有单位指标、质量与假设
-    logs/                       原始求解与异常日志
-    fields/header.json          网格与格式说明
-    fields/*.bin                float32 场与掩码
-```
+## 本地分析契约
 
-上面是目标文件包格式。P2-01 仅建立纯 codec/迁移/快照；磁盘原子保存与导入仍为 P2-04。
+| 值类型（拟定） | 内容与不变量 |
+|---|---|
+| AnalysisMethod | kind、版本、结果等级；首期 airflowPreview、powerEstimate、steadyHeatBalance |
+| AnalysisReadiness | 按方法列出阻断/警告、字段路径、实体身份、支持范围 |
+| AnalysisConfigurationStore | storeVersion/projectID、按scenarioID索引的method配置；与项目输入同一撤销事务 |
+| ResolvedAnalysisInput | 原始场景快照、显式采用的预设/覆盖、方法配置、数据出处；提交后不可变 |
+| LocalAnalysisRequest | requestVersion、RunIdentity、方法、resolved input、资源上限 |
+| LocalAnalysisEvent | runID、scenarioID、sequence、stage、进度或终态；AsyncStream 值事件 |
+| LocalAnalysisResult | identity、method/version、状态、检查、假设、excludedEntities、缺失原因、路径或聚合指标 |
+| SceneDescriptor | domain Z-up 几何与 UUID、显示符号、路径；不含 Entity、UI 类型或热负荷算法 |
+| ComparisonSnapshot | 固定基准/候选 run、评价配置 hash、时段/单位/假设一致性、可比较项及解释 |
 
-## 完整模型设计
+AnalysisMethod 与旧 l0…l3 enum 并存，禁止把规则预览映射成 l2。检查通过的语义是“本方法输入/算法检查通过”，与物理验证、现场校准等级分开。任务成功、检查、freshness 保持三条轴；原有 QualityState.passed 不能单独表示现实可信。
 
-| 实体 | 必需信息 | 校验 |
-|---|---|---|
-| Project | schema、ID、坐标、长度单位、模板 | 支持版本、唯一 ID |
-| Room | 墙门窗、封闭边界、高度、朝向、室外关系 | 法线、相交、开口归属 |
-| Obstacle | 简化几何、位置、材料或热条件 | 不穿墙、最小特征尺寸 |
-| HVAC | 设备型式、送回风口、风量、容量、功率、性能来源 | 流量、方向、范围与数量 |
-| Control | 设定、传感位置、时间表、控制模式 | 不把设定当送风温度 |
-| Occupant | 座位、人数、met、clo、显潜热、时间表 | 采样点在流体域 |
-| Envelope | 构造、U 值、玻璃 SHGC、遮阳 | SHGC 与透光率分开 |
-| Ventilation | 新风、排风、渗风、门窗 | 循环风与室外交换分开 |
-| Environment | 天气、代表日、时区、户外参数 | 文件哈希、日期与工况 |
-| Cost | 电价、时段、币种、设备/安装报价来源 | 缺失不填零费用 |
+## 能力检查与未知值
 
-每个不确定物理值带 value / unit / source / reference / uncertainty；区间必须有含义和来源。
+几何查看仅需有效几何；气流规则还需合法风口方向和支持对象。墙体 U、送风温度、COP 或天气缺失不能阻断仅需几何的预览。费用方法必须独立检查功率、时段和费率。
 
-## 任务事件
+复用已有语义校验的相关项，不关闭校验或用默认值掩盖问题。保留原 inputPreparation 为将来的严格引擎门槛。结构损坏/非法单位/越界仍阻断相关方法；未知几何影响路径时必须阻断或显式限定可分析范围。
 
-协议 version、run_id、scenario_id、input_hash、sequence、timestamp、event_type、stage、payload。
-事件类型：accepted、progress、log、quality、completed、failed、cancelled。求解阶段用 iteration 与监测量，不把残差当总进度百分比。
-stdout 只发 JSONL；stderr 发诊断。事件写入先完成单行再刷新。客户端拒绝错 run、过期 sequence、未知 schema；未知可选字段采用明确兼容策略。
-Request 引用项目快照相对路径与内容哈希。取消幂等；拒绝新任务和取消执行中任务分开；不吞异常。
+用户采用假设时保存假设 ID、版本、取值/区间、单位、来源、覆盖原因；不覆盖项目中的 unknown。缺失结果采用 missing(reason)，不是 0。风档类别不是 VolumeFlow；无量纲 pathStrength 不是 Speed；规则覆盖标签不是 ComfortMetric。
 
-## 结果格式
+## 哈希、缓存与比较
 
-指标保存 name、value 或 missing、unit、aggregation、sample_ids、method、fidelity、quality、assumptions。null/缺失不作为 0。
-舒适位置指标、代表日电耗和费用附各自时间范围；跨口径结果不能直接求节省百分比。
-报告引用 run，而不是读取不断变化的编辑对象。
+N1 定义并测试规范化编码：类型tag/长度前缀、稳定UTF-8键序、数组语义顺序、有限Double二进制/-0、未知数字原token；保存方法版本及解析后的实际假设。禁止使用 Swift hashValue 作为持久身份。
 
-## 场数据格式
+分别保存完整证据snapshotHash、方法新鲜度inputHash、计算复用computationHash、费用/比较evaluationHash。计算缓存key覆盖几何、所选场景相关输入、方法/规则版本、预设实际值、路径分辨率/seed，并限定project/scenario/method命名空间；首版不跨方案重绑定实体载荷。相机、颜色、动画播放时间和标签不改变物理/规则 key。功率估算 key 不必因风向改变而失效；必须通过相关字段投影测试证明。
 
-Header 至少包含 version、origin_m、spacing_m、dimensions、axis_order、coordinate_system、channels、units、dtype、endianness、validity_mask、payload_bytes、checksum。
-约定 float32 little-endian；展平顺序 i + nx*(j + ny*k)，x 变化最快；channel 的交错/独立布局必须明确。温度显示格式统一 °C，OpenFOAM K 只在 adapter 内转换。
-向量转换同时处理位置、方向与重力；invalid mask 排除实体和域外。加载前核对文件长度与校验和。
-显示网格用于渲染；定量座位指标源于原始求解网格，避免显示降采样改变量化结果。
+费用评价另有 evaluationHash，包含时段、电价、币种和方法；分享含匿名化配置。复用计算结果时生成当前请求自己的 run 归属，不把基准 runID 贴到候选上。未知扩展、天气/数据文件如参与方法则纳入内容哈希。
 
-## 版本与哈希
+## 项目包与持久化
 
-规范化序列化物理输入，再生成 SHA-256；排除相机、色标、更新时间等展示字段。加入天气、设备曲线、solver 设置和版本。
-新增必须字段或语义变化升 schema；同时保留 migration 和旧夹具。不能只改 Swift 模型忘记 Python 与协议。
+计划以`analysis/configuration.json`保存按方案索引的显式方法配置，以`runs/<run-id>/native-analysis/{input.json,result.json,manifest.json}`保存小型分析证据；路径含于result，不另保存逐帧动画。manifest声明owner/版本/身份/相对名/长度/hash。费用在run下evaluations/<evaluation-hash>.json追加至manifest，input/result不改；固定比较保存为analysis/comparisons/<comparison-id>.json，独立owner/version及bodyHash。相机/选择为独立显示状态，不进入物理模型或分析输入undo。N1-05先实现artifact边界，N5-03验收完整文档事务与保存/重开。
+
+metadata.json v1 当前拒绝未知键，不直接添加 analysis 或 view 字段；新增侧文件或升级包版本都需兼容决策和迁移测试。DocumentGroup 管理的包只通过文档事务保存，不从分析 actor 向同一 URL 写文件。运行结果通过 Sendable 值交接到文档层，预算失败保留原包和编辑输入。
+
+当前包默认上限为 4096 条目、32 层、64 MiB 单文件、256 MiB 全包；P2 以值保存附件，会占用内存。本地路径采用紧凑数组、有限历史，首版不保存逐帧动画或稠密体积场。原生input/result/manifest初始上限为8MiB/2MiB/64KiB，配置Store≤1MiB、费用/比较单项≤256KiB，已识别全部分析侧文件累计32MiB；超过时保留原包并标结果未保存。规模增加后另立流式artifact store，不默认扩大上限。未知/未来记录无损保留；外部侧文件更新与输入/config统一撤销按执行规范处理。
+
+## 跨语言与未来场数据
+
+共享 ProjectDocument 字段变化同步 model spec、Swift Codable、Python、schema、迁移和 contracts；App 专属本地 request/result 使用独立 schema，由 Swift 与独立 schema validator 验证，Backend 不必实现同一算法。消费者安装 App 不需要 Python，研发契约检查仍可使用锁定 Python 环境。
+
+N3 不要求二进制场。若 N6 引入原生网格/外部结果，header 必须写坐标、单位、origin、spacing、dimensions、轴序、float32/endian、mask、长度和 hash；真实速度场与规则方向场使用不同 channel/方法。墙和家具内的 invalid 不当作零参与统计。

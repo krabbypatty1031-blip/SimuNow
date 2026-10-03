@@ -1,57 +1,59 @@
 # 系统架构
 
-## 模块与依赖
+## 主线与模块
 
 ```mermaid
 flowchart TD
-  Mac[Mac App] --> Workspace[SimuWorkspace]
-  iOS[iOS App] --> Workspace
+  Mac[Mac App] --> Workspace[SimuWorkspace 文档与工作流]
+  Mobile[iPhone / iPad App] --> Workspace
+  Workspace --> Core[SimuCore 模型与结果值]
+  Workspace --> Simulation[SimuSimulation 本地分析 actor]
+  Workspace --> Visualization[SimuVisualization 场景与 RealityKit]
+  Workspace --> Reporting[SimuReporting 证据输出]
   Workspace --> Design[SimuDesignSystem]
-  Workspace --> Viz[SimuVisualization]
-  Workspace --> Client[SimuSimulation]
-  Workspace --> Reporting[SimuReporting]
-  Viz --> Core[SimuCore]
-  Client --> Core
+  Simulation --> Core
+  Visualization --> Core
   Reporting --> Core
-  Client -. Mac执行适配 .-> Worker[Python worker]
-  Client -. 后续iOS远程适配 .-> Service[机构计算节点]
-  Worker --> L0[L0快速模型]
-  Worker --> L1[EnergyPlus]
-  L1 --> Boundary[HVAC边界转换]
-  Boundary --> L2[OpenFOAM]
-  L2 --> Results[后处理与质量]
-  Results --> Client
+  Simulation --> Rules[方向与遮挡规则]
+  Simulation --> Balance[热量与用电估算]
+  Simulation -. 后续独立适配 .-> Research[原生网格 / 专业外部复核]
 ```
 
-| 模块 | 当前骨架 | 扩展责任 | 禁止耦合 |
-|---|---|---|---|
-| Core | draft、坐标、来源、run 身份与状态 | 完整房间 / HVAC / 座位 / 结果契约 | SwiftUI、Process、求解器 |
-| Simulation | submit/cancel、未配置实现 | 事件流、结果读取、本地/远程适配 | View、硬编码路径 |
-| DesignSystem | EmptyStateView | 语义 token、状态、指标组件 | 计算规则 |
-| Visualization | 空视口 | 几何、切片、流线、掩码、坐标转换 | 费用与推荐 |
-| Reporting | 导出协议 | 证据汇总、PDF | 重新计算指标 |
-| Workspace | Observable store、共享导航 | 工程操作、编辑、任务与比较 | 直接调用 OpenFOAM |
+| 模块 | 已有可复用成果 | 本轮路线新增责任 |
+|---|---|---|
+| SimuCore | Foundation-only v2、语义单位/来源、校验、不可变快照、RunIdentity | 方法、就绪度、分析请求与结果的纯值契约 |
+| SimuSimulation | submit/cancel 协议、未配置实现 | 本地 async actor、规则与估算、取消、确定性哈希和缓存 |
+| SimuVisualization | Z-up/Apple 坐标转换、俯视投影和对象视图 | 纯 SceneDescriptor、RealityKit entity 增量更新、相机/选择、路径绘制 |
+| SimuWorkspace | FileDocument、编辑/undo、模板、基准/候选、导入修复 | 简化入口、按能力就绪度、预览调度、结果归属与比较 |
+| SimuReporting | 报告接口 | 消费固定结果证据；不能重新计算或提升结论等级 |
+| SimuDesignSystem | 共享空状态 | 方法/缺失/过期/假设的文字与可访问性组件 |
+| Apps | 双原生入口与文档生命周期 | 注入本地 client 与 renderer capability；平台文件/分享适配 |
+| Backend | v2 Python 契约、runtime manifest/doctor | 保留兼容测试和研发复核工具；不进入消费者启动/预览链路 |
 
-## 状态与并发
+无需新增几十个包。代码按 feature 放在现有模块：Core/Analysis、Simulation/LocalAnalysis、Simulation/AirflowRules、Simulation/ThermalEstimate、Visualization/RoomScene、Visualization/RealityKit、Workspace/Analysis、Workspace/Comparison。这些目录及N1～N4实现现已存在；具体公开接口以Protocols和Delivery/N1…N4-implementation.md为准，N5相关建议/报告尚未实现。
 
-UI store 使用 MainActor + Observation。可变任务状态放 actor；跨边界数据为 Codable / Sendable 值类型。
-项目编辑模型与输入快照分开。任务终态、质量状态、freshness 三条独立轴；只有当前、质量通过且指标有效的结果用于当前推荐。
-单项目 store 当前由各 WindowGroup 初始化；P2 决定文档窗口与项目身份的生命周期，避免窗口状态串用。
+## 计算与渲染分离
 
-## 两端策略
+1. 工作区捕获不可变输入；独立能力检查决定能做哪种分析。
+2. LocalAnalysisClient 仅接收 Sendable 值，执行有限 CPU 工作；actor 用于隔离状态，计算还需显式放在非 MainActor 执行域。循环检查取消并限制点数/步数。
+3. 输出方法、假设、路径/定性标签或聚合估算。分析模块不导入 RealityKit，渲染不承担热负荷、成本或推荐。
+4. renderer 在 MainActor 创建和更新 Entity；后台只生成纯几何描述/路径点。Entity、FileWrapper、UI binding 不跨计算 actor 传递。
+5. RealityKit 负责相机、材质、几何、选择与展示动画。刚体碰撞、ForceEffect、粒子发射器不能作为空气压力/热量求解器。
 
-两个原生 target 共用一个本地 Swift Package，按 capability 注入功能。
-Mac：全工作区、计算调度、批量、报告；iPad：模型检查、设备标注、结果浏览；iPhone：采集、标注、参数与建议卡。
-iOS 不运行外部 Python / Docker / OpenFOAM；通过文件结果或后续用户配置的远程节点使用计算能力。
-RoomPlan / ARKit 置于 iOS 适配；Process / NSOpenPanel / 安全书签置于 Mac 适配。平台名称不能代替真正的能力检测。
+## 文档与任务状态
 
-## 计算与展示
+DocumentGroup binding 继续作为持久化权威；不另建数据库或第二套几何。共享几何编辑沿用 P2 全方案检查；相机/选择为显示状态。
 
-计算原始输出保留在 run 目录。后处理输出平台无关结果 JSON、float32 规则场、有效掩码和折线。
-Mac 先使用 RealityKit 几何或独立 MTKView 显示；重采样密度只影响显示，座位定量值从原始求解网格采样。
-macOS 14 作为基础；RealityView 在目标 SDK 核对 availability，必要时使用 Mac renderer adapter。提高最低系统版本必须记录 ADR 并同步所有配置与包。
+每次分析保存 run ID、scenario ID、输入哈希、方法版本、实际采用的分析配置、假设和检查。当前编辑 hash、run 归属和完成结果分别管理；旧任务可进入历史，不能写入当前方案视图。
 
-## 后续代码位置
+几何查看不等于 inputPreparation；本地预览不使用旧严格“可求解”门槛作为全局阻断。仍必须通过必要结构、单位和安全校验。只有与该方法无关的缺项可忽略；未知几何或设备的排除必须显式列出，不静默遗漏。
 
-`Backend/src/simunow_worker/` 下新增 `models/`、`jobs/`、`adapters/l0/`、`adapters/energyplus/`、`adapters/openfoam/`、`postprocessing/`、`quality/`、`decision/`。
-Swift 按 feature 划分 Workspace 子目录，公共协议留在底层。首次引入真实 adapter 后再拆子包，不提前建立几十个空模块。
+## 平台与兼容
+
+首选 RealityView 的虚拟相机进行离线、非 AR 查看；不要求相机、LiDAR 或摄像权限。macOS 15 / iOS 18 起启用该 renderer；当前最低 macOS 14 / iOS 17 保留现有二维查看、编辑和本地分析。依据与 SDK 核对见 [来源登记](09-source-register.md)。
+
+N1-02 先验证两端创建一个房间、orbit、选择和关闭；失败先定位 renderer，而不安装外部求解器。N2 提供 capability 与清楚的二维回退；不为统一接口默认提高最低系统。后续提高最低版本另立 ADR 并同步 Package/xcconfig/生成器。
+
+## 扩展边界
+
+旧 SimulationFidelity.l0…l3 与 request/receipt 不改语义。本地规则预览使用独立 AnalysisMethod/version，不能填成 `.l2` 或宣称 CFD。共享项目字段改动仍同步 model spec、Swift、Python、schema、迁移和 contracts；仅 App 分析/展示配置使用独立版本协议。N1 冻结这些边界，详见 [数据契约](04-data-contracts.md)。

@@ -1,39 +1,38 @@
 # 平台与交付
 
-## 兼容矩阵
+## 能力矩阵与版本策略
 
-| 能力 | macOS | iPadOS / iOS |
-|---|---|---|
-| 项目/方案/指标模型 | 共享 | 共享 |
-| 编辑与结果 UI | 全工作区 | 自适应分栏/详情 |
-| 场数据加载与采样显示 | 共享格式 | 共享格式，内存预算不同 |
-| 房间扫描 | 导入 | RoomPlan + 能力检测 |
-| 本地 Python / CFD | Mac adapter | 不支持 |
-| 远程计算 | 后续可选 | 后续可选 |
-| 报告 | 导出/留档 | 查看/分享/可支持的导出 |
+| 能力 | macOS14 | macOS15+ | iOS/iPadOS17 | iOS/iPadOS18+ |
+|---|---|---|---|---|
+| P2 编辑/原生项目包 | 已有代码 | 已有代码 | 已有代码 | 已有代码 |
+| 二维房间/对象查看 | 已有代码 | 已有代码 | 已有代码 | 已有代码 |
+| Swift 本地规则与估算 | 计划支持 | 计划支持 | 计划支持 | 计划支持 |
+| RealityView 非 AR 三维 | 首版二维回退 | N2 计划支持 | 首版二维回退 | N2 计划支持 |
+| RoomPlan 扫描 | 不支持 | 不支持 | 后续、需硬件能力 | 后续、需硬件能力 |
+| Python/外部引擎 | 可选研发复核 | 可选研发复核 | 不在本机运行 | 不在本机运行 |
 
-最低 macOS14 / iOS17；每个新增框架调用核对 SDK availability。当前 package 的 SwiftUI 空工作区支持这两端，尚无 renderer 或 RoomPlan。
+上述“计划支持”不代表已实现。当前最低 macOS14 / iOS17、Swift6 不变；RealityView availability 核对为15/18，见 [官方/SDK依据](../References/09-source-register.md)。首版直接采用虚拟相机，不启用 AR world tracking；查看房间无需相机、LiDAR 或摄像权限。
 
-## 工程配置
+N1-02 检查公开 API、编译与实际非 AR 场景。N2 的 availability/capability 选择 renderer；不调用私有 SDK 模块，不默认新引擎缺失是平台失败原因。提高最低版本需单独 ADR、Package/xcconfig/生成器一致更新和设备范围说明。
 
-`SimuNowMac` 与 `SimuNowiOS` schemes 为共享；Debug 只编译当前架构，Release 使用目标默认架构。当前无开发团队，模拟器/无签名构建不需要团队；真机和正式发行由用户配置。
-bundle identifier `com.simunow.mac` / `com.simunow.ios` 为开发占位。发布前替换为团队持有的标识并核对平台权限。
-当前只有 accent asset，App icon、privacy manifest（按实际 API 要求）、采集权限描述与本地化资源在能力接入阶段完成。
+## 工程与运行时
 
-## 运行时与沙盒
+保留 SimuNowMac/SimuNowiOS shared schemes、六个包与 DocumentGroup。新源码放包内；App target/资源/配置变化维护 generate_project.py，保留用户 scheme 定制。Development Team/bundle ID/正式签名仍由用户配置。
 
-Mac 已启用 app sandbox 与用户选择文件读写。P3 验证 sandbox 下 helper/Process、项目安全书签、容器桥接与运行时路径。
-可选路径：应用内签名受控 helper、明确安装的 companion、用户配置私有节点。根据实际分发渠道做 ADR，不默认关闭 sandbox。
-Python/EnergyPlus/OpenFOAM 以固定版本部署，启动前 doctor 检查版本与能力；缺少引擎显示修复路径，不在启动时在线安装。
-OpenFOAM 发行方式逐项核对依赖许可；独立进程不等于免除分发要求。
+App 默认注入本地 client，不检测或安装 Python/Colima/OpenFOAM/EnergyPlus，不弹运行时修复提示阻断预览。Backend doctor 和锁定环境仅用于已有研发分支/专业复核，未卸载或删除。
 
-## 安全与数据
+Mac sandbox 和用户选择文件读写继续启用。本地 CPU 分析无需 Process/helper/容器桥接；项目包通过原生文档协调保存。外部复核重新评估签名、helper、节点、许可与权限后才接入，不继承默认关闭 sandbox 的做法。
 
-房间、照片、人员使用与能耗默认本地。远程计算需用户配置目标节点、最小包、认证加密、保留与删除策略。
-共享报告可隐藏名称/位置，日志不含密钥或敏感标签；不将真实房间提交到仓库。
-移动端文件与后台任务限制独立验证；账号与云同步在明确需求后引入。
+## UI、内存和能耗
 
-## 交付清单
+实体/材质/选择更新 MainActor，后台分析只传值。路径/模型缓存有限，停止显示后暂停动画，切后台/关窗取消相关订阅；iOS 内存与热状态单独记录。内存紧张降低显示密度而不改变已保存的方法结论，不能静默改实际分析配置。
 
-双端构建 → 设备运行 → 运行时/权限 → 图标/版本/本地化 → 许可证与数据说明 → 签名/公证或 TestFlight → 新机器试装。
-当前完成骨架与 P2 文档编辑器代码，平台运行范围见 verification.md；未上传、发布或替用户选择开发账号。
+旧系统和 Reduce Motion 用二维/静态箭头，仍能完成调整与比较。VoiceOver 可通过对象列表与建议文字操作，三维不是信息唯一入口。实际显示、最低系统和文件分享需要设备/运行时验证，generic build 不替代。
+
+## 隐私与发布候选
+
+房间、测量与照片默认本地；不引入账号、遥测上传、远程节点或自动设备控制。分享冻结结果可去身份，图中明确方法/假设。引入测量/扫描后按实际 API 添加权限与隐私描述。
+
+交付顺序：双端构建→实际查看与文档操作→无网络/无 worker 试用→可访问性→图标/本地化/许可证/隐私→签名安装候选→新机器试装→用户授权后正式分发。N5 产生候选，不自动上传或公证发布。
+
+已验证平台事实见 [verification](verification.md)，不能把本页的新路线当运行证据。

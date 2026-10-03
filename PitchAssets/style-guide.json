@@ -1,0 +1,100 @@
+{
+  "revision": "v1.8",
+  "language": "en",
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "aspectRatio": "16:9"
+  },
+  "font": "Arial",
+  "palette": {
+    "white": "#FFFFFF",
+    "ink": "#20282C",
+    "secondary": "#536069",
+    "muted": "#64727A",
+    "pale": "#F1F4F5",
+    "line": "#D7DFE3",
+    "teal": "#277F89",
+    "cyan": "#57BCC7"
+  },
+  "layouts": [
+    "Cover — Architectural hero",
+    "Statement — Spatial visual",
+    "Split — Model and inputs",
+    "Process — Four steps",
+    "Product — Workflow columns",
+    "Method — Two engines",
+    "Evidence — Comparison table",
+    "Evidence — Quality gates",
+    "Value — Decision columns",
+    "Progress — Status table",
+    "Roadmap — Four milestones",
+    "Closing — Architectural hero"
+  ],
+  "slideCount": 14,
+  "coverHeadline": "Simulate first. Design better.",
+  "coverSubtitle": "Airflow and energy in one model. Comfort insights for every seat.",
+  "status": "Slide 7 presents local room and rule-based airflow preview, transparent electricity/cost/sensible-heat estimates and one-baseline/two-alternative comparison. Native editable text and generated obstruction concept; under-development and method disclosures. Other thirteen slides preserved.",
+  "imageTool": "Built-in imagegen",
+  "assets": [
+    "cover-architecture-airflow.png",
+    "seat-airflow-study.png",
+    "room-model-exploded.png",
+    "problem-hong-kong-office.png",
+    "room-decision-office.png",
+    "product-workspace-concept.png",
+    "office-scenario-pair.png",
+    "method-seat-sampling.png",
+    "local-preview-office.png"
+  ],
+  "research": {
+    "problemSlide": 2,
+    "referenceSlide": 14,
+    "editableCharts": 2,
+    "sources": "research-sources.json",
+    "updateScript": "add-problem-and-references.mjs",
+    "baselineScript": "build-pitchdeck.mjs",
+    "roomDecisionSlide": 3,
+    "editableTables": [
+      3,
+      5,
+      8,
+      11
+    ],
+    "roomDecisionUpdateScript": "build-room-decisions.mjs",
+    "roomDecisionPrompt": "room-decision-imagegen-prompt.json",
+    "productOverviewSlide": 4,
+    "productOverviewSource": "product-source.json",
+    "productOverviewUpdateScript": "build-product-overview.mjs",
+    "productOverviewPrompt": "product-imagegen-prompt.json",
+    "productFunctionDiagramUpdateScript": "build-product-function-diagram.mjs",
+    "productFunctionDiagramRegionMerger": "replace-product-function-region.py",
+    "officeScenarioSlide": 5,
+    "officeScenarioUpdateScript": "build-office-scenario.mjs",
+    "officeScenarioPrompt": "office-scenario-imagegen-prompt.json",
+    "officeScenarioSource": "office-scenario-source.json",
+    "evaluationMethodSlide": 6,
+    "evaluationMethodUpdateScript": "build-evaluation-method.mjs",
+    "evaluationMethodPrompt": "method-imagegen-prompt.json",
+    "evaluationMethodSources": "method-sources.json",
+    "editableDiagramSlides": [
+      4,
+      6
+    ],
+    "referenceIds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "localPreviewSlide": 7,
+    "localPreviewSource": "local-preview-source.json",
+    "localPreviewUpdateScript": "build-local-preview.mjs",
+    "localPreviewPrompt": "local-preview-imagegen-prompts.json"
+  }
+}

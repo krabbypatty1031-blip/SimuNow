@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-03",
+  "slide": 6,
+  "scope": "User-approved planned EnergyPlus/OpenFOAM pitch vision, not current numerical implementation",
+  "productSource": {
+    "id": 4,
+    "sha256": "16e3fd5e2a75c14cb6e7abe5398f4422e370a9bd34879836ebab760fd28d74b4"
+  },
+  "sources": [
+    {
+      "id": 6,
+      "title": "ANSI/ASHRAE Standard 55-2023, official public overview",
+      "url": "https://www.ashrae.org/technical-resources/bookstore/standard-55-thermal-environmental-conditions-for-human-occupancy",
+      "supports": "Thermal comfort environmental and personal input factors"
+    },
+    {
+      "id": 7,
+      "title": "EnergyPlus Engineering Reference, Zone Internal Gains",
+      "url": "https://energyplus.readthedocs.io/en/latest/guides/engineering-reference/17.1-zone-internal-gains.html",
+      "supports": "People, lights, equipment and thermal-load components"
+    },
+    {
+      "id": 8,
+      "title": "EnergyPlus Quick Start Guide",
+      "version": "26.2 online documentation as accessed",
+      "url": "https://energyplus.readthedocs.io/en/stable/quick_start/quick_start.html",
+      "supports": "Model and EPW weather inputs, output variables and meters; comparison period is a SimuNow proposed choice"
+    },
+    {
+      "id": 9,
+      "title": "OpenCFD OpenFOAM documentation, buoyantSimpleFoam",
+      "version": "v2306 documentation",
+      "url": "https://doc.openfoam.com/2306/tools/processing/solvers/rtm/heat-transfer/buoyantSimpleFoam/",
+      "supports": "An example steady-state heat-transfer solver with temperature and velocity fields; not a selected or validated SimuNow solver",
+      "verification": "Official indexed documentation content retrieved via web search; direct fetch returned 403"
+    }
+  ],
+  "accessed": "2026-10-03",
+  "claimBoundaries": [
+    "Representative-day energy is distinct from an annual savings claim.",
+    "A representative steady state does not establish cooldown time.",
+    "Airflow/temperature fields need additional comfort inputs and valid sampling.",
+    "Connections depict intended information relationships, not implemented transient or two-way coupling.",
+    "No computed field, efficiency, cost, compliance or satisfaction result is shown."
+  ]
+}

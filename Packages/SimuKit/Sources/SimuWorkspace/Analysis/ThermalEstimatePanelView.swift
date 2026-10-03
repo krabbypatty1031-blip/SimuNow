@@ -11,6 +11,7 @@ import SimuSimulation
     @State private var tariffDraft:TariffDraft?
     @State private var loadingCost=false
     @State private var costLoadTask:Task<Void,Never>?
+    @State private var costLoadID=UUID()
     public init(store:WorkspaceStore,entries:[String:ProjectPackageEntry],input:EstimateWorkspaceInput) { self.store=store;self.entries=entries;self.input=input }
     public var body:some View {
         VStack(alignment:.leading,spacing:12) {
@@ -20,8 +21,8 @@ import SimuSimulation
             methodCard(.steadyHeatBalance,title:"限定稳态显热")
             if let error=store.estimates.error { Text(error).font(.caption).foregroundStyle(.orange) }
         }
-        .onDisappear { costLoadTask?.cancel();costLoadTask=nil;loadingCost=false }
-        .onChange(of:input){_,_ in costLoadTask?.cancel();costLoadTask=nil;loadingCost=false }
+        .onDisappear { costLoadID=UUID();costLoadTask?.cancel();costLoadTask=nil;loadingCost=false }
+        .onChange(of:input){_,_ in costLoadID=UUID();costLoadTask?.cancel();costLoadTask=nil;loadingCost=false }
         .sheet(item:$powerDraft){draft in PowerEstimateEditor(draft:draft,registry:store.modelRegistry){edited in
             let configs=try edited.applying(currentProject:store.project,currentScenarioID:store.selectedScenarioID,currentStore:store.analysisConfiguration)
             try store.updateAnalysisConfiguration(configs,actionName:"采用功率情景")
@@ -52,7 +53,7 @@ import SimuSimulation
             if kind == .powerEstimate,let draft=store.estimates.draftSubtotal,!draft.complete {
                 Text("草稿已知时段小计 \(draft.payload.knownSubtotalKWh.formatted()) kWh；覆盖 \(draft.coveredMinutes)/\(draft.requestedMinutes) 分钟。完整电量不可用，不能据此报告收益。").font(.caption).foregroundStyle(.secondary)
             }
-            if let request=store.estimates.prepared[kind],coordinator.activeIdentity?.inputHash==request.identity.inputHash,let stage=coordinator.stage { Text("任务：\(stage.rawValue)").font(.caption) }
+            if let request=store.estimates.prepared[kind],coordinator.activeIdentity?.inputHash==request.identity.inputHash,let stage=coordinator.stage { Text("任务：\(stageTitle(stage))").font(.caption) }
             if let result=store.estimates.currentResult(kind) {
                 Text("方法检查：\(result.checks.state == .passed ? "通过" : "未通过") · 依据：简化情景估算 · 当前输入").font(.caption)
                 Text(persistence(coordinator.persistence[result.identity.runID] ?? .notSaved)).font(.caption).foregroundStyle(.secondary)
@@ -157,13 +158,25 @@ import SimuSimulation
         if case .known(_,let s,let bounds)=p { Text(source(s)).font(.caption2).textSelection(.enabled);if let b=bounds {Text("采用范围\(b.lower.formatted())…\(b.upper.formatted()) \(Q.unit) · \(b.meaning)").font(.caption)} }
     }
     private func capacityTitle(_ c:SensibleCapacityScreen)->String { switch c { case .sufficientForDeclaredSensibleCase:"已声明代表工况显热容量账面覆盖；不代表全制冷选型或舒适通过。";case .insufficientForDeclaredSensibleCase:"已声明代表工况显热容量账面不足。";case .cannotEvaluate:"容量不可筛查：缺显热/SHR依据、负荷/能力范围重叠或存在排除项。" } }
+    private func stageTitle(_ stage:LocalAnalysisStage)->String {
+        switch stage {
+        case .accepted:"已接受"
+        case .validating:"验证输入"
+        case .running,.progress:"计算情景"
+        case .checking:"方法检查"
+        case .completed:"计算完成"
+        case .failed:"失败"
+        case .cancelled:"已取消"
+        }
+    }
     private func persistence(_ p:AnalysisPersistenceState)->String { switch p { case .saved:"已加入项目；写盘由文档保存负责。";case .notSaved:"尚未加入项目。";case .failed(let reason):"结果未保存："+reason } }
     private func open(_ kind:AnalysisKind) { guard let project=store.project,let id=store.selectedScenarioID else{return};if kind == .powerEstimate { powerDraft = .init(project:project,scenarioID:id,store:store.analysisConfiguration) } else { heatDraft = .init(project:project,scenarioID:id,store:store.analysisConfiguration) } }
     private func persistRun(_ a:NativeAnalysisArtifact)throws { guard let write=store.persistNativeAnalysis else{throw NativeArtifactError.unsupportedRecord};try write(a) }
     private func persistCost(_ a:NativeCostEvaluationArtifact)throws { guard let write=store.persistCostEvaluation else{throw NativeArtifactError.unsupportedRecord};try write(a) }
     private func currentCostConfiguration(parent:LocalAnalysisResult)throws -> CostEvaluationConfiguration {
-        guard let project=store.project,let id=store.selectedScenarioID,case .powerEstimate(let p)=parent.payload else { throw WorkspaceEditingError.noScenario }
-        let cost=project.scenarios.first{$0.id==id}!.evaluation.cost
+        guard let project=store.project,let id=store.selectedScenarioID,
+              id==parent.identity.scenarioID,let scenario=project.scenarios.first(where:{$0.id==id}),case .powerEstimate(let p)=parent.payload else { throw WorkspaceEditingError.noScenario }
+        let cost=scenario.evaluation.cost
         return .init(requestedWindows:p.requestedWindows,currency:cost.currency,tariffs:cost.tariffs.map{.init(startMinute:$0.startMinute,endMinute:$0.endMinute,rate:$0.rate)})
     }
     private func openTariff(result:LocalAnalysisResult) {
@@ -174,15 +187,17 @@ import SimuSimulation
     private func evaluateCurrentTariff(result:LocalAnalysisResult) {
         guard let project=store.project,let config=try? currentCostConfiguration(parent:result) else{return}
         let entries=entries;loadingCost=true
-        costLoadTask?.cancel()
+        costLoadTask?.cancel();costLoadID=UUID();let token=costLoadID
+        let instance=store.documentInstanceID,revision=store.nativeSidefileRevision
         costLoadTask=Task {
-            defer {loadingCost=false}
+            defer {if costLoadID==token{loadingCost=false;costLoadTask=nil}}
             do {
                 let worker=Task.detached{try NativeArtifactCodec().load(runID:result.identity.runID,entries:entries,projectID:project.id)}
                 let parent=try await withTaskCancellationHandler(operation:{try await worker.value},onCancel:{worker.cancel()})
-                guard !Task.isCancelled,store.project==project,store.estimates.currentResult(.powerEstimate)?.identity==result.identity else{return}
+                guard !Task.isCancelled,costLoadID==token,store.project==project,store.estimates.currentResult(.powerEstimate)?.identity==result.identity else{return}
+                try store.validateNativeDocumentContext(instanceID:instance,sidefileRevision:revision)
                 store.estimates.evaluateCost(configuration:config,parent:parent,entries:entries,persist:persistCost)
-            } catch { if !Task.isCancelled {store.presentedError=error.localizedDescription} }
+            } catch { if !Task.isCancelled,costLoadID==token {store.presentedError=error.localizedDescription} }
         }
     }
 }
@@ -213,7 +228,7 @@ private struct PowerEstimateEditor:View {
             if draft.aggregateCoverageConfirmed {TextField("合计覆盖与来源说明",text:$draft.aggregateNote,axis:.vertical)}
         }
         if let error {Text(error).foregroundStyle(.red)}
-    }.navigationTitle("功率与时段").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
+    }.formStyle(.grouped).navigationTitle("功率与时段").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
     #if os(macOS)
     .frame(minWidth:560,minHeight:550)
     #endif
@@ -257,7 +272,7 @@ private struct HeatBalanceEditor:View {
             TextField("区间关系/端点范围来源与局限",text:$draft.sensitivityExplanation,axis:.vertical)
         }
         if let error {Text(error).foregroundStyle(.red)}
-    }.navigationTitle("显热情景输入").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
+    }.formStyle(.grouped).navigationTitle("显热情景输入").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
     #if os(macOS)
     .frame(minWidth:600,minHeight:650)
     #endif
@@ -280,7 +295,7 @@ private struct TariffEditor:View {
         Button("增加费率片段"){draft.tariffs.append(.init())}
         Text("费用仅作单位消费费率情景；订阅、设备和安装费用不在合计内。来源若已含税，不额外加假税。")
         if let error {Text(error).foregroundStyle(.red)}
-    }.navigationTitle("参考日电价").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("应用费率"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
+    }.formStyle(.grouped).navigationTitle("参考日电价").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("应用费率"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
     #if os(macOS)
     .frame(minWidth:520,minHeight:450)
     #endif

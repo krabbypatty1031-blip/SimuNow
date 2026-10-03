@@ -28,18 +28,24 @@ private func nativeRequest(_ kind: AnalysisKind = .airflowPreview, project: Proj
     return try AnalysisInputResolver().request(project: project, scenarioID: project.scenarios[0].id, method: .init(kind: kind),
         configuration: nativeConfiguration(kind,watts: watts), runID: id)
 }
-private func nativeExecution(_ request: LocalAnalysisRequest, checks: AnalysisChecksState = .passed) -> LocalAnalysisExecution {
+private func nativeExecution(_ request: LocalAnalysisRequest, checks: AnalysisChecksState = .passed) throws -> LocalAnalysisExecution {
     let payload: LocalAnalysisPayload
     switch request.method.kind {
     case .airflowPreview: payload = .airflowPreview(.init(profileID: "simunow.preview.genericCone",profileVersion: 1,
         paths: [.init(id: 0,points: [.init(position: .init(x: 1,y: 1,z: 1),strength: 1)],termination: .lengthLimit)], relations: [], validEmissionCount: 1))
-    case .powerEstimate: payload = .powerEstimate(.init(requestedWindows: [.init(startMinute: 0,endMinute: 120)],segments: [.init(startMinute: 0,endMinute: 120,powerWatts: 1000,energyKWh: 2,basis: .declaredScenario)], totalEnergyKWh: 2,knownSubtotalKWh: 2))
+    case .powerEstimate:
+        guard case .powerEstimate(let configuration) = request.resolvedInput.configuration.payload else {
+            throw ProjectDataError.contract("Synthetic cache fixture requires adopted power inputs")
+        }
+        // These tests check scheduling/LRU, not the numerical integrator. Use a
+        // real v1 payload; independent analytical formula tests remain in N4.
+        payload = .powerEstimate(try PowerIntegrator.integrate(configuration, deviceIDs: request.resolvedInput.snapshot.inputs.hvac.map(\.id)))
     case .steadyHeatBalance: payload = .steadyHeatBalance(.init(terms: ThermalEstimateValidation.heatTerms.map{.init(id:$0,signedWatts:$0 == "conductance" ? 1000:0,description:"synthetic")},totalSignedWatts: 1000,coolingSensibleWatts: 1000,excludedTerms: [],completeness:.completeDeclaredCase))
     }
     return .init(payload: payload,checks: .init(state: checks))
 }
-private func nativeResult(_ request: LocalAnalysisRequest) -> LocalAnalysisResult {
-    let execution = nativeExecution(request)
+private func nativeResult(_ request: LocalAnalysisRequest) throws -> LocalAnalysisResult {
+    let execution = try nativeExecution(request)
     return .init(identity: request.identity,method: request.method,checks: execution.checks,assumptions: request.resolvedInput.adoptedAssumptions,
         elapsedSeconds: 0,payload: execution.payload)
 }
@@ -52,7 +58,7 @@ private struct NativeTestExecutor: LocalAnalysisExecutor {
         if slow { try await Task.sleep(for: .seconds(5)) }
         if fail { throw ProjectDataError.contract("synthetic failure") }
         for i in 0..<200 { try Task.checkCancellation(); await progress(Double(i)/200) }
-        return nativeExecution(request,checks: checks)
+        return try nativeExecution(request,checks: checks)
     }
 }
 private func nativeEvents(_ stream: AsyncStream<LocalAnalysisEvent>) async -> [LocalAnalysisEvent] {
@@ -62,7 +68,7 @@ private func nativeEvents(_ stream: AsyncStream<LocalAnalysisEvent>) async -> [L
     let codec = NativeAnalysisCodec()
     for (index,kind) in AnalysisKind.allCases.enumerated() {
         let id = UUID(uuidString: "11111111-1111-1111-1111-11111111111\(index)")!
-        let request = try nativeRequest(kind,id: id), result = nativeResult(request)
+        let request = try nativeRequest(kind,id: id), result = try nativeResult(request)
         #expect(try codec.decodeRequest(codec.encodeRequest(request)) == request)
         #expect(try codec.decodeResult(codec.encodeResult(result)) == result)
         let event = LocalAnalysisEvent(runID: id,scenarioID: request.identity.scenarioID,sequence: 0,stage: .completed,result: result)
@@ -205,7 +211,10 @@ private func nativeEvents(_ stream: AsyncStream<LocalAnalysisEvent>) async -> [L
 }
 @Test func nativeActorCacheLRUIsBoundedAndFailedChecksAreNotCached() async throws {
     let client = try LocalAnalysisClient(executors: [NativeTestExecutor(method:.init(kind:.powerEstimate))])
-    for i in 0..<13 { _ = await nativeEvents(try await client.submit(nativeRequest(.powerEstimate,watts:1000+Double(i)))) }
+    for i in 0..<13 {
+        let events = await nativeEvents(try await client.submit(nativeRequest(.powerEstimate,watts:1000+Double(i))))
+        #expect(events.last?.stage == .completed && events.last?.result != nil)
+    }
     #expect(await client.statistics().cacheCount == 12)
     let events = await nativeEvents(try await client.submit(nativeRequest(.powerEstimate,watts:1000)))
     #expect(events.last?.result?.provenance.cacheHit == false)
@@ -369,7 +378,7 @@ private struct NativeCPUExecutor: LocalAnalysisExecutor {
         var sum = 0
         for i in 0..<100_000_000 { if i%1000 == 0 { try Task.checkCancellation() }; sum &+= i }
         if sum == -1 { throw ProjectDataError.contract("unreachable synthetic value") }
-        return nativeExecution(request)
+        return try nativeExecution(request)
     }
 }
 @Test @MainActor func nativeCPULoopAllowsActorCancellationAndWindowCoordinatorRelease() async throws {

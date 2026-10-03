@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-03",
+  "slide": 4,
+  "referenceId": 4,
+  "authority": "AGENTS.md",
+  "sha256": "16e3fd5e2a75c14cb6e7abe5398f4422e370a9bd34879836ebab760fd28d74b4",
+  "locators": [
+    "Project and priorities",
+    "Swift and interface guidelines",
+    "Physical and result constraints",
+    "Data and task conventions"
+  ],
+  "productDefinition": "Mac-first indoor AC configuration and operation analysis. Unified room model connects planned EnergyPlus energy and OpenFOAM airflow evaluation, with local comfort, electricity and cost.",
+  "initialScope": "One office or classroom",
+  "implementedBoundary": "Native app foundation; numerical engines are not connected. This page presents the product vision, not numerical execution or measured outcomes.",
+  "illustration": "product-workspace-concept.png",
+  "prompt": "product-imagegen-prompt.json",
+  "illustrationScope": "Generated planned UI concept, not an actual application screenshot."
+}

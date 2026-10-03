@@ -63,6 +63,10 @@ public struct OpeningEditorView: View {
             } else { Text("房间或门窗已经不存在。") }
             if let error { Section("修改未提交") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
         }
+        .formStyle(.grouped)
+        #if os(macOS)
+        .frame(minWidth: 560, idealWidth: 680, minHeight: 500, idealHeight: 640)
+        #endif
         .onChange(of: project) { _, _ in if !isDirty { reload() } }
         .onChange(of: isDirty) { _, dirty in if !dirty && project != baseProject { reload() } }
         .navigationTitle(openingID == nil ? "添加门窗" : "编辑门窗")

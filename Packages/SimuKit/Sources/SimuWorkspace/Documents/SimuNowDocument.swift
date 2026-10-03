@@ -16,6 +16,9 @@ public struct SimuNowDocument: FileDocument, Sendable {
 
     public var project: ProjectDocument
     public var metadata: ProjectPackageMetadata
+    /// Identifies this open document instance, never serialized. Value transactions
+    /// preserve it; reading another package (even the same project UUID) creates a new one.
+    public private(set) var documentInstanceID = UUID()
     /// Transient change token, never written to project metadata. Sidefile readers reload off MainActor.
     public private(set) var nativeSidefileRevision = UUID()
     public private(set) var preservedEntries: [String: ProjectPackageEntry]
@@ -28,6 +31,7 @@ public struct SimuNowDocument: FileDocument, Sendable {
     private let validatedProjectData: Data
     private let validatedMetadata: ProjectPackageMetadata
     private let validatedMetadataData: Data
+    private let validatedIntegrityReport: ValidationReport
 
     public init(
         project: ProjectDocument, metadata: ProjectPackageMetadata = .init(),
@@ -72,6 +76,9 @@ public struct SimuNowDocument: FileDocument, Sendable {
             hashes[path] = Self.contentHash(data)
         }
         self.weatherAssetHashes = hashes
+        self.validatedIntegrityReport = Self.makeIntegrityReport(
+            project: project, metadata: metadata, preservedEntries: preservedEntries,
+            registry: registry, weatherAssetHashes: hashes)
     }
 
     public static func unfinished(name: String = "未命名项目") -> Self {
@@ -117,8 +124,18 @@ public struct SimuNowDocument: FileDocument, Sendable {
             limits: limits)
     }
 
-    /// Recomputed after edits, so repair/save state cannot become stale.
+    /// Native transactions establish a validated immutable baseline. Public input
+    /// mutations bypass that baseline and still receive a complete fresh check.
     public var integrityReport: ValidationReport {
+        if project == validatedProject, metadata == validatedMetadata { return validatedIntegrityReport }
+        return Self.makeIntegrityReport(project: project, metadata: metadata,
+            preservedEntries: preservedEntries, registry: registry, weatherAssetHashes: weatherAssetHashes)
+    }
+    private static func makeIntegrityReport(
+        project: ProjectDocument, metadata: ProjectPackageMetadata,
+        preservedEntries: [String: ProjectPackageEntry], registry: ModelRegistry,
+        weatherAssetHashes: [String: String]
+    ) -> ValidationReport {
         var issues: [ValidationIssue]
         do { issues = try ProjectValidator().validate(project, registry: registry).issues } catch {
             issues = [.init(code: "project_contract", path: "", message: "项目结构或已知类型无效：\(error)")]
@@ -177,6 +194,10 @@ public struct SimuNowDocument: FileDocument, Sendable {
 
     public var requiresRepair: Bool { !integrityReport.passes(.projectIntegrity) }
 
+    func validateDocumentInstance(_ expectedID: UUID) throws {
+        guard documentInstanceID == expectedID else { throw NativeDocumentSessionError.replaced }
+    }
+
     public func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         try makeFileWrapper()
     }
@@ -228,9 +249,11 @@ public struct SimuNowDocument: FileDocument, Sendable {
         var updated = project
         updated.scenarios[index].inputs.environment.weather = .init(
             relativePath: "assets/weather/\(name)", sha256: hash)
-        return try Self(
+        var next = try Self(
             project: updated, metadata: metadata, preservedEntries: entries, registry: registry,
             limits: limits)
+        next.documentInstanceID = documentInstanceID
+        return next
     }
 
     func replacingNativeInputState(
@@ -239,6 +262,7 @@ public struct SimuNowDocument: FileDocument, Sendable {
         var next = try Self(
             project: project, metadata: metadata, preservedEntries: entries, registry: registry,
             limits: limits)
+        next.documentInstanceID = documentInstanceID
         if entries == preservedEntries { next.nativeSidefileRevision = nativeSidefileRevision }
         return next
     }
@@ -249,9 +273,11 @@ public struct SimuNowDocument: FileDocument, Sendable {
             entries["assets"] == preservedEntries["assets"]
         else {
             // Caller changed public input or asset bytes: use the full constructor.
-            return try Self(
+            var next = try Self(
                 project: project, metadata: metadata, preservedEntries: entries,
                 registry: registry, limits: limits)
+            next.documentInstanceID = documentInstanceID
+            return next
         }
         guard entries["project.json"] == nil, entries["metadata.json"] == nil else {
             throw ProjectPackageError.invalidPackage("保留条目不能覆盖项目或元数据。")
@@ -271,5 +297,15 @@ public struct SimuNowDocument: FileDocument, Sendable {
 
     private static func contentHash(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+enum NativeDocumentSessionError: Error, LocalizedError {
+    case replaced, attachmentsChanged
+    var errorDescription: String? {
+        switch self {
+        case .replaced: "文档已替换，旧会话的运行或修改未追加到新文档。"
+        case .attachmentsChanged: "项目附件已更新，请重新载入或评价当前记录。"
+        }
     }
 }

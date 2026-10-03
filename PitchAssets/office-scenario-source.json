@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-03",
+  "slide": 5,
+  "scenarioType": "Internal hypothetical office comparison",
+  "roomDimensionsM": [6, 4, 2.8],
+  "occupiedSeats": 4,
+  "baseline": {"acPlacement": "Side wall"},
+  "candidate": {"acPlacement": "Rear wall"},
+  "sharedInputs": {
+    "setpointC": 26,
+    "supplyAirflowM3PerS": 0.18,
+    "operation": "09:00–17:00",
+    "roomFurnitureLoadsWeather": "Held fixed; complete physical input is required before evaluating results"
+  },
+  "assumptionBoundary": "All numerical inputs are illustrative design assumptions, not measurements or recommended settings. AC placement is the intended changed variable. Supply direction should be documented relative to each unit and room geometry.",
+  "references": [
+    {
+      "id": 4,
+      "title": "SimuNow AGENTS.md user-approved product-vision snapshot",
+      "sha256": "16e3fd5e2a75c14cb6e7abe5398f4422e370a9bd34879836ebab760fd28d74b4",
+      "locator": "Physical and result constraints; Data and task conventions"
+    },
+    {
+      "id": 6,
+      "title": "ASHRAE Standard 55-2023 official overview",
+      "url": "https://www.ashrae.org/technical-resources/bookstore/standard-55-thermal-environmental-conditions-for-human-occupancy",
+      "accessed": "2026-10-03",
+      "supports": "Environmental and personal thermal-comfort input factors, not compliance or simulated results"
+    }
+  ],
+  "computedResults": null,
+  "preferredCandidate": null
+}

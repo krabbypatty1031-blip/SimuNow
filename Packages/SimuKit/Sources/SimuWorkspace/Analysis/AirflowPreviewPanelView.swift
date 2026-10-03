@@ -181,6 +181,7 @@ private struct AirflowPreviewConfigurationEditor: View {
         NavigationStack {
             Form {
                 Text("genericCone v1：内部展示假设，未按设备或实测校准。路径到第一次墙/家具接触即停止；不模拟绕流。已有范围、步数、强度阈值与来源会保留。")
+                    .fixedSize(horizontal: false, vertical: true)
                 TextField("起始半径 / m", text: $draft.radiusText)
                 TextField("扩散半角 / °（1…45）", text: $draft.angleText)
                 Picker("预览密度", selection: $draft.pathCount) {
@@ -194,7 +195,7 @@ private struct AirflowPreviewConfigurationEditor: View {
                 TextField("确定性 seed / UInt32", text: $draft.seedText)
                 Toggle("明确采用上述展示假设", isOn: $accepted)
                 if let error { Text(error).foregroundStyle(.red) }
-            }.navigationTitle("气流展示档案").toolbar {
+            }.formStyle(.grouped).navigationTitle("气流展示档案").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("采用并预览") {
@@ -206,7 +207,7 @@ private struct AirflowPreviewConfigurationEditor: View {
                 }
             }
             #if os(macOS)
-                .frame(minWidth: 480, minHeight: 400)
+                .frame(minWidth: 560, idealWidth: 640, minHeight: 480, idealHeight: 600)
             #endif
         }
     }

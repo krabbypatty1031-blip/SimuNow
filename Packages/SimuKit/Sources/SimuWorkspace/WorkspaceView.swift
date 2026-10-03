@@ -75,8 +75,8 @@ public struct WorkspaceView: View {
             Label(saveBlocked ? "项目需要修复，修复前不能保存" : "草稿可保存", systemImage: saveBlocked ? "exclamationmark.triangle" : "checkmark.circle")
                 .foregroundStyle(saveBlocked ? Color.orange : Color.secondary)
             HStack {
-                Text("计算输入待补充：\(preparationIssues.count) 项").font(.caption).foregroundStyle(.secondary)
-                Button("查看问题") { sheet = .issues }
+                Text("高级物理输入待补充：\(preparationIssues.count) 项").font(.caption).foregroundStyle(.secondary)
+                Button("高级输入检查") { sheet = .issues }
             }
         }.padding().frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -102,7 +102,7 @@ public struct WorkspaceView: View {
         case .runs:
             NativeAnalysisHistoryView(store:store,entries:nativeEntries,revision:nativeSidefileRevision)
         case .reports:
-            EmptyStateView("暂无有效报告", symbol: "doc.text", message: "后续接入计算和质量检查后才可生成报告；当前模型不能给出能耗、舒适或节省结论。")
+            EmptyStateView("报告功能尚未接入", symbol: "doc.text", message: "已保存的气流规则与电量、费用、显热情景可在工作区和运行历史查看。完整舒适、年度节能与报告导出仍待开发。")
         }
     }
     @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {

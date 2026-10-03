@@ -1,0 +1,67 @@
+{
+  "accessed": "2026-10-03",
+  "sources": [
+    {
+      "id": 1,
+      "author": "Electrical and Mechanical Services Department, Government of the Hong Kong SAR",
+      "year": 2026,
+      "title": "Hong Kong Energy End-use Data 2026",
+      "url": "https://www.emsd.gov.hk/filemanager/en/content_762/HKEEUD2026.pdf",
+      "dataYear": 2024,
+      "locators": ["Table 12, printed p. 27 (PDF p. 28)", "Table 39, printed p. 54 (PDF p. 55)", "Chronology of Major Revisions item 21, printed p. 78 (PDF p. 79)"],
+      "scope": "EMSD Air Conditioning includes AC units, heaters, fans, air purifiers and dehumidifiers. Official estimated end-use statistics."
+    },
+    {
+      "id": 2,
+      "author": "International Energy Agency",
+      "year": 2026,
+      "published": "2026-07-10",
+      "title": "Cooling a hotter world: El Niño meets strong growth in global electricity demand",
+      "url": "https://www.iea.org/commentaries/cooling-a-hotter-world-el-nino-meets-strong-growth-in-global-electricity-demand",
+      "licence": "CC BY 4.0",
+      "scope": "Building space cooling, excluding data centres. The 2,900 TWh paragraph does not explicitly assign a data year, so the slide labels source vintage. Annual electricity and peak power have different denominators."
+    },
+    {
+      "id": 6,
+      "author": "ASHRAE",
+      "year": 2023,
+      "title": "ANSI/ASHRAE Standard 55-2023: Thermal Environmental Conditions for Human Occupancy",
+      "url": "https://www.ashrae.org/technical-resources/bookstore/standard-55-thermal-environmental-conditions-for-human-occupancy",
+      "locators": ["Official public overview: environmental and personal factors"],
+      "scope": "Six basic thermal-comfort factors. Slide 3 does not claim Standard 55 compliance or measured occupant satisfaction."
+    },
+    {
+      "id": 7,
+      "author": "EnergyPlus",
+      "year": null,
+      "title": "Engineering Reference: Zone Internal Gains",
+      "url": "https://energyplus.readthedocs.io/en/latest/guides/engineering-reference/17.1-zone-internal-gains.html",
+      "locators": ["Sources and Types of Gains"],
+      "scope": "People, lights and equipment contribute internal loads; convective, radiant and latent gains are distinct. Does not support an assumed savings percentage."
+    }
+  ],
+  "hongKong": {
+    "dataYear": 2024,
+    "airConditioningTJ": 50193,
+    "totalElectricityTJ": 166931,
+    "officeAirConditioningTJ": 7837,
+    "officeElectricityTJ": 17179,
+    "calculatedTWh": 13.9425,
+    "calculatedCityShare": 0.3006811197440859,
+    "calculatedOfficeShare": 0.4561965190057629,
+    "display": {"cityTWh": "13.9", "cityShare": "30.1%", "officeShare": "45.6%"}
+  },
+  "global": {
+    "annualSpaceCoolingTWhApprox": 2900,
+    "growthSince2015Approx": 0.50,
+    "annualElectricityShareApprox": 0.10,
+    "peakPowerShareApprox": 0.30,
+    "sourceVintage": 2026
+  },
+  "restrictions": [
+    "Hong Kong and IEA scopes are not harmonised. Do not derive a direct efficiency ratio.",
+    "These statistics establish scale, not a waste fraction or SimuNow savings.",
+    "No forecast is necessary for the new problem-statement slide.",
+    "Illustration is concept art, not computed or observed flow or thermal comfort."
+  ]
+}

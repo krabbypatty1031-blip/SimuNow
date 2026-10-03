@@ -1,0 +1,7 @@
+{
+  "tool": "Built-in imagegen",
+  "generated": "2026-10-03",
+  "asset": "problem-hong-kong-office.png",
+  "prompt": "Use case: scientific-educational\nAsset type: supporting illustration for a SimuNow academic problem-statement slide\nPrimary request: a clean architectural cutaway illustration of a compact Hong Kong office with a wall-mounted split air conditioner, desks and varied seat positions, with dense Hong Kong high-rise buildings visible outside the window.\nStyle/medium: refined architectural pencil and pale cyan technical rendering, white background, fine graphite construction lines, realistic proportional room geometry, matching an elegant white academic presentation.\nComposition/framing: landscape 3:2, room and city together in one coherent cutaway, generous white space around the edges, clear silhouettes and readable objects at small scale.\nColor palette: white, graphite grey, muted teal and pale cyan.\nConstraints: illustration only, no charts, no numbers, no labels, no text, no logos, no watermark, no temperature map, no invented CFD result. Show room layout and AC context without claiming measured flow or thermal comfort.",
+  "disclosure": "Concept illustration only. No calculated fields or measured comfort."
+}

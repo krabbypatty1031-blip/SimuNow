@@ -1,0 +1,8 @@
+{
+  "created": "2026-10-03",
+  "tool": "Built-in imagegen",
+  "useCase": "scientific-educational",
+  "asset": "room-decision-office.png",
+  "prompt": "Use case: scientific-educational\nAsset type: academic PowerPoint illustration, used on the left half of a white slide with editable labels added separately.\nPrimary request: an elegant architectural cutaway of one small rectangular office to explain room-level air-conditioning configuration choices.\nScene and subjects: two back walls, low thin floor slab, four individual desks with modest computer monitors, four office chairs, one large window on the left wall, one single wall-mounted split air-conditioning indoor unit on the right/back wall. No people. Desks are distributed between the window side, room centre and AC side so positions are visually distinct. Keep the AC unobstructed and clearly visible.\nStyle: precise isometric architectural model with fine graphite outlines, matte white surfaces, subtle grey shading, restrained pale cyan glass. Professional scientific presentation aesthetic, crisp and readable at small scale.\nComposition: wide landscape 3:2 image, slightly elevated isometric view, room fills the central 85% with clean white margins. Open front and roof, all four desks and chairs visible. White seamless background.\nColor palette: white, charcoal grey, pale cool grey, small muted teal accents.\nConstraints: conceptual room geometry only. No airflow arrows, streamlines, temperature gradients, heat maps, numerical values, plots, labels, text, legends, logos or watermarks. Do not depict a computed simulation or performance result. Use gentle shadows, no dark background.",
+  "scope": "Concept geometry only; no computed airflow or performance results."
+}

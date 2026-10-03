@@ -6,8 +6,8 @@ Mac 优先、兼容 iPhone / iPad 的室内空调方案分析 App。开发主线
 
 ## 当前交付
 
-这是 **P0 工程骨架 + P2 项目模型与编辑器 + N1 本地分析基座**：两个原生 App target、六个本地 Swift Package 模块、文档工作区、模型与任务接口、Python worker 边界、协议和开发计划。
-项目输入 v2、Swift/Python/schema 契约、矩形房间/门窗/家具/人员/空调编辑、数值与俯视点击放置、办公室/教室模板、独立候选、完整值撤销、输入问题定位、不可变快照及本地项目包已实现，见 [模型契约](Protocols/project-model-v2.md)、[包格式](Protocols/project-package-v1.md) 和 [验证记录](Plans/Delivery/verification.md)。N1 新增独立本地契约、按方法就绪度、不可变请求/规范化哈希、有限 actor 调度/取消/缓存、原生分析侧文件事务及非 AR RealityKit 能力验证入口，见 [本地分析契约](Protocols/native-analysis-v1.md)。生产气流规则、完整三维房间查看、热量/费用算法、消费流程与分享仍由 N2–N5 接入；未注册方法明确不可用。扫描、CFD、EnergyPlus 管线、完整舒适、优化及 PDF 报告仍待开发。输入完整性和本地方法检查不代表物理验证。
+这是 **P0 工程骨架 + P2 项目模型与编辑器 + N1–N4 本地规则、三维查看与情景估算**：两个原生 App target、六个本地 Swift Package 模块、文档工作区、模型与任务接口、Python worker 边界、协议和开发计划。
+项目输入 v2、Swift/Python/schema 契约、矩形房间/门窗/家具/人员/空调编辑、数值与俯视点击放置、办公室/教室模板、独立候选、完整值撤销、输入问题定位、不可变快照及本地项目包已实现，见 [模型契约](Protocols/project-model-v2.md)、[包格式](Protocols/project-package-v1.md) 和 [验证记录](Plans/Delivery/verification.md)。N1 新增独立本地契约、按方法就绪度、不可变请求/规范化哈希、有限 actor 调度/取消/缓存、原生分析侧文件事务及非 AR RealityKit 能力验证入口，见 [本地分析契约](Protocols/native-analysis-v1.md)。N2 已接入非 AR 房间几何、相机、选择与完整二维回退；N3 已接入真实 Swift 定性路径、首次家具遮挡、关注点关系、防抖/取消、同栈配置撤销及保存历史，见 [N3交接](Plans/Delivery/N3-implementation.md)。气流档案需明确采用，只输出几何规则，不提供现实风速或舒适。N4已接入功率积分、独立Decimal费用评价、显热账目/端点情景和固定比较，见 [N4交接](Plans/Delivery/N4-implementation.md)；主工作区最终回归与真实平台验收仍在进行。N5消费者建议/分享本次不实施；未注册方法明确不可用。扫描、CFD、EnergyPlus 管线、完整舒适、优化及 PDF 报告仍待开发。输入完整性和本地方法检查不代表物理验证。
 
 ## 打开与运行
 

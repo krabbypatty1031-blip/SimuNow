@@ -231,8 +231,10 @@ public actor LocalAnalysisClient: LocalAnalysisSubmitting {
                 else { throw ProjectDataError.contract("Executor result exceeded request resource limits") }
             }
             let registry = registry
+            let request = job.request
             let encoding = Task.detached {
                 try Task.checkCancellation()
+                try ThermalEstimateEvidenceValidation.validate(request: request, result: result)
                 return try NativeAnalysisCodec(registry: registry).encodeResult(result).count
             }
             let byteCount = try await withTaskCancellationHandler(

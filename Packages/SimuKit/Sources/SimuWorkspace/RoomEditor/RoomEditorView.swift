@@ -55,7 +55,11 @@ public struct RoomEditorView: View {
                     Text("门窗增删及类型转换会同步更新所有方案；窗性能与开启比例仍需按方案补充。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("未知、假设与预设") { ParameterAssumptionsView(project: project, registry: registry) }
+                Section {
+                    DisclosureGroup("查看未知、假设与预设") {
+                        ParameterAssumptionsView(project: project, registry: registry)
+                    }
+                }
             } else {
                 Section {
                     Label("此房间无法使用矩形编辑器修改。", systemImage: "info.circle")
@@ -65,6 +69,7 @@ public struct RoomEditorView: View {
             }
             if let error { Section("修改未提交") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
         }
+        .formStyle(.grouped)
         .onChange(of: project) { _, _ in if !isDirty { reload() } }
         .onChange(of: isDirty) { _, dirty in if !dirty && project != baseProject { reload() } }
         .navigationTitle("编辑房间")

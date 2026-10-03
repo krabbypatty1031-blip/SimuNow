@@ -3,13 +3,20 @@
 Synthetic seats only: no OpenFOAM. A missing or failed field omits the
 ratio. Out-of-domain seats leave the denominator instead of counting as
 failures. Ratio 0 means every evaluated seat missed a gate.
+
+Sampler omissions (`samples.json` `omitted_seats`) are ids and reasons,
+not public seat rows. They still have to be named on the ratio reason.
 """
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from uuid import uuid4
 
+from simunow_worker.l2_runner import _seat_rows
 from simunow_worker.models.feasibility import feasibility_metrics
 from simunow_worker.models.l2_accounting import evaluate_l2
 
@@ -192,6 +199,173 @@ class EvaluateL2FeasibilityTests(unittest.TestCase):
         self.assertTrue(by_name["seat_pass_ratio"]["omitted"])
         self.assertIsNone(by_name["seat_pass_ratio"]["value"])
         self.assertTrue(by_name["seat_t_c_min"]["omitted"])
+
+    def test_context_omitted_seats_are_named_and_stay_off_the_public_array(self):
+        # Real samples keep {id, reason} beside seats. Stuffing that stub
+        # into seatSamples would violate the schema (tC/uMag required).
+        context = {
+            "pipelineCompleted": True,
+            "qualityDetail": dict(PASSED_QUALITY),
+            "seatSamples": [
+                {"id": "S1", "x": 1, "y": 1, "z": 1.1, "tC": 24.5, "uMag": 0.05},
+                {"id": "S2", "x": 2, "y": 2, "z": 1.1, "tC": 25.5, "uMag": 0.20},
+            ],
+            "omittedSeats": [{"id": "S9", "reason": "not_in_fluid"}],
+        }
+        result = evaluate_l2(self._identity(), OFFICE, context)
+        self.assertEqual([seat["id"] for seat in result["seatSamples"]], ["S1", "S2"])
+        for seat in result["seatSamples"]:
+            self.assertIn("tC", seat)
+            self.assertIn("uMag", seat)
+        by_name = _by_name(result["metrics"])
+        self.assertEqual(by_name["seat_eval_count"]["value"], 2)
+        self.assertEqual(by_name["seat_pass_ratio"]["value"], 1.0)
+        reason = by_name["seat_pass_ratio"]["reason"]
+        self.assertIn("S9", reason)
+        self.assertIn("不计入分母", reason)
+        self.assertNotIn("S9", [seat["id"] for seat in result["seatSamples"]])
+
+    def test_only_omitted_seats_are_named_without_inventing_ratio_zero(self):
+        # Quality passed, but every seat was outside the fluid. No evaluated
+        # seat means the ratio stays omitted. Naming the ids is required;
+        # 0% would claim they were evaluated and failed.
+        context = {
+            "pipelineCompleted": True,
+            "qualityDetail": dict(PASSED_QUALITY),
+            "seatSamples": None,
+            "omittedSeats": [
+                {"id": "S9", "reason": "not_in_fluid"},
+                {"id": "S8", "reason": "not_in_fluid"},
+            ],
+        }
+        result = evaluate_l2(self._identity(), OFFICE, context)
+        self.assertFalse(result["seatSamples"])
+        by_name = _by_name(result["metrics"])
+        ratio = by_name["seat_pass_ratio"]
+        self.assertTrue(ratio["omitted"])
+        self.assertIsNone(ratio["value"])
+        self.assertNotEqual(ratio["value"], 0)
+        self.assertIn("S9", ratio["reason"])
+        self.assertIn("S8", ratio["reason"])
+        self.assertIn("不计入分母", ratio["reason"])
+        self.assertNotIn("no quality-passed seat samples", ratio["reason"])
+
+
+class SeparateOmissionTests(unittest.TestCase):
+    def test_omitted_seat_argument_leaves_the_denominator_and_names_the_id(self):
+        by_name = _by_name(
+            feasibility_metrics(
+                [dict(row) for row in IN_BAND[:3]],
+                quality_passed=True,
+                omitted_seats=[{"id": "S9", "reason": "not_in_fluid"}],
+            )
+        )
+        self.assertEqual(by_name["seat_eval_count"]["value"], 3)
+        self.assertEqual(by_name["seat_pass_count"]["value"], 3)
+        self.assertEqual(by_name["seat_pass_ratio"]["value"], 1.0)
+        self.assertIn("S9", by_name["seat_pass_ratio"]["reason"])
+        self.assertIn("不计入分母", by_name["seat_pass_ratio"]["reason"])
+        self.assertNotEqual(by_name["worst_seat_id"]["reason"], "S9")
+
+    def test_no_eval_seats_with_omissions_omits_ratio_and_names_ids(self):
+        metrics = feasibility_metrics(
+            None,
+            quality_passed=True,
+            omitted_seats=[{"id": "S9", "reason": "not_in_fluid"}],
+        )
+        ratio = _by_name(metrics)["seat_pass_ratio"]
+        self.assertTrue(ratio["omitted"])
+        self.assertIsNone(ratio["value"])
+        self.assertNotEqual(ratio["value"], 0)
+        self.assertIn("S9", ratio["reason"])
+        self.assertIn("不计入分母", ratio["reason"])
+        for metric in metrics:
+            self.assertTrue(metric["omitted"], metric["name"])
+            self.assertIsNone(metric["value"], metric["name"])
+
+
+# Public seat rows require tC/uMag. Sampler omissions are a side list.
+_CONTRACT_SEAT_KEYS = {"id", "x", "y", "z", "tC", "uMag", "lowSpeedAbsoluteError", "pmv", "ppd"}
+
+
+class RunnerOmittedSeatMappingTests(unittest.TestCase):
+    """samples.json → evaluate_l2 without OpenFOAM."""
+
+    def _write_samples(self, run_dir: Path, *, seats: list[dict], omitted: list[dict]) -> None:
+        (run_dir / "samples.json").write_text(
+            json.dumps({"seats": seats, "omitted_seats": omitted}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (run_dir / "quality.json").write_text(
+            json.dumps(
+                {
+                    "checkMesh": "ok",
+                    "solver_end": True,
+                    "monitors": {"stable": True},
+                    "mass": {"relative_error": 0.001, "gate": 0.01},
+                    "energy": {"relative_error": 0.004, "gate": 0.05},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _identity(self):
+        return {"runID": str(uuid4()), "scenarioID": str(uuid4()), "inputHash": "omitted-seat-map"}
+
+    def test_seat_rows_stay_contract_valid_and_omitted_ids_reach_feasibility(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            self._write_samples(
+                run_dir,
+                seats=[
+                    {"id": "S1", "x": 1.0, "y": 1.5, "z": 1.1, "T_C": 24.5, "U_mag": 0.05},
+                ],
+                omitted=[{"id": "S9", "omitted": True, "reason": "not_in_fluid"}],
+            )
+            rows = _seat_rows(run_dir)
+            self.assertEqual([row["id"] for row in rows], ["S1"])
+            for row in rows:
+                self.assertTrue(_CONTRACT_SEAT_KEYS.issuperset(row))
+                self.assertIsInstance(row["tC"], float)
+                self.assertIsInstance(row["uMag"], float)
+            self.assertNotIn("S9", [row["id"] for row in rows])
+
+            # Imported inside the test so a missing helper fails this case only.
+            from simunow_worker.l2_runner import passed_field_context
+
+            context = passed_field_context(run_dir, OFFICE)
+            self.assertEqual([row["id"] for row in context["seatSamples"]], ["S1"])
+            self.assertEqual(context["omittedSeats"][0]["id"], "S9")
+            self.assertEqual(context["omittedSeats"][0]["reason"], "not_in_fluid")
+            result = evaluate_l2(self._identity(), OFFICE, context)
+            self.assertEqual([seat["id"] for seat in result["seatSamples"]], ["S1"])
+            for seat in result["seatSamples"]:
+                self.assertIn("tC", seat)
+                self.assertIn("uMag", seat)
+            reason = _by_name(result["metrics"])["seat_pass_ratio"]["reason"]
+            self.assertIn("S9", reason)
+            self.assertIn("不计入分母", reason)
+
+    def test_samples_with_only_omitted_seats_name_ids_and_do_not_invent_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            self._write_samples(
+                run_dir,
+                seats=[],
+                omitted=[{"id": "S9", "omitted": True, "reason": "not_in_fluid"}],
+            )
+            # An empty fluid list is not a public seat array of stubs.
+            self.assertIsNone(_seat_rows(run_dir))
+            from simunow_worker.l2_runner import passed_field_context
+
+            result = evaluate_l2(self._identity(), OFFICE, passed_field_context(run_dir, OFFICE))
+            self.assertFalse(result["seatSamples"])
+            ratio = _by_name(result["metrics"])["seat_pass_ratio"]
+            self.assertTrue(ratio["omitted"])
+            self.assertIsNone(ratio["value"])
+            self.assertNotEqual(ratio["value"], 0)
+            self.assertIn("S9", ratio["reason"])
+            self.assertNotIn("no quality-passed seat samples", ratio["reason"])
 
 
 if __name__ == "__main__":

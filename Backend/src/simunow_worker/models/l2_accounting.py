@@ -96,6 +96,9 @@ def evaluate_l2(identity: dict, draft: dict, context: dict) -> dict:
     passed = pipeline_completed and quality_pass(detail)
     # Seat values exist only for a quality-passed field. A failed field omits them.
     seat_rows = context.get("seatSamples") if passed else None
+    # Sampler omissions are ids+reasons, not seat rows. Only a passed field
+    # may disclose them; a failed field stays "not evaluable", never ratio 0.
+    omitted_seats = context.get("omittedSeats") if passed else None
     # Comfort needs MRT/RH/clo/met on top of the field's air T and speed.
     # Missing comfort inputs keep PMV omitted with a reason, never PMV=0.
     if seat_rows is None:
@@ -107,7 +110,9 @@ def evaluate_l2(identity: dict, draft: dict, context: dict) -> dict:
         # does not fail a seat; an out-of-domain seat stays out of the ratio.
         seat_rows, comfort_rows = comfort_metrics(seat_rows, context.get("comfortInputs"))
     # Append only. Quality gates above are unchanged. No passed field → omit, never 0.
-    feasibility_rows = feasibility_metrics(seat_rows, quality_passed=passed)
+    feasibility_rows = feasibility_metrics(
+        seat_rows, quality_passed=passed, omitted_seats=omitted_seats
+    )
     if not pipeline_completed or detail is None:
         quality_state = "notEvaluated"
     elif passed:

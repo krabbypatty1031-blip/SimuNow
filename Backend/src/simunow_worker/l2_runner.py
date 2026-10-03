@@ -63,14 +63,26 @@ def _write_result(run_dir: Path, result: dict) -> None:
     (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _seat_rows(run_dir: Path) -> list[dict] | None:
-    """Map P1 samples.json onto the contract seat rows (Z-up, °C, m/s)."""
+def _load_samples(run_dir: Path) -> dict | None:
+    """samples.json, or None when the file is missing or not an object."""
     path = run_dir / "samples.json"
     if not path.is_file():
         return None
     try:
         samples = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
+        return None
+    return samples if isinstance(samples, dict) else None
+
+
+def _seat_rows(run_dir: Path) -> list[dict] | None:
+    """Map P1 samples.json seats onto the contract rows (Z-up, °C, m/s).
+
+    `omitted_seats` stays out of this list. Those records are {id, reason}
+    with no tC/uMag, and the public seat array rejects them.
+    """
+    samples = _load_samples(run_dir)
+    if samples is None:
         return None
     rows = []
     for seat in samples.get("seats", []):
@@ -86,6 +98,34 @@ def _seat_rows(run_dir: Path) -> list[dict] | None:
             row["lowSpeedAbsoluteError"] = True
         rows.append(row)
     return rows or None
+
+
+def _omitted_seats(run_dir: Path) -> list[dict]:
+    """Sampler side list. Id and reason only; never a public seat row."""
+    samples = _load_samples(run_dir)
+    if samples is None:
+        return []
+    rows = []
+    for seat in samples.get("omitted_seats") or []:
+        if not isinstance(seat, dict) or seat.get("id") is None:
+            continue
+        row = {"id": str(seat["id"])}
+        # `not_in_fluid` and any later sampler reason travel with the id.
+        if seat.get("reason"):
+            row["reason"] = str(seat["reason"])
+        rows.append(row)
+    return rows
+
+
+def passed_field_context(run_dir: Path, draft: dict) -> dict:
+    """Context after the pipeline returns. Omissions stay off seatSamples."""
+    return {
+        "qualityDetail": quality_detail(_quality_json(run_dir)),
+        "seatSamples": _seat_rows(run_dir),
+        "omittedSeats": _omitted_seats(run_dir),
+        "pipelineCompleted": True,
+        "comfortInputs": comfort_inputs_from_draft(draft),
+    }
 
 
 def _quality_json(run_dir: Path) -> dict | None:
@@ -169,16 +209,7 @@ def run_l2_task(argv: list[str] | None = None) -> int:
         return 1
 
     _emit(_event(request, 3, "progress", "checking", {"fraction": 0.9, "monitor": "quality"}))
-    result = evaluate_l2(
-        identity,
-        draft,
-        {
-            "qualityDetail": quality_detail(_quality_json(run_dir)),
-            "seatSamples": _seat_rows(run_dir),
-            "pipelineCompleted": True,
-            "comfortInputs": comfort_inputs_from_draft(draft),
-        },
-    )
+    result = evaluate_l2(identity, draft, passed_field_context(run_dir, draft))
     _write_result(run_dir, result)
     detail = result.get("qualityDetail")
     if result["quality"] == "passed":

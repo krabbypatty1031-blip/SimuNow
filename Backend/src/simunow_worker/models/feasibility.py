@@ -117,15 +117,56 @@ def _worst(evaluated: list[dict]) -> dict:
     )
 
 
-def feasibility_metrics(seat_rows: list[dict] | None, *, quality_passed: bool) -> list[dict]:
-    """Coverage metrics for one field. Missing field → omitted, never ratio 0."""
-    if not quality_passed or not seat_rows:
+def _exclusion_ids(excluded: list[dict], omitted_seats: list[dict] | None) -> list[str]:
+    """Ids kept out of the denominator. Sampler omissions are named once.
+
+    `omitted_seats` is the samples.json side list ({id, reason}). Those
+    records have no tC/uMag, so they never join the public seat array.
+    """
+    ids: list[str] = []
+    seen: set[str] = set()
+    for row in [*excluded, *(omitted_seats or [])]:
+        if not isinstance(row, dict):
+            continue
+        seat_id = row.get("id")
+        if seat_id is None:
+            continue
+        text = str(seat_id)
+        if text in seen:
+            continue
+        seen.add(text)
+        ids.append(text)
+    return ids
+
+
+def feasibility_metrics(
+    seat_rows: list[dict] | None,
+    *,
+    quality_passed: bool,
+    omitted_seats: list[dict] | None = None,
+) -> list[dict]:
+    """Coverage metrics for one field. Missing field → omitted, never ratio 0.
+
+    A quality-passed field whose seats were all dropped by the sampler still
+    names those ids. It does not pretend the room had no seats, and it does
+    not report ratio 0: nothing was evaluated.
+    """
+    if not quality_passed:
         return _omitted_all(OMIT_REASON)
 
-    evaluated, excluded = _split(seat_rows)
+    sampling_omissions = [
+        row for row in (omitted_seats or []) if isinstance(row, dict) and row.get("id") is not None
+    ]
+    # Empty fluid samples with no sampler omissions really is "no seats".
+    # Omissions alone are an exclusion, not a missing field.
+    if not seat_rows and not sampling_omissions:
+        return _omitted_all(OMIT_REASON)
+
+    evaluated, excluded = _split(seat_rows or [])
+    exclusion_ids = _exclusion_ids(excluded, sampling_omissions)
     if not evaluated:
-        ids = ", ".join(str(row.get("id")) for row in excluded) or "none"
-        return _omitted_all(f"not evaluable: no seat inside the model domain (excluded: {ids}; 不计入分母)")
+        shown = ", ".join(exclusion_ids) if exclusion_ids else "none"
+        return _omitted_all(f"not evaluable: no seat inside the model domain (excluded: {shown}; 不计入分母)")
 
     pass_count = 0
     hit_gates: list[str] = []
@@ -151,9 +192,10 @@ def feasibility_metrics(seat_rows: list[dict] | None, *, quality_passed: bool) -
         worst_reason += "；低速绝对误差"
 
     notes: list[str] = []
-    if excluded:
-        ids = ", ".join(str(row.get("id")) for row in excluded)
-        notes.append(f"排除 {len(excluded)} 座（域外或 omitted，不计入分母）：{ids}")
+    if exclusion_ids:
+        notes.append(
+            f"排除 {len(exclusion_ids)} 座（域外或 omitted，不计入分母）：{', '.join(exclusion_ids)}"
+        )
     low_speed = [str(row.get("id")) for row in evaluated if row.get("lowSpeedAbsoluteError")]
     if low_speed:
         notes.append("低速绝对误差座位仍用风速门：" + ", ".join(low_speed))

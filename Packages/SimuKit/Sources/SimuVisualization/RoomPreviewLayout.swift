@@ -1,9 +1,10 @@
 import Foundation
 import SimuCore
 
-/// Pure layout math for the read-only 3D room preview. Converts domain model geometry
+/// Pure layout math for the 3D room preview. Converts domain model geometry
 /// (metres, right-handed Z-up) into Apple display coordinates via CoordinateTransform.
 /// Contains no field data: the preview shows geometry only, never simulated results.
+/// Movable items carry a domain anchor so a drag can be written back into the project.
 public struct RoomPreviewLayout: Equatable, Sendable {
 
     public enum BoxKind: Equatable, Sendable {
@@ -16,12 +17,19 @@ public struct RoomPreviewLayout: Equatable, Sendable {
         public let size: Position3D    // positive extents, Apple coords
         /// Unit direction in Apple coords. Devices use the supply direction; other kinds ignore it.
         public let facing: Direction3D
+        /// Groups the mesh with the person, samples, or ports that move together.
+        public let group: RoomPreviewItem?
+        /// Domain point written when this mesh is the item's drag handle.
+        public let anchor: RoomPreviewAnchor?
 
-        public init(kind: BoxKind, center: Position3D, size: Position3D, facing: Direction3D = Direction3D(x: 0, y: 0, z: 1)) {
+        public init(kind: BoxKind, center: Position3D, size: Position3D, facing: Direction3D = Direction3D(x: 0, y: 0, z: 1),
+                    group: RoomPreviewItem? = nil, anchor: RoomPreviewAnchor? = nil) {
             self.kind = kind
             self.center = center
             self.size = size
             self.facing = facing
+            self.group = group
+            self.anchor = anchor
         }
     }
 
@@ -34,6 +42,15 @@ public struct RoomPreviewLayout: Equatable, Sendable {
     public struct Figure: Equatable, Sendable {
         public let kind: FigureKind
         public let position: Position3D // Apple Y-up metres
+        public let group: RoomPreviewItem?
+        public let anchor: RoomPreviewAnchor?
+
+        public init(kind: FigureKind, position: Position3D, group: RoomPreviewItem? = nil, anchor: RoomPreviewAnchor? = nil) {
+            self.kind = kind
+            self.position = position
+            self.group = group
+            self.anchor = anchor
+        }
     }
 
     public struct Arrow: Equatable, Sendable {
@@ -41,6 +58,15 @@ public struct RoomPreviewLayout: Equatable, Sendable {
         public let direction: Direction3D  // unit vector, Apple coords
         public let role: PortRole
         public let length: Double
+        public let group: RoomPreviewItem?
+
+        public init(base: Position3D, direction: Direction3D, role: PortRole, length: Double, group: RoomPreviewItem? = nil) {
+            self.base = base
+            self.direction = direction
+            self.role = role
+            self.length = length
+            self.group = group
+        }
     }
 
     public let roomCenter: Position3D  // Apple coords
@@ -124,33 +150,44 @@ public struct RoomPreviewLayout: Equatable, Sendable {
                   let bw = box.dimensions.width.value, let bd = box.dimensions.depth.value, let bh = box.dimensions.height.value else { continue }
             boxes.append(Box(kind: .obstacle,
                              center: apple(x: box.origin.x + bw / 2, y: box.origin.y + bd / 2, z: box.origin.z + bh / 2),
-                             size: appleSize(bw, bh, bd)))
+                             size: appleSize(bw, bh, bd),
+                             group: .obstacle(obstacle.id),
+                             anchor: RoomPreviewAnchor(position: box.origin,
+                                                       span: RoomPreviewSpan(offsets: [Position3D(x: bw, y: bd, z: bh)]))))
         }
 
         for seat in seats {
-            boxes.append(Box(kind: .seat, center: apple(seat.position), size: appleSize(0.14, 0.14, 0.14)))
+            let offsets = seat.samples.map { relative($0.position, to: seat.position) }
+            boxes.append(Box(kind: .seat, center: apple(seat.position), size: appleSize(0.14, 0.14, 0.14),
+                             group: .seat(seat.id),
+                             anchor: RoomPreviewAnchor(position: seat.position, span: RoomPreviewSpan(offsets: offsets))))
             for sample in seat.samples {
-                boxes.append(Box(kind: .sample, center: apple(sample.position), size: appleSize(0.05, 0.05, 0.05)))
+                boxes.append(Box(kind: .sample, center: apple(sample.position), size: appleSize(0.05, 0.05, 0.05),
+                                 group: .seat(seat.id)))
             }
         }
 
         for device in devices {
             // The device marker size is a display convention (the model stores position, not dimensions).
             let supply = device.ports.first { $0.role == .supply }?.direction ?? Direction3D(x: 0, y: -1, z: 0)
+            let portOffsets = device.ports.map { relative($0.position, to: device.position) }
             boxes.append(Box(kind: .device, center: apple(device.position), size: appleSize(0.32, 0.22, 0.22),
-                             facing: CoordinateTransform.toApple(supply)))
+                             facing: CoordinateTransform.toApple(supply),
+                             group: .device(device.id),
+                             anchor: RoomPreviewAnchor(position: device.position, span: RoomPreviewSpan(offsets: portOffsets))))
             for port in device.ports {
                 arrows.append(Arrow(base: apple(port.position), direction: CoordinateTransform.toApple(port.direction),
-                                    role: port.role, length: arrowLength))
+                                    role: port.role, length: arrowLength, group: .device(device.id)))
             }
         }
 
         let occupied = Set(occupants.map(\.seatID))
         for seat in seats where occupied.contains(seat.id) {
-            figures.append(Figure(kind: .person, position: apple(seat.position)))
+            figures.append(Figure(kind: .person, position: apple(seat.position), group: .seat(seat.id)))
         }
         for item in equipment {
-            figures.append(Figure(kind: .monitor, position: apple(item.position)))
+            figures.append(Figure(kind: .monitor, position: apple(item.position), group: .equipment(item.id),
+                                  anchor: RoomPreviewAnchor(position: item.position, span: .point)))
         }
 
         return RoomPreviewLayout(roomCenter: apple(x: w / 2, y: d / 2, z: h / 2),
@@ -159,6 +196,10 @@ public struct RoomPreviewLayout: Equatable, Sendable {
     }
 
     // MARK: - Coordinate helpers (domain → Apple Y-up)
+
+    private static func relative(_ point: Position3D, to origin: Position3D) -> Position3D {
+        Position3D(x: point.x - origin.x, y: point.y - origin.y, z: point.z - origin.z)
+    }
 
     private static func apple(_ p: Position3D) -> Position3D { CoordinateTransform.toApple(p) }
     private static func apple(x: Double, y: Double, z: Double) -> Position3D {

@@ -3,20 +3,26 @@ import RealityKit
 import SwiftUI
 import SimuCore
 
-/// Read-only 3D preview of the room model. Geometry only — no airflow or temperature
-/// fields; result rendering arrives with P4. Editing stays in the top-down view and
-/// the inspector. RealityView requires macOS 15+ (deployment floor stays macOS 14, ADR-002);
+/// 3D preview of the room model. Geometry only — no airflow or temperature fields.
+/// Dragging a desk, seat, air conditioner, or monitor moves that project item inside the room.
+/// RealityView requires macOS 15+ (deployment floor stays macOS 14, ADR-002);
 /// older systems get an honest fallback note.
 public struct RoomPreview3D: View {
     let layout: RoomPreviewLayout
+    let onSelect: (RoomPreviewItem) -> Void
+    let onMove: (RoomPreviewItem, Position3D) -> Void
 
-    public init(layout: RoomPreviewLayout) {
+    public init(layout: RoomPreviewLayout,
+                onSelect: @escaping (RoomPreviewItem) -> Void = { _ in },
+                onMove: @escaping (RoomPreviewItem, Position3D) -> Void = { _, _ in }) {
         self.layout = layout
+        self.onSelect = onSelect
+        self.onMove = onMove
     }
 
     public var body: some View {
         if #available(macOS 15.0, *) {
-            RoomPreview3DReality(layout: layout)
+            RoomPreview3DReality(layout: layout, onSelect: onSelect, onMove: onMove)
         } else {
             ContentUnavailableView("3D 预览需要 macOS 15 或更新", systemImage: "cube.transparent",
                                    description: Text("当前系统版本可使用俯视编辑完成全部建模；3D 预览只是只读辅助视图。"))
@@ -27,17 +33,30 @@ public struct RoomPreview3D: View {
 @available(macOS 15.0, *)
 private struct RoomPreview3DReality: View {
     let layout: RoomPreviewLayout
+    let onSelect: (RoomPreviewItem) -> Void
+    let onMove: (RoomPreviewItem, Position3D) -> Void
 
     @State private var azimuth = -Double.pi / 5
     @State private var elevation = Double.pi / 6
     @State private var distanceFactor = 1.0
     @State private var lastDrag: CGSize = .zero
     @State private var cameraHolder = CameraHolder()
+    @State private var shownFingerprint = ""
+    @State private var activeDrag: ActiveDrag?
 
     /// Holds the camera entity across SwiftUI updates so orbit gestures mutate it
     /// without rebuilding the scene.
     final class CameraHolder: @unchecked Sendable {
         weak var camera: PerspectiveCamera?
+    }
+
+    struct ActiveDrag {
+        var item: RoomPreviewItem
+        var domain: Position3D
+        var span: RoomPreviewSpan
+        var entityStart: SIMD3<Float>
+        var grab: SIMD3<Float>?
+        var latest: Position3D
     }
 
     private var suggestedDistance: Double { RoomPreviewLayout.suggestedDistance(roomSize: layout.roomSize) }
@@ -46,18 +65,27 @@ private struct RoomPreview3DReality: View {
         ZStack(alignment: .bottomLeading) {
             RealityView { content in
                 let camera = PerspectiveCamera()
+                camera.name = "camera"
                 cameraHolder.camera = camera
                 content.add(camera)
-                content.add(makeScene())
                 applyCamera()
+            } update: { content in
+                applyCamera()
+                guard activeDrag == nil else { return }
+                guard shownFingerprint != layout.fingerprint || !content.entities.contains(where: { $0.name == "room" }) else { return }
+                if let existing = content.entities.first(where: { $0.name == "room" }) {
+                    content.entities.remove(existing)
+                }
+                content.add(makeScene())
+                shownFingerprint = layout.fingerprint
             }
-            .id(layout.fingerprint)
+            .highPriorityGesture(itemGesture)
             .gesture(orbitGesture)
             .gesture(zoomGesture)
-            .accessibilityLabel("房间三维示意预览，只读。桌椅、人和空调是外形，不含气流或温度场")
+            .accessibilityLabel("房间三维预览。拖动桌椅、空调或显示器可在房间内移动；拖空白处旋转。不含气流或温度场")
 
             HStack {
-                Text("3D 示意预览（只读）· 拖动旋转 · 双指缩放 · 外形不参与计算，不含气流/温度场")
+                Text("拖动物品沿房间地面移动，高度不变 · 拖空白处旋转 · 双指缩放")
                     .font(.caption2).foregroundStyle(.secondary)
                     .padding(6).background(.regularMaterial).clipShape(RoundedRectangle(cornerRadius: 6))
                 Spacer()
@@ -80,11 +108,19 @@ private struct RoomPreview3DReality: View {
 
     private var orbitGesture: some Gesture {
         DragGesture(minimumDistance: 2).onChanged { value in
+            guard activeDrag == nil else { return }
             azimuth += Double(value.translation.width - lastDrag.width) * 0.008
             elevation = min(max(elevation - Double(value.translation.height - lastDrag.height) * 0.008, 0.03), 1.45)
             lastDrag = value.translation
         }
         .onEnded { _ in lastDrag = .zero }
+    }
+
+    private var itemGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .targetedToAnyEntity()
+            .onChanged { value in moveItem(value) }
+            .onEnded { _ in finishItemDrag() }
     }
 
     private var zoomGesture: some Gesture {
@@ -99,25 +135,99 @@ private struct RoomPreview3DReality: View {
         let offset = RoomPreviewLayout.cameraOffset(azimuth: azimuth, elevation: elevation, radius: radius)
         let center = layout.roomCenter
         let position = SIMD3<Float>(Float(center.x + offset.x), Float(center.y + offset.y), Float(center.z + offset.z))
-        camera.look(at: SIMD3<Float>(Float(center.x), Float(center.y), Float(center.z)), from: position, relativeTo: nil)
+        let target = SIMD3<Float>(Float(center.x), Float(center.y), Float(center.z))
+        camera.look(at: target, from: position, relativeTo: nil)
+    }
+
+    // MARK: - Drag
+
+    private func moveItem(_ value: EntityTargetValue<DragGesture.Value>) {
+        guard let holder = dragHolder(value.entity),
+              let component = holder.components[PreviewDragComponent.self] else { return }
+        if activeDrag == nil {
+            activeDrag = ActiveDrag(item: component.item, domain: component.domain, span: component.span,
+                                    entityStart: holder.position, grab: nil, latest: component.domain)
+            onSelect(component.item)
+        }
+        guard var drag = activeDrag, drag.item == component.item else { return }
+        // Slide on the room's horizontal plane at this item's height, so desks stay on the floor
+        // and the movement matches domain X/Y rather than the camera plane.
+        guard let current = hitOnItemPlane(value.location, planeY: drag.entityStart.y, value: value) else { return }
+        if drag.grab == nil {
+            drag.grab = hitOnItemPlane(value.startLocation, planeY: drag.entityStart.y, value: value) ?? current
+        }
+        var delta = current - (drag.grab ?? current)
+        delta.y = 0
+        let domain = RoomPreviewDrag.moved(start: drag.domain, appleDelta: delta, roomSize: layout.roomSize, span: drag.span)
+        holder.position = drag.entityStart + RoomPreviewDrag.appleShift(from: drag.domain, to: domain)
+        drag.latest = domain
+        activeDrag = drag
+    }
+
+    private func finishItemDrag() {
+        if let drag = activeDrag, drag.domain != drag.latest {
+            onMove(drag.item, drag.latest)
+        }
+        activeDrag = nil
+        lastDrag = .zero
+    }
+
+    private func dragHolder(_ entity: Entity) -> Entity? {
+        var node: Entity? = entity
+        while let current = node {
+            if current.components[PreviewDragComponent.self] != nil { return current }
+            node = current.parent
+        }
+        return nil
+    }
+
+    private func hitOnItemPlane(_ point: CGPoint, planeY: Float, value: EntityTargetValue<DragGesture.Value>) -> SIMD3<Float>? {
+        guard let ray = value.ray(through: point, in: .local, to: .scene) else { return nil }
+        return RoomPreviewDrag.hitHorizontalPlane(origin: ray.origin, direction: ray.direction, planeY: planeY)
     }
 
     // MARK: - Scene
 
     private func makeScene() -> Entity {
         let root = Entity()
+        root.name = "room"
         let key = DirectionalLight()
         key.light.intensity = 10000
         key.look(at: .zero, from: SIMD3<Float>(1.2, 2.4, 1.6), relativeTo: nil)
         root.addChild(key)
+        var groups: [RoomPreviewItem: Entity] = [:]
+        func adopt(_ visual: Entity, group: RoomPreviewItem?, anchor: RoomPreviewAnchor?) {
+            guard let group else {
+                root.addChild(visual)
+                return
+            }
+            let holder: Entity
+            if let existing = groups[group] {
+                holder = existing
+            } else {
+                holder = Entity()
+                holder.position = visual.position
+                holder.components.set(InputTargetComponent())
+                if let anchor {
+                    holder.components.set(PreviewDragComponent(item: group, domain: anchor.position, span: anchor.span))
+                }
+                groups[group] = holder
+                root.addChild(holder)
+            }
+            visual.position -= holder.position
+            holder.addChild(visual)
+        }
         for box in layout.boxes {
-            root.addChild(makeBox(box))
+            adopt(makeBox(box), group: box.group, anchor: box.anchor)
         }
         for figure in layout.figures {
-            root.addChild(makeFigure(figure))
+            adopt(makeFigure(figure), group: figure.group, anchor: figure.anchor)
         }
         for arrow in layout.arrows {
-            root.addChild(makeArrow(arrow))
+            adopt(makeArrow(arrow), group: arrow.group, anchor: nil)
+        }
+        for holder in groups.values {
+            holder.generateCollisionShapes(recursive: true)
         }
         return root
     }
@@ -194,5 +304,12 @@ private struct RoomPreview3DReality: View {
             return SimpleMaterial(color: .systemGray, isMetallic: false)
         }
     }
+}
+
+@available(macOS 15.0, *)
+private struct PreviewDragComponent: Component {
+    var item: RoomPreviewItem
+    var domain: Position3D
+    var span: RoomPreviewSpan
 }
 #endif

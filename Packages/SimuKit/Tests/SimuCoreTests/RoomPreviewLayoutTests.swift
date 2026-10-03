@@ -110,4 +110,29 @@ struct RoomPreviewLayoutTests {
         #expect(classLayout.figures.filter { $0.kind == .person }.count == 12)
         #expect(classLayout.figures.filter { $0.kind == .monitor }.isEmpty)
     }
+
+    @Test func dragMovesInThreeAxesAndStaysInsideTheRoom() {
+        let room = Position3D(x: 5, y: 4, z: 2.8)
+        let point = RoomPreviewSpan.point
+        let east = RoomPreviewDrag.moved(start: Position3D(x: 1, y: 1, z: 0), appleDelta: SIMD3(1, 0, 0), roomSize: room, span: point)
+        #expect(east == Position3D(x: 2, y: 1, z: 0))
+        let up = RoomPreviewDrag.moved(start: Position3D(x: 1, y: 1, z: 0), appleDelta: SIMD3(0, 1, 0), roomSize: room, span: point)
+        #expect(up == Position3D(x: 1, y: 1, z: 1))
+        let north = RoomPreviewDrag.moved(start: Position3D(x: 1, y: 1, z: 0), appleDelta: SIMD3(0, 0, -1), roomSize: room, span: point)
+        #expect(north == Position3D(x: 1, y: 2, z: 0))
+        let outside = RoomPreviewDrag.moved(start: Position3D(x: 1, y: 1, z: 0), appleDelta: SIMD3(20, 20, -20), roomSize: room, span: point)
+        #expect(outside == Position3D(x: 5, y: 4, z: 2.8))
+        let desk = RoomPreviewSpan(offsets: [Position3D(x: 1.2, y: 0.6, z: 0.75)])
+        let shoved = RoomPreviewDrag.moved(start: Position3D(x: 0, y: 0, z: 0), appleDelta: SIMD3(10, 10, -10), roomSize: room, span: desk)
+        #expect(abs(shoved.x - (5 - 1.2)) < 1e-9)
+        #expect(abs(shoved.y - (4 - 0.6)) < 1e-9)
+        #expect(abs(shoved.z - (2.8 - 0.75)) < 1e-9)
+        let shift = RoomPreviewDrag.appleShift(from: Position3D(x: 1, y: 2, z: 0), to: Position3D(x: 1, y: 3, z: 0.5))
+        #expect(shift == SIMD3(Float(0), Float(0.5), Float(-1)))
+        let straight = RoomPreviewDrag.hitHorizontalPlane(origin: SIMD3(0, 5, 0), direction: SIMD3(0, -1, 0), planeY: 1)
+        #expect(straight == SIMD3(0, 1, 0))
+        let angled = RoomPreviewDrag.hitHorizontalPlane(origin: SIMD3(0, 4, 0), direction: SIMD3(1, -2, 0.5), planeY: 0)
+        #expect(angled == SIMD3(2, 0, 1))
+        #expect(RoomPreviewDrag.hitHorizontalPlane(origin: SIMD3(0, 1, 0), direction: SIMD3(0, 1, 0), planeY: 0) == nil)
+    }
 }

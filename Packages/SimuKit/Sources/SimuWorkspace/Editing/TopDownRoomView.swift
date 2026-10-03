@@ -1,5 +1,6 @@
 import SwiftUI
 import SimuCore
+import SimuVisualization
 
 /// Top-down plan view: room rectangle with obstacles, seats, devices and ports.
 /// Tap selects; drag repositions (snap 0.05 m, clamped to the room); contract validation reports the rest.
@@ -125,12 +126,10 @@ public struct TopDownRoomView: View {
                 guard let selection = session.selection, let start = dragStart else { return }
                 let dx = Double(value.translation.width) / scale
                 let dy = -Double(value.translation.height) / scale
-                move(selection, to: snap(start.x + dx), snap(start.y + dy))
+                move(selection, to: RoomPreviewDrag.snap(start.x + dx), RoomPreviewDrag.snap(start.y + dy))
             }
             .onEnded { _ in dragStart = nil }
     }
-
-    private func snap(_ v: Double) -> Double { (v / 0.05).rounded() * 0.05 }
 
     private func currentPosition(of selection: EntitySelection) -> Position3D? {
         guard let scenario = session.currentScenario else { return nil }
@@ -146,41 +145,14 @@ public struct TopDownRoomView: View {
     }
 
     private func move(_ selection: EntitySelection, to x: Double, _ y: Double) {
-        guard let size = roomSize else { return }
-        session.mutate { document in
-            guard let sIndex = document.scenarios.firstIndex(where: { $0.id == session.currentScenarioID }) else { return }
-            switch selection {
-            case .seat(let id):
-                guard let i = document.scenarios[sIndex].inputs.usage.seats.firstIndex(where: { $0.id == id }) else { return }
-                let px = min(max(x, 0), size.w), py = min(max(y, 0), size.d)
-                let seat = document.scenarios[sIndex].inputs.usage.seats[i]
-                let dx = px - seat.position.x, dy = py - seat.position.y
-                document.scenarios[sIndex].inputs.usage.seats[i].position = Position3D(x: px, y: py, z: seat.position.z)
-                for j in seat.samples.indices {
-                    let s = seat.samples[j].position
-                    document.scenarios[sIndex].inputs.usage.seats[i].samples[j].position = Position3D(x: s.x + dx, y: s.y + dy, z: s.z)
-                }
-            case .device(let id):
-                guard let i = document.scenarios[sIndex].inputs.hvac.firstIndex(where: { $0.id == id }) else { return }
-                let px = min(max(x, 0), size.w), py = min(max(y, 0), size.d)
-                let device = document.scenarios[sIndex].inputs.hvac[i]
-                let dx = px - device.position.x, dy = py - device.position.y
-                document.scenarios[sIndex].inputs.hvac[i].position = Position3D(x: px, y: py, z: device.position.z)
-                for k in device.ports.indices {
-                    let p = device.ports[k].position
-                    document.scenarios[sIndex].inputs.hvac[i].ports[k].position = Position3D(x: p.x + dx, y: p.y + dy, z: p.z)
-                }
-            case .obstacle(let id):
-                guard let oi = document.geometry.obstacles.firstIndex(where: { $0.id == id }),
-                      let box = try? document.geometry.obstacles[oi].shape.resolved(as: BoxObstacle.self, registry: session.registry),
-                      let w = box.dimensions.width.value, let d = box.dimensions.depth.value else { return }
-                let px = min(max(x, 0), size.w - w), py = min(max(y, 0), size.d - d)
-                let moved = BoxObstacle(origin: Position3D(x: px, y: py, z: box.origin.z), dimensions: box.dimensions)
-                if let record = try? ExtensionRecord(moved) {
-                    document.geometry.obstacles[oi].shape = record
-                }
-            default: break
-            }
+        guard let current = currentPosition(of: selection) else { return }
+        let item: RoomPreviewItem
+        switch selection {
+        case .seat(let id): item = .seat(id)
+        case .device(let id): item = .device(id)
+        case .obstacle(let id): item = .obstacle(id)
+        default: return
         }
+        RoomMotion.apply(item, to: Position3D(x: x, y: y, z: current.z), session: session)
     }
 }

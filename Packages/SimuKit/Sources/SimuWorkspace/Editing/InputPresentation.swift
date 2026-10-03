@@ -78,6 +78,20 @@ enum InputPresentation {
         return context.isEmpty || field == context ? field : "\(context) · \(field)"
     }
 
+    /// Sidebar label: which wall, and a number only when that wall has more than one of the same kind.
+    static func openingListTitle(_ opening: Opening, in room: Room) -> String {
+        let face = room.surfaces.first { $0.id == opening.surfaceID }?.face
+        let place = face.map(faceTitle) ?? "未指定墙面"
+        let kind = opening.kind == .window ? "窗" : "门"
+        let matches = room.openings.filter { other in
+            other.kind == opening.kind && room.surfaces.first { $0.id == other.surfaceID }?.face == face
+        }
+        guard matches.count > 1, let index = matches.firstIndex(where: { $0.id == opening.id }) else {
+            return "\(place)的\(kind)"
+        }
+        return "\(place)的\(kind) \(index + 1)"
+    }
+
     static func faceTitle(_ face: SurfaceFace) -> String {
         switch face {
         case .xMin: "左墙"
@@ -99,7 +113,7 @@ enum InputPresentation {
         case .seat: "座位设置"
         case .occupant: "人员设置"
         case .equipment: "电器设置"
-        case .control: "温度与开机时间"
+        case .control: "设定温度"
         case .environment: "天气与温湿度"
         case .cost: "电价与报价"
         }

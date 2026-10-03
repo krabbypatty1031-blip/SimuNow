@@ -47,9 +47,9 @@ public struct WorkspaceView: View {
                 }
                 if let room = session.project.geometry.rooms.first {
                     Section("我的房间") {
-                        treeRow("房间：\(room.name)", selection: .room(room.id), session: session)
+                        treeRow(room.name, detail: "尺寸、朝向和墙面", selection: .room(room.id), session: session)
                         ForEach(room.openings, id: \.id) { opening in
-                            treeRow("\(opening.kind == .window ? "窗" : "门")", selection: .opening(opening.id), session: session)
+                            treeRow(InputPresentation.openingListTitle(opening, in: room), selection: .opening(opening.id), session: session)
                         }
                         DisclosureGroup("家具 · \(session.project.geometry.obstacles.count)") {
                             ForEach(session.project.geometry.obstacles, id: \.id) { obstacle in
@@ -68,16 +68,18 @@ public struct WorkspaceView: View {
                                 treeRow(seat.name, selection: .seat(seat.id), session: session)
                             }
                         }
-                        DisclosureGroup("人员与电器") {
-                            ForEach(Array(scenario.inputs.usage.occupants.enumerated()), id: \.element.id) { index, occupant in
-                                treeRow("人员 \(index + 1)", selection: .occupant(occupant.id), session: session)
+                        DisclosureGroup("人和设备散热") {
+                            ForEach(scenario.inputs.usage.occupants, id: \.id) { occupant in
+                                let seatName = scenario.inputs.usage.seats.first { $0.id == occupant.seatID }?.name
+                                treeRow(seatName.map { "\($0)的人" } ?? "未对应座位的人", selection: .occupant(occupant.id), session: session)
                             }
                             ForEach(Array(scenario.inputs.usage.equipment.enumerated()), id: \.element.id) { index, item in
-                                treeRow("电器 \(index + 1)", selection: .equipment(item.id), session: session)
+                                treeRow("设备散热 \(index + 1)", selection: .equipment(item.id), session: session)
                             }
                         }
                         ForEach(scenario.inputs.controls, id: \.id) { control in
-                            treeRow("温度与开机时间", selection: .control(control.id), session: session)
+                            let deviceName = scenario.inputs.hvac.first { $0.id == control.deviceID }?.name ?? "空调"
+                            treeRow("\(deviceName)的设定温度", selection: .control(control.id), session: session)
                         }
                         treeRow("天气与温湿度", selection: .environment, session: session)
                         treeRow("电价与报价", selection: .cost, session: session)
@@ -126,12 +128,17 @@ public struct WorkspaceView: View {
         }
     }
 
-    private func treeRow(_ title: String, selection: EntitySelection, session: ProjectSession) -> some View {
+    private func treeRow(_ title: String, detail: String? = nil, selection: EntitySelection, session: ProjectSession) -> some View {
         Button {
             session.selection = selection
         } label: {
             HStack {
-                Text(title).font(.callout)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.callout)
+                    if let detail {
+                        Text(detail).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
                 if session.selection == selection {
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
@@ -139,6 +146,7 @@ public struct WorkspaceView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(detail.map { "\(title)，\($0)" } ?? title)
     }
 
     @ViewBuilder
@@ -171,7 +179,7 @@ public struct WorkspaceView: View {
                 Spacer()
             }
             .padding(.horizontal, 8).padding(.top, 6)
-            Text(viewMode == .plan ? "点选对象修改设置；拖动可调整位置。" : "这里查看房间外观，不显示温度或气流结果。")
+            Text(viewMode == .plan ? "点选对象修改设置；拖动可调整位置。" : "拖动桌椅、空调或显示器，它们会沿房间地面移动并保持原来的高度。拖空白处旋转。")
                 .font(.caption).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12).padding(.top, 8)
@@ -232,7 +240,11 @@ public struct WorkspaceView: View {
                                                 registry: session.registry,
                                                 occupants: session.currentScenario?.inputs.usage.occupants ?? [],
                                                 equipment: session.currentScenario?.inputs.usage.equipment ?? []) {
-            RoomPreview3D(layout: layout)
+            RoomPreview3D(layout: layout, onSelect: { item in
+                session.selection = RoomMotion.selection(for: item)
+            }, onMove: { item, position in
+                RoomMotion.apply(item, to: position, session: session)
+            })
         } else {
             ContentUnavailableView("先填写房间尺寸", systemImage: "cube.transparent",
                                    description: Text("尺寸齐全后，可以查看房间外观。"))

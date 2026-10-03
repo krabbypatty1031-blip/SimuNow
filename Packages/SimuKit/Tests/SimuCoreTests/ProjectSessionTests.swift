@@ -65,6 +65,26 @@ import Testing
     #expect(try session.snapshot(for: session.project.scenarios[0].id).scenarioID == session.project.scenarios[0].id)
 }
 
+@Test @MainActor func draggingKeepsAttachedPointsInsideTheRoom() throws {
+    let session = ProjectSession(project: ProjectTemplates.office())
+    let seat = session.project.scenarios[0].inputs.usage.seats[0]
+    let highest = seat.samples.map(\.position.z).max() ?? 0
+    RoomMotion.apply(.seat(seat.id), to: Position3D(x: 100, y: -4, z: 9), session: session)
+    let moved = try #require(session.project.scenarios[0].inputs.usage.seats.first { $0.id == seat.id })
+    #expect(moved.position.x == 5)
+    #expect(moved.position.y == 0)
+    #expect(moved.position.z == 2.8 - (highest - seat.position.z))
+    #expect(moved.samples.map(\.position.z).allSatisfy { $0 <= 2.8 + 1e-9 })
+    let dx = moved.position.x - seat.position.x
+    #expect(moved.samples[0].position.x == seat.samples[0].position.x + dx)
+
+    let device = session.project.scenarios[0].inputs.hvac[0]
+    RoomMotion.apply(.device(device.id), to: Position3D(x: 1, y: 1, z: 0), session: session)
+    let movedDevice = try #require(session.project.scenarios[0].inputs.hvac.first { $0.id == device.id })
+    #expect(movedDevice.position == Position3D(x: 1, y: 1, z: 0))
+    #expect(movedDevice.ports.contains { $0.position.z == device.ports[0].position.z - device.position.z })
+}
+
 @Test @MainActor func everyBlockingInputOpensAnEditor() {
     var project = ProjectTemplates.office()
     project.scenarios[0].inputs.environment.outdoorTemperature = .unknown(reason: "test")

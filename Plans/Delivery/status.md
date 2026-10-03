@@ -19,7 +19,7 @@
 | P1-01 固定运行环境与能力检查 | 已完成（2026-10-03，strict doctor exit 0 / ready） | runtime/、Artifacts/P1-01/；verification.md P1-01 收尾节；ADR-018 |
 | L1/L2/L3 引擎 | L1/L2 引擎已安装并通过最小启动验证（P1-01）；适配器待开发（P1-02…05、P3-03/04） | P1/P3 遗留条件 |
 | P5 方案对比/建议卡/基础 PDF | 已完成（L0 口径；舒适与年度费用不含，见计划） | Comparison/、Reporting/；verification.md P5 节 |
-| 只读 3D 几何预览 | 已完成（macOS 15+ RealityView；示意桌椅、人体、显示器、门窗和壁挂空调；更低系统/iOS 回退说明；非编辑器、不含场） | SimuVisualization RoomPreview3D/Layout/Meshes；ADR-017、ADR-020 |
+| 3D 几何预览 | 已完成（macOS 15+ RealityView；示意桌椅、人体、显示器、门窗和壁挂空调；可在房间内拖动这些物品；更低系统/iOS 回退说明；不含场） | SimuVisualization RoomPreview3D/Layout/Meshes；ADR-017、ADR-020、ADR-021 |
 | 场渲染/舒适评价 | 待开发 | P4 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 | iOS 模拟器启动 | 已验证（iPhone 17，install+launch+存活） | verification.md「应用启动验证」 |

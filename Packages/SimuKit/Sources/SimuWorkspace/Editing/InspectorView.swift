@@ -30,7 +30,7 @@ public struct InspectorView: View {
                 } else {
                     Section {
                         RoomPageIntro("想改哪里？", detail: "点选图中的空调、座位或家具，就能查看设置。")
-                        Text("温度和开机时间在左侧；天气与温湿度也可以单独设置。")
+                        Text("左侧可以选择尺寸与墙面、门窗、人和空调的设定温度；天气与电价也在左侧。")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     assumptionsSection

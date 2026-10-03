@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Testing
 @testable import SimuCore
-import SimuWorkspace
+@testable import SimuWorkspace
 
 @Test func templatesPassIntegrityWithHongKongOctoberDefaults() throws {
     for project in [ProjectTemplates.office(), ProjectTemplates.classroom()] {
@@ -75,6 +75,13 @@ import SimuWorkspace
     #expect(report.issues.contains { $0.code == "device_count" })
     #expect(!report.issues.contains { $0.path.hasSuffix("/outdoorTemperature") })
     #expect(!report.issues.contains { $0.path.hasSuffix("/weather") })
+}
+
+@Test func sidebarNamesOpeningsByWall() {
+    let office = ProjectTemplates.office().geometry.rooms[0]
+    #expect(office.openings.map { InputPresentation.openingListTitle($0, in: office) } == ["远侧墙的窗", "左墙的门"])
+    let classroom = ProjectTemplates.classroom().geometry.rooms[0]
+    #expect(classroom.openings.map { InputPresentation.openingListTitle($0, in: classroom) } == ["远侧墙的窗 1", "远侧墙的窗 2", "左墙的门"])
 }
 
 @Test func templateMassBalanceAndFlowConsistencyHold() throws {

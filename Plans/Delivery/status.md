@@ -45,11 +45,11 @@
 | L0/L3 与场显示接入 | P4 视口/切片/对比已通 | P4-05 a/b/c/d + P4-06 a/b + Debug 手测已记录。L0/L3 引擎仍未配置。Release 沙盒 exec 待 P7 helper |
 | ADR-012 人员显热对齐 | 已实施（P4-06 对比前置） | 模板 `occupantSensibleW` 70→57（每人显热，实测拆分）；`write_idf` `OCCUPANT_LATENT_W=13` 显式单列、People 行 activity 57+13=70 逐位不变 → L1 IDF/P3 手测数字有效；L2 人员源 560→456 W（虚增 104 W 消除）；钉版重跑 `result-l2`（座位 24.43–24.73 °C）/`field-slice-l2`（23.348–25.207 °C）；断言更新 `test_l1_schedule`（activity 跟随显+潜敏感性 + 基线 70）/`test_boundary`/`test_l2_room`（456/57）/`L2BoundaryTests`/`L2RoomMappingTests`/`ContractTests`；`project-v2-office.json` fixture 第 5 处同步 57 并加断言锁值（Python 79 + Swift 125 全绿；mac/ios BUILD SUCCEEDED）；实施补录见 `decisions.md` ADR-012 |
 | 场渲染/成本/报告 | 待开发 | P5（renderer 预算在 P4-05） |
-| RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
+| RoomPlan/实测/代理/批量 | 本期不做（用户决定 2026-10-03） | P6/P7 延后至赛后第 3–8 周路线，阶段计划文档保留不改目标 |
 
 ## 下一步
 
-P4 阶段门已关闭，并已快进合并进 `dev`（未推远程）。下一阶段按计划是 P5（建议/费用/PDF），不要把本阶段 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。已知限制：任务页 `lastResult` 单槽（提交 L2 后 L1 瓦数显示未知）；P1 case 整墙送风带，沿墙平移 s0/s1 不改场。
+P4 阶段门已关闭，并已快进合并进 `dev`（未推远程）。下一阶段按计划是 P5（建议/费用/PDF），不要把本阶段 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。已知限制：任务页 `lastResult` 单槽（提交 L2 后 L1 瓦数显示未知）；P1 case 整墙送风带，沿墙平移 s0/s1 不改场。**P6/P7 本期不做（用户决定 2026-10-03）**：RoomPlan 扫描、实测校准、代理/批量/签名部署延后至赛后路线，先集中 P5 交付。
 
 ## P4 阶段结论
 

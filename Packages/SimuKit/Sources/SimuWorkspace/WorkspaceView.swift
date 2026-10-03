@@ -8,6 +8,8 @@ public struct WorkspaceView: View {
     @State private var store: WorkspaceStore
     @State private var isOpeningPackage = false
     @State private var isSavingPackage = false
+    /// Shared camera yaw for the comparison page: one lens for all candidates.
+    @State private var comparisonYaw: Double = -0.6
 
     public init(store: WorkspaceStore) {
         self._store = State(initialValue: store)
@@ -82,25 +84,7 @@ public struct WorkspaceView: View {
         case .workspace:
             workspaceDetail
         case .scenarios:
-            if let baseline = store.baseline, let current = store.project {
-                Form {
-                    Section("基准方案") {
-                        LabeledContent("方案 ID", value: store.baselineScenarioID?.uuidString ?? "无")
-                        LabeledContent("基准长度 m", value: String(baseline.geometry?.sizeX.value ?? 0))
-                        Text("基准是输入快照，不含计算结果。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    Section("当前编辑") {
-                        LabeledContent("当前长度 m", value: String(current.geometry?.sizeX.value ?? 0))
-                        Text("改当前房间不会覆盖基准 JSON。")
-                            .font(.footnote)
-                    }
-                }
-                .formStyle(.grouped)
-            } else {
-                EmptyStateView("暂无方案", symbol: "square.stack.3d.up", message: "从办公室或教室模板创建后，这里显示冻结基准与当前编辑。")
-            }
+            scenariosDetail
         case .runs:
             runsDetail
         case .reports:
@@ -158,6 +142,20 @@ public struct WorkspaceView: View {
                     if let message = store.runMessage {
                         Text(message)
                             .font(.footnote)
+                    }
+                    Button("固定为对比候选") {
+                        store.pinCurrentAsCandidate()
+                    }
+                    .disabled(!store.canPinCandidate)
+                    .accessibilityLabel("把当前结果固定为对比候选，冻结几何与口径快照")
+                    if store.candidateRuns.isEmpty {
+                        Text("固定后可在方案对比页并排查看。stale 结果不能固定。")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("已固定 \(store.candidateRuns.count) 个候选，见方案对比页。")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Section("代表日指标") {
@@ -232,6 +230,117 @@ public struct WorkspaceView: View {
         case .stale: "输入已改，待重算"
         case nil: "无结果"
         }
+    }
+
+    /// P4-06 comparison page: pinned candidates share one camera (yaw), one
+    /// physical colour range and the same basis; mixed bases are flagged
+    /// instead of being shown as a valid comparison.
+    @ViewBuilder
+    private var scenariosDetail: some View {
+        if store.candidateRuns.isEmpty {
+            EmptyStateView(
+                "暂无对比候选",
+                symbol: "square.stack.3d.up",
+                message: "提交代表工况 L2 后，在任务页把结果固定为候选；基准加两个候选同口径并排。"
+            )
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let mismatch = store.basisMismatchText {
+                        Label(mismatch, systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel(mismatch)
+                    } else {
+                        Label("口径一致：人数、占用时段、设定与送风温度相同，只有几何不同。", systemImage: "checkmark.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let range = store.comparisonPaletteRange {
+                        Text(String(format: "共用色标 %.1f – %.1f °C（跨候选联合范围，不各自归一化）", range.minC, range.maxC))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("无质量通过的切片，暂无共用色标。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    // One camera for every candidate: a shared yaw binding.
+                    ForEach(store.candidateRuns) { record in
+                        candidateCard(record, sharedYaw: $comparisonYaw)
+                    }
+                }
+                .padding()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func candidateCard(_ record: CandidateRun, sharedYaw: Binding<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(record.name)
+                    .font(.headline)
+                Spacer()
+                Button(role: .destructive) {
+                    store.removeCandidate(runID: record.identity.runID)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .accessibilityLabel("移除候选 \(record.name)")
+            }
+            Text("run \(record.identity.runID.uuidString.prefix(8)) · 输入哈希 \(record.identity.inputHash.prefix(8))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            // Freshness and quality are independent states, shown side by side.
+            HStack(spacing: 12) {
+                LabeledContent("状态", value: record.state.rawValue)
+                LabeledContent("质量", value: record.quality.rawValue)
+                LabeledContent("新鲜度", value: store.candidateFreshness(record) == .current ? "当前输入" : "输入已改")
+            }
+            .font(.footnote)
+            HStack(spacing: 12) {
+                LabeledContent("座位最低温", value: candidateMetric(record, "seat_t_c_min"))
+                LabeledContent("座位最高温", value: candidateMetric(record, "seat_t_c_max"))
+                LabeledContent("最大风速", value: candidateMetric(record, "seat_u_mag_max"))
+                LabeledContent("PPD 最高", value: candidateMetric(record, "seat_ppd_max"))
+            }
+            .font(.footnote)
+            if let reason = record.metrics.first(where: { $0.name == "seat_pmv_min" })?.reason {
+                Text(reason)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            // Frozen geometry snapshot, not the live draft. One shared camera
+            // (yaw) and one shared physical palette across all candidates.
+            SimulationViewport(
+                draft: record.draft,
+                field: record.slice,
+                sharedPalette: sharedComparisonPalette,
+                yaw: sharedYaw
+            )
+            .frame(height: 220)
+        }
+        .padding(12)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("对比候选 \(record.name)")
+    }
+
+    private func candidateMetric(_ record: CandidateRun, _ name: String) -> String {
+        guard let metric = record.metrics.first(where: { $0.name == name }) else {
+            return "无此指标"
+        }
+        if metric.omitted || metric.value == nil {
+            return "未知"
+        }
+        return "\(metric.value!) \(metric.unit)"
+    }
+
+    /// One physical colour range shared by every candidate viewport.
+    private var sharedComparisonPalette: SlicePalette? {
+        guard let range = store.comparisonPaletteRange else { return nil }
+        return SlicePalette(minC: range.minC, maxC: range.maxC)
     }
 
     /// Same physical range text as the viewport legend; nil stats stay unknown.

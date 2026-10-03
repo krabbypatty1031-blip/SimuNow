@@ -1,7 +1,17 @@
 # 工程验证记录
 
-日期：2026-10-03（P4-05 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
+
+## P4-06 验证（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` | 通过，125 项（SimuCoreTests 115 + SimuVisualizationTests 10） | 新增 `CandidateRunTests` 4 项（同口径可比较、人数/时段/设定/送风不同分别阻断并给中文原因、Codable roundtrip 保 draft/切片冻结）与 `WorkspaceComparisonTests` 5 项（pin 冻结几何与口径快照、编辑不改 record、stale 拒绝 pin、共用色标跨候选联合 min/max、混合口径 `basisMismatchText`、质量失败候选 freshness=current 且 slice=nil 与 quality 独立） |
+| `Scripts/check.sh mac` | BUILD SUCCEEDED | `WorkspaceView` 对比页（口径警示/共用 yaw 镜头/sharedPalette/runID/哈希/状态/质量/新鲜度并排）、任务页「固定为对比候选」（stale disabled）、`RoomWireframeView` 外部 yaw 与 sharedPalette、`SimulationViewport` 透传 |
+| `Scripts/check.sh ios` | BUILD SUCCEEDED | 对比页共用 SimuWorkspace/SimuVisualization 视图；iOS 不接本地 OpenFOAM（L2 按钮仅 macOS） |
+
+不得当作产品功能：候选并排的**实际显示效果未手测**（UI 无测试 target，编译与单测不能代替手测）；「基准 + 两候选」需用户改空间参数 → 提交 → 固定三次产生，本仓库未预置候选数据；对比结论（哪个更舒适）不做自动推荐（P5 建议）。
 
 ## P4-05 全量验证（2026-10-03）
 

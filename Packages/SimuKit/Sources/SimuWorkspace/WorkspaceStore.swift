@@ -377,6 +377,87 @@ public final class WorkspaceStore {
         try? await l2Client.cancel(runID: runID)
     }
 
+    // MARK: - Candidate comparison (P4-06)
+
+    /// Pinned, frozen scenario results for the comparison page. The record is
+    /// a copy; later edits never mutate it.
+    public var candidateRuns: [CandidateRun] = []
+
+    /// Pinning requires a finished, current result. A stale result belongs to
+    /// an older input and must not be labelled with the current draft.
+    public var canPinCandidate: Bool {
+        lastResult != nil && resultFreshness == .current && !isSubmitting
+    }
+
+    /// Freeze the latest result as a comparison candidate. The basis (people,
+    /// hours, setpoints, supply temperature) is copied from the draft at pin
+    /// time; only fresh results may pin, so basis and run cannot drift apart.
+    public func pinCurrentAsCandidate(named name: String? = nil) {
+        guard canPinCandidate, let result = lastResult, let project else { return }
+        let basis = CandidateRun.ComparisonBasis(
+            occupantCount: project.occupancy?.occupantCount.value ?? 0,
+            occupiedStart: project.occupancy?.schedule?.start
+                ?? project.hvac?.schedule?.start ?? "",
+            occupiedEnd: project.occupancy?.schedule?.end
+                ?? project.hvac?.schedule?.end ?? "",
+            setpointC: project.hvac?.setpointC.value ?? 0,
+            supplyTemperatureC: project.hvac?.supplyTemperatureC.value ?? 0
+        )
+        let record = CandidateRun(
+            name: name?.isEmpty == false ? name! : "方案 \(candidateRuns.count + 1)",
+            identity: result.identity,
+            state: result.state,
+            quality: result.quality,
+            metrics: result.metrics,
+            slice: lastFieldSlice,
+            basis: basis,
+            draft: project
+        )
+        candidateRuns.append(record)
+    }
+
+    public func removeCandidate(runID: UUID) {
+        candidateRuns.removeAll { $0.identity.runID == runID }
+    }
+
+    /// Shared physical colour range across all quality-passed candidate
+    /// slices. Candidates never renormalise individually to hide differences.
+    /// nil when no candidate has a quality-passed slice with valid stats.
+    public var comparisonPaletteRange: (minC: Double, maxC: Double)? {
+        let slices = candidateRuns.compactMap(\.slice).filter { $0.quality == "passed" }
+        let mins = slices.compactMap(\.stats.minC)
+        let maxs = slices.compactMap(\.stats.maxC)
+        guard let minC = mins.min(), let maxC = maxs.max() else { return nil }
+        return (minC, maxC)
+    }
+
+    /// Whether every pinned candidate shares one basis; a false value must
+    /// block a side-by-side numeric comparison in the UI.
+    public var candidatesShareBasis: Bool {
+        basisMismatchText == nil
+    }
+
+    /// nil when all candidates share the basis, otherwise the first mismatch
+    /// reason. Empty candidate lists trivially share a basis.
+    public var basisMismatchText: String? {
+        let bases = candidateRuns.map(\.basis)
+        guard let first = bases.first else { return nil }
+        for other in bases.dropFirst() {
+            if let reason = CandidateRun.basisMismatch(first, other) {
+                return reason
+            }
+        }
+        return nil
+    }
+
+    /// Per-candidate freshness against the live draft: a pinned record whose
+    /// input hash matches the current draft is current; anything else is
+    /// stale. Freshness is independent of the record's own quality.
+    public func candidateFreshness(_ record: CandidateRun) -> ResultFreshness {
+        guard let hash = currentInputHash() else { return .stale }
+        return record.identity.inputHash == hash ? .current : .stale
+    }
+
     #if os(macOS)
     public func restoreEngineBookmarks() {
         if let saved = EngineBookmarkStore.restore() {

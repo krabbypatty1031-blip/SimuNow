@@ -8,12 +8,26 @@ import SimuCore
 public struct RoomWireframeView: View {
     private let scene: RoomScene
     private let field: FieldSlice?
-    @State private var yaw: Double = -0.6
+    /// Shared comparison palette (P4-06): candidates render against one
+    /// physical range instead of renormalising individually. nil keeps the
+    /// slice's own range, which is the single-run behaviour.
+    private let sharedPalette: SlicePalette?
+    /// External yaw so the comparison page can keep one camera for several
+    /// candidates. nil keeps a private, self-contained camera.
+    private let externalYaw: Binding<Double>?
+    @State private var internalYaw: Double = -0.6
     @State private var dragStartYaw: Double?
 
-    public init(scene: RoomScene, field: FieldSlice? = nil) {
+    public init(scene: RoomScene, field: FieldSlice? = nil, sharedPalette: SlicePalette? = nil, yaw: Binding<Double>? = nil) {
         self.scene = scene
         self.field = field
+        self.sharedPalette = sharedPalette
+        self.externalYaw = yaw
+    }
+
+    /// The live camera binding: external when provided, private otherwise.
+    private var yaw: Binding<Double> {
+        externalYaw ?? $internalYaw
     }
 
     public var body: some View {
@@ -33,9 +47,9 @@ public struct RoomWireframeView: View {
             DragGesture()
                 .onChanged { value in
                     // Horizontal drag spins the room; no gesture changes data.
-                    let base = dragStartYaw ?? yaw
+                    let base = dragStartYaw ?? yaw.wrappedValue
                     dragStartYaw = base
-                    yaw = base + value.translation.width * 0.01
+                    yaw.wrappedValue = base + value.translation.width * 0.01
                 }
                 .onEnded { _ in dragStartYaw = nil }
         )
@@ -45,6 +59,11 @@ public struct RoomWireframeView: View {
     }
 
     private var palette: SlicePalette? {
+        // A shared palette wins so candidates compare on one physical range;
+        // otherwise the slice's own quality-passed range is used.
+        if let sharedPalette {
+            return sharedPalette
+        }
         // Colour exists only for a quality-passed field with valid stats.
         guard let field, field.quality == "passed",
               let minC = field.stats.minC, let maxC = field.stats.maxC else {
@@ -94,7 +113,7 @@ public struct RoomWireframeView: View {
     /// All geometry is projected first, then fitted with one uniform scale so
     /// the room keeps its proportions; padding leaves room for the legend.
     private func draw(in context: inout GraphicsContext, canvasSize: CGSize) {
-        let projection = IsometricProjection(yawRadians: yaw)
+        let projection = IsometricProjection(yawRadians: yaw.wrappedValue)
         let roomPoints = projection.roomCorners(scene)
         var allPoints = roomPoints
         if let supply = scene.supply {

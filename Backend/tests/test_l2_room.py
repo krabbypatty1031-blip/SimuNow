@@ -82,6 +82,59 @@ class L2RoomMappingTests(unittest.TestCase):
             room["assumptions"],
         )
 
+    def test_second_window_adds_watts_to_the_band(self):
+        # ADR-017: the band flux is SUM(window W) / band area, so adding a
+        # declared-flux window must heat the field and every seat reading.
+        draft = deepcopy(OFFICE)
+        draft["geometry"]["openings"].append(
+            {
+                "id": "W2",
+                "kind": "window",
+                "wall": "yMax",
+                "s0": {"value": 1.0, "unit": "m", "source": "user"},
+                "s1": {"value": 2.0, "unit": "m", "source": "user"},
+                "z0": {"value": 1.0, "unit": "m", "source": "user"},
+                "z1": {"value": 2.0, "unit": "m", "source": "user"},
+                "heatFluxWm2": {"value": 80.0, "unit": "W/m2", "source": "user"},
+            }
+        )
+        room = project_to_l2_room(draft)
+        size_y = 6.0
+        first_band_height = 2.2 - 0.9
+        total_w = 80.0 * 1.5 * 1.3 + 80.0 * 1.0 * 1.0
+        self.assertAlmostEqual(room["window"]["q_w_m2"]["value"], total_w / (size_y * first_band_height))
+        self.assertGreater(room["window"]["q_w_m2"]["value"], 80.0 * (3.75 - 2.25) / size_y)
+        self.assertAlmostEqual(room["window_area_m2"]["value"], 1.5 * 1.3 + 1.0 * 1.0)
+        self.assertIn(
+            "all windows merge into one band; total window W is the sum over windows",
+            room["assumptions"],
+        )
+
+    def test_second_window_without_flux_contributes_zero_watts(self):
+        # A window with no declared flux brings area (L1 counts it) but 0 W to
+        # the field; no flux is invented for it and the band keeps the
+        # single-window value.
+        draft = deepcopy(OFFICE)
+        draft["geometry"]["openings"].append(
+            {
+                "id": "W2",
+                "kind": "window",
+                "wall": "yMax",
+                "s0": {"value": 1.0, "unit": "m", "source": "user"},
+                "s1": {"value": 2.0, "unit": "m", "source": "user"},
+                "z0": {"value": 1.0, "unit": "m", "source": "user"},
+                "z1": {"value": 2.0, "unit": "m", "source": "user"},
+            }
+        )
+        room = project_to_l2_room(draft)
+        size_y = 6.0
+        window_span = 3.75 - 2.25
+        # Same band watts as the single-window baseline: 80 W on the 1.5 m
+        # patch spread over the full-span band.
+        self.assertAlmostEqual(room["window"]["q_w_m2"]["value"], 80.0 * 1.5 * 1.3 / (size_y * 1.3))
+        self.assertAlmostEqual(room["window"]["q_w_m2"]["value"], 80.0 * window_span / size_y)
+        self.assertAlmostEqual(room["window_area_m2"]["value"], 1.5 * 1.3 + 1.0 * 1.0)
+
     def test_incomplete_draft_is_rejected(self):
         with self.assertRaises(ValueError):
             project_to_l2_room({"schemaVersion": 2, "name": "空"})

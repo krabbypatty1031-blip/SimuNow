@@ -128,6 +128,79 @@ import SimuVisualization
     #expect(RoomDisplayLayout.glyphDisplayLength(mag: 0.03, maxMag: 0.03) > 0.3)
 }
 
+@Test func polylineSampleWalksArcLengthAndWraps() {
+    let points = [
+        Position3D(x: 0, y: 0, z: 1.1),
+        Position3D(x: 2, y: 0, z: 1.1),
+        Position3D(x: 2, y: 2, z: 1.1),
+    ]
+    let start = RoomDisplayLayout.polylineSample(points: points, phase: 0)
+    let mid = RoomDisplayLayout.polylineSample(points: points, phase: 0.5)
+    let end = RoomDisplayLayout.polylineSample(points: points, phase: 1)
+    let wrapped = RoomDisplayLayout.polylineSample(points: points, phase: 1.25)
+    #expect(start.map { abs($0.x) < 1e-9 && abs($0.y) < 1e-9 } == true)
+    #expect(mid.map { abs($0.x - 2) < 1e-9 && abs($0.y) < 1e-9 } == true)
+    #expect(end.map { abs($0.x) < 1e-9 && abs($0.y) < 1e-9 } == true)
+    #expect(wrapped.map { abs($0.x - 1) < 1e-9 && abs($0.y) < 1e-9 } == true)
+    #expect(RoomDisplayLayout.polylineSample(points: [points[0]], phase: 0.3) == nil)
+}
+
+@Test func solvedBandPatchSpansTheFullWallAtTheTerminalHeights() throws {
+    // The solver breathes through a full-span band at the terminal heights;
+    // the schematic AC box marks the device, not the mesh inlet.
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let scene = try #require(RoomScene(draft: draft))
+    let supply = try #require(scene.supply)
+    let band = RoomDisplayLayout.solvedBandPatch(supply, scene: scene)
+    #expect(band.wall == supply.wall)
+    #expect(band.s0M == 0)
+    #expect(abs(band.s1M - scene.sizeYM) < 1e-9)
+    #expect(band.z0M == supply.z0M && band.z1M == supply.z1M)
+    // Placement covers the whole wall span at the same height range.
+    let placed = RoomDisplayLayout.patchPlacement(band, scene: scene, outward: -0.02)
+    #expect(abs(placed.center.y - scene.sizeYM / 2) < 1e-9)
+    #expect(abs(placed.size.y - scene.sizeYM) < 1e-9)
+    #expect(abs(placed.size.z - (supply.z1M - supply.z0M)) < 1e-9)
+    // A y-wall terminal spans the x extent instead.
+    let yBand = RoomDisplayLayout.solvedBandPatch(
+        WallPatchScene(wall: .yMin, s0M: 1, s1M: 2, z0M: 1, z1M: 2),
+        scene: scene
+    )
+    #expect(yBand.s0M == 0)
+    #expect(abs(yBand.s1M - scene.sizeXM) < 1e-9)
+}
+
+@Test func terminalLabelAnchorSitsBesideAndInFrontOfTheDevice() throws {
+    // The 0.20 m AC body swallows a label at the band midpoint; the
+    // words have to sit past the box, into the room, and above the lid.
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let scene = try #require(RoomScene(draft: draft))
+    let supply = try #require(scene.supply)
+    let anchor = RoomDisplayLayout.terminalLabelAnchor(supply, scene: scene)
+    #expect(anchor.x >= 0.30)
+    #expect(anchor.y > supply.s1M)
+    #expect(anchor.z > supply.z1M)
+    let returnAir = try #require(scene.returnAir)
+    let returnAnchor = RoomDisplayLayout.terminalLabelAnchor(returnAir, scene: scene)
+    #expect(returnAnchor.x >= 0.30)
+    #expect(returnAnchor.y > returnAir.s1M)
+    #expect(returnAnchor.z > returnAir.z1M)
+    #expect(abs(returnAnchor.z - anchor.z) > 0.3)
+}
+
+@Test func flowParticlePhaseIsADisplayLoopNotPhysicalTime() {
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    let oneLap = Date(timeIntervalSinceReferenceDate: RoomDisplayLayout.flowParticleLoopSeconds)
+    let half = Date(timeIntervalSinceReferenceDate: RoomDisplayLayout.flowParticleLoopSeconds / 2)
+    #expect(abs(RoomDisplayLayout.flowParticlePhase(at: start)) < 1e-9)
+    #expect(abs(RoomDisplayLayout.flowParticlePhase(at: oneLap)) < 1e-9)
+    #expect(abs(RoomDisplayLayout.flowParticlePhase(at: half) - 0.5) < 1e-9)
+    #expect(RoomDisplayLayout.flowParticleLoopSeconds < 10)
+    #expect(RoomDisplayLayout.flowBeadPhase(clock: 0, index: 0, count: 4) == 0)
+    #expect(abs(RoomDisplayLayout.flowBeadPhase(clock: 0, index: 1, count: 4) - 0.25) < 1e-9)
+    #expect(abs(RoomDisplayLayout.flowBeadPhase(clock: 0.75, index: 1, count: 4)) < 1e-9)
+}
+
 @Test func roomDisplayLayoutBuildIDChangesWhenFlowOverlayArrives() throws {
     let draft = try ProjectTemplates.bundled(named: "office").project
     let scene = try #require(RoomScene(draft: draft))

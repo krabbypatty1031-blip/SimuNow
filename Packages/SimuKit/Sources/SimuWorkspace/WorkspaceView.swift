@@ -194,7 +194,11 @@ public struct WorkspaceView: View {
                     }
                     if let flow = store.lastFlowOverlay, let maxMag = flow.stats.maxMag {
                         LabeledContent("气流范围", value: flowRangeText(flow, maxMag: maxMag))
-                        Text("箭头和流线来自通过检查的稳态速度场。箭头已放大，不是真实位移，也不是开机降温。")
+                        Text("箭头和流线来自通过检查的稳态速度场。圆点沿流线循环是示意流向，箭头已放大，不是真实位移，也不是开机降温。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        // The solver's inlet simplification, disclosed next to the flow it produced.
+                        Text("送风按整墙高度带进入计算，速度按风量缩放；「送风」「回风」标注指该带，墙上空调外形只标位置。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else if store.lastFieldSlice != nil {

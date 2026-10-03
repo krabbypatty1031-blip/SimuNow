@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from simunow_worker.models.project import patch_area_m2
+
 
 def _terminal(patch: dict) -> dict:
     return {
@@ -14,6 +16,11 @@ def _terminal(patch: dict) -> dict:
     }
 
 
+def _windows(geometry: dict) -> list[dict]:
+    """All window openings, in draft order. Doors are not glazed and stay out."""
+    return [item for item in geometry.get("openings", []) if item.get("kind") == "window"]
+
+
 def map_l2_boundary(draft: dict, l1: dict | None = None) -> dict:
     """Supply T comes from L1 or the HVAC coil setting, never the zone setpoint."""
     occupancy = draft.get("occupancy")
@@ -24,8 +31,14 @@ def map_l2_boundary(draft: dict, l1: dict | None = None) -> dict:
     supply = hvac["supplyTemperatureC"]["value"]
     if l1 and l1.get("supplyTemperatureC") is not None:
         supply = l1["supplyTemperatureC"]
-    window = next((item for item in geometry.get("openings", []) if item.get("kind") == "window"), None)
-    flux = ((window or {}).get("heatFluxWm2") or {}).get("value", 0.0)
+    # Area-weighted mean flux over ALL windows; a window without a declared
+    # flux contributes area but 0 W. A single window keeps its own value.
+    windows = _windows(geometry)
+    window_area = sum(patch_area_m2(item) for item in windows)
+    window_w = sum(
+        ((item.get("heatFluxWm2") or {}).get("value") or 0.0) * patch_area_m2(item) for item in windows
+    )
+    flux = window_w / window_area if window_area > 0 else 0.0
     occupant_count = occupancy["occupantCount"]["value"]
     # Per-person sensible × count once. Seats locate people; they are not a second watt source.
     occupant_sensible = occupant_count * occupancy["occupantSensibleW"]["value"]

@@ -84,7 +84,9 @@ class L2RunnerTests(unittest.TestCase):
                 self.assertTrue((run_dir / "quality.json").is_file())
                 self.assertTrue((run_dir / "samples.json").is_file())
                 seats = result["seatSamples"]
-                self.assertEqual(len(seats), 4)
+                # Office template carries 8 seats (S1-S8) since P5; keep the
+                # engine-level count in sync with the template, not history.
+                self.assertEqual(len(seats), 8)
                 for seat in seats:
                     self.assertGreater(seat["tC"], 15.0, "a seat colder than the 16C supply is not room air")
                     self.assertGreater(seat["uMag"], 0.0)

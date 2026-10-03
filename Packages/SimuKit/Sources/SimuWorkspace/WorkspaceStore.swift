@@ -126,10 +126,23 @@ public final class WorkspaceStore {
         s1: Double,
         z0: Double,
         z1: Double,
-        source: ParameterSource
+        source: ParameterSource,
+        heatFluxWm2: PhysicalQuantity? = nil
     ) {
         var draft = project ?? ProjectDraft(name: "未命名房间")
-        fieldIssues = draft.applyOpening(id: id, kind: kind, wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
+        // heatFluxWm2 nil = keep the stored flux (the editor has no flux field);
+        // non-nil = explicit write (addOpening's template-level 80 W/m2).
+        fieldIssues = draft.applyOpening(
+            id: id,
+            kind: kind,
+            wall: wall,
+            s0: s0,
+            s1: s1,
+            z0: z0,
+            z1: z1,
+            source: source,
+            heatFluxWm2: heatFluxWm2
+        )
         project = draft
     }
 

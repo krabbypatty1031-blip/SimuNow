@@ -1,5 +1,6 @@
 import json
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 from simunow_worker.models.boundary import map_l2_boundary
@@ -37,6 +38,28 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(mapped["outdoorAirM3s"], 0.02)
         self.assertAlmostEqual(mapped["recirculatedAirM3s"], 0.108 - 0.02)
         self.assertNotEqual(mapped["outdoorAirM3s"], mapped["recirculatedAirM3s"])
+
+    def test_second_window_averages_into_the_boundary_flux(self):
+        # ADR-017: the DTO flux is the area-weighted mean over ALL windows,
+        # not the first window's literal. Single-window rooms stay at 80.
+        draft = deepcopy(OFFICE)
+        draft["geometry"]["openings"].append(
+            {
+                "id": "W2",
+                "kind": "window",
+                "wall": "yMax",
+                "s0": {"value": 1.0, "unit": "m", "source": "user"},
+                "s1": {"value": 2.0, "unit": "m", "source": "user"},
+                "z0": {"value": 1.0, "unit": "m", "source": "user"},
+                "z1": {"value": 2.0, "unit": "m", "source": "user"},
+                "heatFluxWm2": {"value": 40.0, "unit": "W/m2", "source": "user"},
+            }
+        )
+        mapped = map_l2_boundary(draft, None)
+        total_w = 80.0 * 1.5 * 1.3 + 40.0 * 1.0 * 1.0
+        total_area = 1.5 * 1.3 + 1.0 * 1.0
+        self.assertAlmostEqual(mapped["windowHeatFluxWm2"], total_w / total_area)
+        self.assertNotEqual(mapped["windowHeatFluxWm2"], 80.0)
 
 
 if __name__ == "__main__":

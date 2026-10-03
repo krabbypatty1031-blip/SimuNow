@@ -223,3 +223,46 @@ import Testing
     #expect(draft.hvac?.kind == .splitAC)
     #expect(draft.hvac?.supply.id == "SUP1")
 }
+
+@Test func editingAWindowKeepsItsStoredHeatFlux() throws {
+    // ADR-017: the editor has no flux field. Applying a window edit must keep
+    // the template's declared 80 W/m2, or the L2 field would silently lose the
+    // window heat the user never touched.
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    let issues = draft.applyOpening(
+        id: "W1",
+        kind: .window,
+        wall: .xMax,
+        s0: 2.0,
+        s1: 4.0,
+        z0: 0.9,
+        z1: 2.2,
+        source: .user
+    )
+    #expect(issues.isEmpty)
+    let opening = draft.geometry?.openings.first { $0.id == "W1" }
+    #expect(opening?.heatFluxWm2?.value == 80)
+    #expect(opening?.heatFluxWm2?.unit == "W/m2")
+    #expect(opening?.heatFluxWm2?.source == .preset)
+    #expect(opening?.s0.value == 2.0)
+}
+
+@Test func applyOpeningWritesAnExplicitHeatFlux() throws {
+    // The addOpening path passes an explicit flux (template-level 80 W/m2,
+    // assumed) so a NEW window reaches both engines: L1 area and L2 watts.
+    var draft = ProjectDraft(name: "办公室")
+    _ = draft.applyRoomSize(x: 6, y: 6, z: 2.8, source: .user)
+    _ = draft.applyOpening(
+        id: "W1",
+        kind: .window,
+        wall: .xMax,
+        s0: 0.5,
+        s1: 2.0,
+        z0: 0.9,
+        z1: 2.2,
+        source: .user,
+        heatFluxWm2: PhysicalQuantity(value: 80, unit: "W/m2", source: .assumed)
+    )
+    #expect(draft.geometry?.openings.first?.heatFluxWm2?.value == 80)
+    #expect(draft.geometry?.openings.first?.heatFluxWm2?.source == .assumed)
+}

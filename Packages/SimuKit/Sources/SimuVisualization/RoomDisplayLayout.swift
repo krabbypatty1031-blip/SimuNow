@@ -71,6 +71,64 @@ public enum RoomDisplayLayout: Sendable {
         Position3D(x: seat.position.x, y: seat.position.y, z: 0)
     }
 
+    /// The band the solver actually breathes through: the terminal's
+    /// z-range stretched over the whole wall span. `write_openfoam_room`
+    /// can only make full-wall bands and scales velocity/flux to preserve
+    /// the project's m3/s and W. The schematic terminal marks the device;
+    /// this band is where the mesh lets air in or out.
+    public static func solvedBandPatch(_ patch: WallPatchScene, scene: RoomScene) -> WallPatchScene {
+        let span: Double
+        switch patch.wall {
+        case .xMin, .xMax:
+            span = scene.sizeYM
+        case .yMin, .yMax:
+            span = scene.sizeXM
+        }
+        return WallPatchScene(
+            wall: patch.wall,
+            s0M: 0,
+            s1M: span,
+            z0M: patch.z0M,
+            z1M: patch.z1M
+        )
+    }
+
+    /// Where 「送风」/「回风」 sit: beside and above the schematic device,
+    /// and far enough into the room that the 0.20 m AC body cannot swallow
+    /// the glyphs. Uses the visible terminal, not the full-wall solved band.
+    public static let terminalLabelInwardM = 0.42
+    public static let terminalLabelAlongM = 0.36
+    public static let terminalLabelAboveM = 0.20
+
+    public static func terminalLabelAnchor(_ patch: WallPatchScene, scene: RoomScene) -> Position3D {
+        let wallSpan: Double
+        switch patch.wall {
+        case .xMin, .xMax:
+            wallSpan = scene.sizeYM
+        case .yMin, .yMax:
+            wallSpan = scene.sizeXM
+        }
+        // Prefer the +s side of the box; flip if that would leave the room.
+        let along: Double
+        if patch.s1M + Self.terminalLabelAlongM <= wallSpan - 0.10 {
+            along = patch.s1M + Self.terminalLabelAlongM
+        } else {
+            along = max(0.10, patch.s0M - Self.terminalLabelAlongM)
+        }
+        let above = patch.z1M + Self.terminalLabelAboveM
+        let inward = Self.terminalLabelInwardM
+        switch patch.wall {
+        case .xMin:
+            return Position3D(x: inward, y: along, z: above)
+        case .xMax:
+            return Position3D(x: scene.sizeXM - inward, y: along, z: above)
+        case .yMin:
+            return Position3D(x: along, y: inward, z: above)
+        case .yMax:
+            return Position3D(x: along, y: scene.sizeYM - inward, z: above)
+        }
+    }
+
     /// Offset the patch off the wall. Negative `outward` moves the centre into the room.
     public static func patchPlacement(
         _ patch: WallPatchScene,
@@ -121,6 +179,64 @@ public enum RoomDisplayLayout: Sendable {
         guard maxMag > 0 else { return shortest }
         let t = Float(min(1, max(0, mag / maxMag)))
         return shortest + t * (longest - shortest)
+    }
+
+    /// Display seconds for one bead lap. Not a physical transit time and
+    /// not a cool-down clock — office jets would take minutes at 1:1.
+    public static let flowParticleLoopSeconds: Double = 3.6
+    /// Beads per quality-passed streamline. Density is display-only.
+    public static let flowParticleBeadCount = 4
+
+    /// Fractional progress in `[0, 1)` for the schematic loop at `date`.
+    public static func flowParticlePhase(at date: Date, period: Double = flowParticleLoopSeconds) -> Double {
+        guard period > 0 else { return 0 }
+        let wrapped = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period)
+        let phase = wrapped < 0 ? wrapped + period : wrapped
+        return phase / period
+    }
+
+    /// Evenly staggered phases so several beads share one loop.
+    public static func flowBeadPhase(clock: Double, index: Int, count: Int) -> Double {
+        guard count > 0 else { return wrappedUnit(clock) }
+        return wrappedUnit(clock + Double(index) / Double(count))
+    }
+
+    /// Arc-length sample on a computation-frame polyline. `phase` wraps.
+    public static func polylineSample(points: [Position3D], phase: Double) -> Position3D? {
+        guard points.count >= 2 else { return nil }
+        var cumulative: [Double] = [0]
+        var total = 0.0
+        for index in 1..<points.count {
+            let dx = points[index].x - points[index - 1].x
+            let dy = points[index].y - points[index - 1].y
+            let dz = points[index].z - points[index - 1].z
+            total += (dx * dx + dy * dy + dz * dz).squareRoot()
+            cumulative.append(total)
+        }
+        guard total > 1e-9 else { return points[0] }
+        let target = wrappedUnit(phase) * total
+        for index in 1..<cumulative.count {
+            if target <= cumulative[index] || index == cumulative.count - 1 {
+                let span = cumulative[index] - cumulative[index - 1]
+                let t = span > 1e-12 ? (target - cumulative[index - 1]) / span : 0
+                let start = points[index - 1]
+                let end = points[index]
+                return Position3D(
+                    x: start.x + (end.x - start.x) * t,
+                    y: start.y + (end.y - start.y) * t,
+                    z: start.z + (end.z - start.z) * t
+                )
+            }
+        }
+        return points.last
+    }
+
+    private static func wrappedUnit(_ value: Double) -> Double {
+        var unit = value.truncatingRemainder(dividingBy: 1)
+        if unit < 0 {
+            unit += 1
+        }
+        return unit
     }
 
     public static func buildID(scene: RoomScene, fieldHash: String?, paletteKey: String?, flowHash: String? = nil) -> String {

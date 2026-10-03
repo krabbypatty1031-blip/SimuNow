@@ -83,6 +83,8 @@ extension ProjectDraft {
     }
 
     /// Numeric editor entry: wall-local s/z and ParameterSource are written together.
+    /// The editor has no flux field, so an omitted flux keeps the stored value:
+    /// applying a window edit must never silently drop the declared heat flux.
     @discardableResult
     public mutating func applyOpening(
         id: String,
@@ -92,9 +94,13 @@ extension ProjectDraft {
         s1: Double,
         z0: Double,
         z1: Double,
-        source: ParameterSource
+        source: ParameterSource,
+        heatFluxWm2: PhysicalQuantity? = nil
     ) -> [FieldIssue] {
-        upsertOpening(
+        // nil = "not edited here": keep whatever the template or an earlier
+        // edit stored. A non-nil value is an explicit write (e.g. addOpening).
+        let storedFlux = heatFluxWm2 ?? geometry?.openings.first(where: { $0.id == id })?.heatFluxWm2
+        return upsertOpening(
             Opening(
                 id: id,
                 kind: kind,
@@ -102,7 +108,8 @@ extension ProjectDraft {
                 s0: Self.metres(s0, source: source),
                 s1: Self.metres(s1, source: source),
                 z0: Self.metres(z0, source: source),
-                z1: Self.metres(z1, source: source)
+                z1: Self.metres(z1, source: source),
+                heatFluxWm2: storedFlux
             )
         )
     }

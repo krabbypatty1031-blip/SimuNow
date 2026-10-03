@@ -166,6 +166,15 @@
 影响：第一轮可按 [UX-user-facing-ui](../Phases/UX-user-facing-ui/UX-user-facing-ui.md) 实施。ADR-016 的 RealityKit spike 明确排在本轮完成之后，且必须复用同一套用户文案，不能把求解变量画回界面。
 验证：2026-10-03 落地。`Scripts/check.sh test`：SimuCoreTests 170 + SimuVisualizationTests 11 全绿。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。呈现层 `UserFacingCopy`；检查器默认房间/使用/空调；提交在「用电与舒适」；PDF 正文「对比说明」，哈希在「详细编号」。App Debug 手测仍待用户点一遍八条清单。3D 按 ADR-016 方案 A 另开工作包，本轮不做点选/拖柄。
 
+## ADR-018：多窗合并投影——添加窗必须同时进入 L1 与 L2（已接受）
+
+日期：2026-10-03。
+背景：敏感性实测发现追加第二扇窗后 L1/L2/电费逐位不变。根因是四个投影（`l1_room` / `l2_room` / `boundary` / `p1_mapping`）用 `next(...)` 只取第一扇窗，用户「添加窗」的操作停在草稿层；另外 UI「应用开口」会把模板窗声明的 `heatFluxWm2` 静默抹成 nil。
+备选：a) 保持单窗，UI 禁止添加窗；b) L2 case writer 支持逐窗 patch（多墙多带）；c) 投影层把全部窗合并进既有单窗结构。
+选择：c。L1 窗面积取**全部窗求和**进单一东墙窗（IDF 结构不变）；L2 带通量取**全部窗 W 求和 ÷ 带面积**（总 W 守恒，单窗结果逐位不变）；`boundary` DTO 用面积加权平均通量；`p1_mapping` 顶层面积求和。Swift 侧 `applyOpening` 缺省**保留已存热通量**（编辑窗不再丢 80 W/m²），`addOpening` 给新窗默认 80 W/m²（`assumed`，同两模板）。
+影响：单窗房间数值逐位不变（office 基线不漂移）；添加带通量窗 → 面积与 W 同时进两层 → 冷负荷、电费、座位温度都动；未声明通量的窗只进 L1（面积）不进 L2（0 W 是声明的零，不是编造）。简化仍在 assumptions 披露（多窗合一带/单东墙窗）。
+验证：`Backend/tests` 新增多窗用例（L1 求和 / L2 总 W 守恒 / 无通量窗归零 / DTO 加权平均）；`RoomEditingTests` 新增保留热通量与显式写入两例。引擎实测见 `status.md` P5 后补条目。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

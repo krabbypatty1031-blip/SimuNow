@@ -46,6 +46,31 @@ def _band_scale(patch: dict, wall: str, size: tuple[float, float, float]) -> flo
     return width / span
 
 
+def _windows(geometry: dict) -> list[dict]:
+    """All window openings, in draft order. Doors are not glazed and stay out."""
+    return [item for item in geometry.get("openings", []) if item.get("kind") == "window"]
+
+
+def _window_total_w(windows: list[dict]) -> float:
+    """Total window heat input, sum of flux x patch area over all windows.
+
+    A window without a declared heatFluxWm2 contributes 0 W; no flux is
+    invented for it. Adding or widening any declared window must move the
+    L2 field (and with it every seat temperature).
+    """
+    total = 0.0
+    for item in windows:
+        flux = item.get("heatFluxWm2")
+        if flux:
+            total += float(flux["value"]) * patch_area_m2(item)
+    return total
+
+
+def _window_area_m2(windows: list[dict]) -> float:
+    """Total glazed area over all windows."""
+    return sum(patch_area_m2(item) for item in windows)
+
+
 def project_to_l2_room(draft: dict) -> dict:
     """Build a P1-shaped L2 room. Supply T is the coil, not the zone setpoint."""
     geometry = draft.get("geometry")
@@ -53,9 +78,15 @@ def project_to_l2_room(draft: dict) -> dict:
     hvac = draft.get("hvac")
     if not geometry or not occupancy or not hvac:
         raise ValueError("incompleteProject")
-    window = next((item for item in geometry.get("openings", []) if item.get("kind") == "window"), None)
-    if window is None:
+    windows = _windows(geometry)
+    if not windows:
         raise ValueError("project has no window opening")
+    # All windows merge into the single full-span band. The band height keeps
+    # the first window's z0/z1; the flux is set so the band injects the SUM of
+    # every window's declared watts (conservation, not the first window only).
+    window = windows[0]
+    window_area = _window_area_m2(windows)
+    window_w = _window_total_w(windows)
     size = (
         geometry["sizeX"]["value"],
         geometry["sizeY"]["value"],
@@ -68,7 +99,12 @@ def project_to_l2_room(draft: dict) -> dict:
     supply_wall = hvac["supply"]["wall"]
     window_wall = window["wall"]
     supply_scale = _band_scale(hvac["supply"], supply_wall, size)
-    window_scale = _band_scale(window, window_wall, size)
+    # Band flux = total window W / band area, so the single full-span band
+    # injects the sum of every window's declared watts. Single-window rooms
+    # keep the previous flux bit for bit (width/span cancels the height).
+    window_span = _wall_span(window_wall, size)
+    window_band_area_m2 = window_span * max(1e-9, window["z1"]["value"] - window["z0"]["value"])
+    window_flux = window_w / window_band_area_m2
     return {
         "name": draft.get("name", "room"),
         "kind": "room",
@@ -85,6 +121,7 @@ def project_to_l2_room(draft: dict) -> dict:
             "wall temperatures are not invented from UA",
             "supply band spans the full wall; velocity scaled to preserve project supply m3/s",
             "window band spans the full wall; flux scaled to preserve total window W",
+            "all windows merge into one band; total window W is the sum over windows",
         ],
         "size": {
             "x_m": _qty(geometry["sizeX"]),
@@ -125,18 +162,15 @@ def project_to_l2_room(draft: dict) -> dict:
             "x_m": {"value": _WALL_X[window_wall](size), "unit": "m", "source": "project"},
             "z0_m": _qty(window["z0"]),
             "z1_m": _qty(window["z1"]),
-            # Band flux preserves the project window's total watts.
-            **(
-                {
-                    "q_w_m2": {
-                        "value": window["heatFluxWm2"]["value"] * window_scale,
-                        "unit": "W/m2",
-                        "source": "project",
-                    }
-                }
-                if window.get("heatFluxWm2")
-                else {}
-            ),
+            # Band flux preserves the SUM of every window's declared watts.
+            # Written unconditionally: a room whose windows declare no flux
+            # injects a declared 0 W, which is a real statement, not an
+            # invented one.
+            "q_w_m2": {
+                "value": window_flux,
+                "unit": "W/m2",
+                "source": "project",
+            },
         },
         "gains": {
             "n_people": _qty(occupancy["occupantCount"]),
@@ -170,7 +204,8 @@ def project_to_l2_room(draft: dict) -> dict:
                 "source": "project",
             },
         },
-        "window_area_m2": {"value": patch_area_m2(window), "unit": "m2", "source": "project"},
+        # Summed glazed area over all windows, matching the L1 window area.
+        "window_area_m2": {"value": window_area, "unit": "m2", "source": "project"},
         "solver": {
             "end_time": _assumed(4000, "1"),
             "monitor_n": _assumed(20, "1"),

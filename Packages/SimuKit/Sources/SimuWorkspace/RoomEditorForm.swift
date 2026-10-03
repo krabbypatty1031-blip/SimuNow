@@ -431,6 +431,12 @@ public struct RoomEditorForm: View {
     private func addOpening(kind: OpeningKind) {
         let prefix = kind == .window ? "W" : "D"
         let existing = store.project?.geometry?.openings.map(\.id) ?? []
+        // New windows get the template-level 80 W/m² (office/classroom preset)
+        // so adding a window reaches BOTH engines: L1 area drives the bill,
+        // the declared flux drives the L2 field. Marked assumed, not measured.
+        let defaultWindowFlux = kind == .window
+            ? PhysicalQuantity(value: 80, unit: "W/m2", source: .assumed)
+            : nil
         store.applyOpening(
             id: ProjectDraft.nextPrefixedID(prefix: prefix, existing: existing),
             kind: kind,
@@ -439,7 +445,8 @@ public struct RoomEditorForm: View {
             s1: kind == .window ? 2.0 : 1.4,
             z0: kind == .window ? 0.9 : 0,
             z1: kind == .window ? 2.2 : 2.1,
-            source: .user
+            source: .user,
+            heatFluxWm2: defaultWindowFlux
         )
     }
 

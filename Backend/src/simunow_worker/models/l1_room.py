@@ -15,6 +15,17 @@ _WALL_X = {
 }
 
 
+def _windows(geometry: dict) -> list[dict]:
+    """All window openings, in draft order. Doors are not glazed and stay out."""
+    return [item for item in geometry.get("openings", []) if item.get("kind") == "window"]
+
+
+def _window_area_m2(windows: list[dict]) -> float:
+    """Total glazed area. The IDF takes ONE east-wall window of this area, so
+    adding or widening any window must move the L1 load and the bill."""
+    return sum(patch_area_m2(item) for item in windows)
+
+
 def _qty(node: dict, source: str = "project") -> dict:
     return {
         "value": node["value"],
@@ -30,9 +41,14 @@ def project_to_l1_room(draft: dict) -> dict:
     hvac = draft.get("hvac")
     if not geometry or not occupancy or not hvac:
         raise ValueError("incompleteProject")
-    window = next((item for item in geometry.get("openings", []) if item.get("kind") == "window"), None)
-    if window is None:
+    windows = _windows(geometry)
+    if not windows:
         raise ValueError("project has no window opening")
+    # All windows merge into the single IDF window. The band (x/z0/z1) and the
+    # declared flux stay from the first window; the AREA is the sum, which is
+    # the only L1 entry the east-wall window consumes.
+    window = windows[0]
+    window_area = _window_area_m2(windows)
     size = (
         geometry["sizeX"]["value"],
         geometry["sizeY"]["value"],
@@ -55,6 +71,7 @@ def project_to_l1_room(draft: dict) -> dict:
             "omitted: l1.ua_opaque_w_k",
             "omitted: l1.shgc",
             "EnergyPlus constructions are engine defaults, not project envelope",
+            "all windows merge into one east-wall window; window area is the sum over windows",
         ],
         "size": {
             "x_m": _qty(geometry["sizeX"]),
@@ -98,7 +115,9 @@ def project_to_l1_room(draft: dict) -> dict:
         "l1": {
             "t_in_c": _qty(hvac["setpointC"]),
             "infil_m3_s": _qty(hvac["outdoorAirM3s"]),
-            "window_area_m2": {"value": patch_area_m2(window), "unit": "m2", "source": "project"},
+            # Summed area, not the first window's patch. Adding a window must
+            # raise the IDF window load (and with it the electricity cost).
+            "window_area_m2": {"value": window_area, "unit": "m2", "source": "project"},
             "cop": _qty(hvac["cop"]),
         },
         # Clock window only. Missing schedule must not become a 24h occupied day here.

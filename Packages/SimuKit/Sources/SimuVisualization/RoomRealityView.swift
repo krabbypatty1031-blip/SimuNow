@@ -4,8 +4,9 @@ import SimuCore
 
 /// Viewer-only RealityKit room: orbit, schematic AC / openings / desks /
 /// seated people, a quality-gated seat-height slice, and optional steady
-/// flow arrows. Add/delete in the inspector rebuilds this view. There is
-/// no click-to-select and no 3D drag handle — those belong to later schemes.
+/// flow arrows with looping beads. Add/delete in the inspector rebuilds
+/// this view. There is no click-to-select and no 3D drag handle — those
+/// belong to later schemes.
 @available(macOS 15.0, iOS 18.0, *)
 public struct RoomRealityView: View {
     private let scene: RoomScene
@@ -17,6 +18,7 @@ public struct RoomRealityView: View {
     @State private var orbit = ViewportOrbit()
     @State private var dragStart: (yaw: Double, pitch: Double)?
     @State private var pinchStart: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         scene: RoomScene,
@@ -52,6 +54,17 @@ public struct RoomRealityView: View {
     }
 
     public var body: some View {
+        // Beads loop on a display clock. Reduce Motion keeps the static path.
+        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: !animatesFlow)) { timeline in
+            realityContent(phase: RoomDisplayLayout.flowParticlePhase(at: timeline.date))
+        }
+    }
+
+    private var animatesFlow: Bool {
+        !reduceMotion && flow?.quality == "passed" && !(flow?.lines.isEmpty ?? true)
+    }
+
+    private func realityContent(phase: Double) -> some View {
         RealityView { content in
             content.camera = .virtual
             let root = await RoomEntityBuilder.makeRoot(scene: scene, field: field, palette: palette, flow: flow)
@@ -63,6 +76,9 @@ public struct RoomRealityView: View {
                 return
             }
             RoomEntityBuilder.applyOrbit(root, scene: scene, orbit: orbit)
+            if let flow {
+                RoomFlowMeshes.updateBeads(flow, in: root, scene: scene, phase: phase)
+            }
         }
         .id(buildID)
         .gesture(
@@ -120,7 +136,7 @@ public struct RoomRealityView: View {
             text += "，坐姿高度温度切片 \(UserFacingCopy.displayNumber(minC)) 到 \(UserFacingCopy.displayNumber(maxC)) 摄氏度（质量通过）"
         }
         if let flow, flow.quality == "passed", let maxMag = flow.stats.maxMag {
-            text += "，稳态气流箭头和流线，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，箭头已放大，不是开机降温"
+            text += "，稳态气流箭头、流线和循环圆点，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点是示意流向，不是开机降温"
         }
         return text
     }

@@ -29,10 +29,13 @@ def map_project_to_p1(draft: dict) -> dict:
     geometry = draft["geometry"]
     occupancy = draft["occupancy"]
     hvac = draft["hvac"]
-    window = next((item for item in geometry["openings"] if item.get("kind") == "window"), None)
-    if window is None:
+    windows = [item for item in geometry["openings"] if item.get("kind") == "window"]
+    if not windows:
         raise ValueError("project has no window opening")
-    window_area = patch_area_m2(window)
+    # First window describes the band; the total glazed area is the SUM over
+    # all windows so adding a window moves this mapping like it moves L1.
+    window = windows[0]
+    window_area = sum(patch_area_m2(item) for item in windows)
     return {
         "name": draft["name"],
         "size": {
@@ -53,7 +56,8 @@ def map_project_to_p1(draft: dict) -> dict:
             "z0_m": window["z0"]["value"],
             "z1_m": window["z1"]["value"],
             "q_w_m2": (window.get("heatFluxWm2") or {}).get("value", 0),
-            "area_m2": window_area,
+            # First window's own patch area. The TOTAL is window_area_m2 below.
+            "area_m2": patch_area_m2(window),
         },
         "gains": {
             "n_people": occupancy["occupantCount"]["value"],

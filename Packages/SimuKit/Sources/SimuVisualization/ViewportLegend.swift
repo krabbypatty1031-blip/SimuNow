@@ -31,7 +31,11 @@ struct ViewportLegend: View {
             }
             if let flow, let maxMag = flow.stats.maxMag {
                 let minMag = flow.stats.minMag ?? 0
-                Text("气流 \(UserFacingCopy.displayNumber(minMag))–\(UserFacingCopy.displayNumber(maxMag)) m/s。箭头已放大，稳态不是开机降温。")
+                Text("气流 \(UserFacingCopy.displayNumber(minMag))–\(UserFacingCopy.displayNumber(maxMag)) m/s。圆点沿流线循环是示意，箭头已放大，不是开机降温。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                // The solver's inlet simplification, stated where the flow is shown.
+                Text("送风按整墙高度带进入计算（速度已按风量缩放）；「送风」「回风」标注指该带，墙上空调只标位置。")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -49,7 +53,8 @@ struct ViewportLegend: View {
         }
         if let flow, let maxMag = flow.stats.maxMag {
             let minMag = flow.stats.minMag ?? 0
-            parts.append("气流 \(UserFacingCopy.displayNumber(minMag)) 到 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，箭头已放大")
+            parts.append("气流 \(UserFacingCopy.displayNumber(minMag)) 到 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点循环是示意流向")
+            parts.append("墙上「送风」「回风」标注求解进风口与回风口，空调外形只标位置")
         }
         return parts.joined(separator: "，")
     }

@@ -55,8 +55,9 @@
 | UX 展示两位小数 | 已通 | 用户看见的数字走 `UserFacingCopy.displayNumber`（两位）。存值与会计半入（10.33112 kWh / 12.397 HKD）未改。检查器输入最多两位。`Scripts/check.sh test`：SimuCoreTests 171 + SimuVisualizationTests 11；`mac` / `ios` BUILD SUCCEEDED |
 | 3D 视口方案 A | 已通（只读 RealityKit + 示意网格） | macOS 15 / iOS 18 走 `RoomRealityView`：拖转/捏合；壁挂室内机/回风格栅、带框窗门、示意桌、椅+坐着的人；质量通过才画坐姿高度温度切片。检查器增删窗/门/家具/座位/空调后视口立刻重建。办公室模板仍无家具盒（`omitted: furniture_boxes`），不编造桌子。macOS 14 / iOS 17 仍是 Canvas。无点选、无三维拖柄。`Scripts/check.sh test`：SimuCoreTests 172 + SimuVisualizationTests 28。`mac` / `ios` BUILD SUCCEEDED。钉版数字未改。App Debug 三维手测待用户点 |
 | 人数与座位一致 | 已通（编辑层） | 加座位加一人，删座位减一人（至少留 1），改人数会增删座位。办公室仍 8 人发热，座位补到 8；教室 24 人 / 24 座。每人显热仍 57 W，钉版 L1/L2 数字未重跑。旧 `project-v2-office.json` 仍是 8 人 4 座，加载会提示不一致。`Scripts/check.sh test`：SimuCoreTests 177 + SimuVisualizationTests 28。 |
-| 三维气流叠加 | 已通（质量门控） | 质量通过才写 `field-flow.json`：坐姿高度速度箭头 + 从求解进口积出的稳态流线。箭头长度是显示放大，不是真实位移，也不是开机降温。旧 L2 run 没有该文件时只显示温度切片。钉版 L1/L2 数字未重跑。`Scripts/check.sh test`：SimuCoreTests 181 + SimuVisualizationTests 31。 |
+| 三维气流叠加 | 已通（质量门控 + 示意循环 + 进/出风文字标注） | 质量通过才写 `field-flow.json`：坐姿高度速度箭头 + 从求解进口积出的稳态流线。圆点沿流线循环，周期是显示约定（约 3.6 s），不是物理过境时间，也不是开机降温。箭头长度仍是显示放大。三维/画布在求解真实进口/出口的整墙带高度放「送风」「回风」文字标注（与 `write_openfoam_room` 整墙带宽一致）；图例与「计算过程」写明速度按风量缩放、空调外形只标位置。开启「减少动态效果」时只保留静态路径与标注。旧 L2 run 没有该文件时只显示温度切片。钉版 L1/L2 数字未重跑。 |
 | 计算文件夹选择反馈 | 已通（检查器） | 「计算准备」移到项目区下方并默认展开。选完后顶部「计算」显示结果与文件夹名（仅 basename）。取消写「没有选择文件夹」；不合格文件夹说明缺能耗程序/副本，不再复用未选时的闲置句。路径不进界面。 |
+| 多窗合并投影（ADR-018） | 已通（添加/修改窗进双引擎） | 四个投影（`l1_room`/`l2_room`/`boundary`/`p1_mapping`）从「只取第一扇」改为合并全部窗：L1 窗面积求和进单一东墙窗、L2 带通量=Σ窗W÷带面积（总 W 守恒）、DTO 面积加权平均。Swift `applyOpening` 缺省保留已存热通量（「应用开口」不再抹掉模板 80 W/m²），`addOpening` 给新窗默认 80 W/m²（`assumed`）。`Backend/tests` 126 全绿（新增多窗 4 例）；`Scripts/check.sh test` 184 全绿（新增保留/显式热通量 2 例）；`mac`/`ios` BUILD SUCCEEDED。引擎实测（`Artifacts/sensitivity/window_add.json`，本地）：baseline 单窗逐位不漂移（3099.3 W / 12.397 HKD / 24.43–24.73 °C）；追加带通量窗 → 3159.0 W / 12.636 HKD / 25.36–25.65 °C（钱与温度都动）；追加无通量窗 → 钱动（面积）、座位温度逐位不变（声明的 0 W）。未声明通量的窗不进 L2 场；窗沿墙位置仍不进 case（满墙带简化照旧披露） |
 
 ## 下一步
 

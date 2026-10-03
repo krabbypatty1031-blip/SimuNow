@@ -1,11 +1,26 @@
 import json
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 from simunow_worker.models.l1_room import project_to_l1_room
 
 ROOT = Path(__file__).resolve().parents[2]
 OFFICE = json.loads((ROOT / "Fixtures" / "templates" / "office.json").read_text(encoding="utf-8"))["project"]
+
+
+def _second_window() -> dict:
+    """A user-added 1.0 x 1.0 m window on another wall, flux like the template's."""
+    return {
+        "id": "W2",
+        "kind": "window",
+        "wall": "yMax",
+        "s0": {"value": 1.0, "unit": "m", "source": "user"},
+        "s1": {"value": 2.0, "unit": "m", "source": "user"},
+        "z0": {"value": 1.0, "unit": "m", "source": "user"},
+        "z1": {"value": 2.0, "unit": "m", "source": "user"},
+        "heatFluxWm2": {"value": 80.0, "unit": "W/m2", "source": "user"},
+    }
 
 
 class L1RoomMappingTests(unittest.TestCase):
@@ -28,6 +43,19 @@ class L1RoomMappingTests(unittest.TestCase):
         self.assertEqual(room["schedule"]["occupancy"]["end"], "18:00")
         self.assertEqual(len(OFFICE["occupancy"]["seats"]), 8)
         self.assertEqual(room["gains"]["n_people"]["value"], len(OFFICE["occupancy"]["seats"]))
+
+    def test_second_window_adds_area_to_l1(self):
+        # ADR-017: every window must reach the engine. The IDF takes ONE
+        # east-wall window of the SUMMED area, so adding a window raises the
+        # L1 load and with it the electricity cost.
+        draft = deepcopy(OFFICE)
+        draft["geometry"]["openings"].append(_second_window())
+        room = project_to_l1_room(draft)
+        self.assertAlmostEqual(room["l1"]["window_area_m2"]["value"], 1.5 * 1.3 + 1.0 * 1.0)
+        self.assertIn(
+            "all windows merge into one east-wall window; window area is the sum over windows",
+            room["assumptions"],
+        )
 
     def test_incomplete_draft_is_rejected(self):
         with self.assertRaises(ValueError):

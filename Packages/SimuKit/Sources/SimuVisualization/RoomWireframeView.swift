@@ -18,6 +18,7 @@ public struct RoomWireframeView: View {
     private let externalYaw: Binding<Double>?
     @State private var internalYaw: Double = -0.6
     @State private var dragStartYaw: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(
         scene: RoomScene,
@@ -40,14 +41,20 @@ public struct RoomWireframeView: View {
 
     public var body: some View {
         GeometryReader { proxy in
-            Canvas { context, canvasSize in
-                draw(in: &context, canvasSize: canvasSize)
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .overlay(alignment: .bottom) {
-                if palette != nil || flow != nil {
-                    ViewportLegend(palette: palette, flow: flow)
-                        .padding(.bottom, 12)
+            TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: !animatesFlow)) { timeline in
+                Canvas { context, canvasSize in
+                    draw(
+                        in: &context,
+                        canvasSize: canvasSize,
+                        phase: RoomDisplayLayout.flowParticlePhase(at: timeline.date)
+                    )
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .overlay(alignment: .bottom) {
+                    if palette != nil || flow != nil {
+                        ViewportLegend(palette: palette, flow: flow)
+                            .padding(.bottom, 12)
+                    }
                 }
             }
         }
@@ -76,14 +83,18 @@ public struct RoomWireframeView: View {
             text += "，坐姿高度温度切片 \(UserFacingCopy.displayNumber(minC)) 到 \(UserFacingCopy.displayNumber(maxC)) 摄氏度（质量通过）"
         }
         if let flow, let maxMag = flow.stats.maxMag {
-            text += "，稳态气流箭头和流线，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，箭头已放大，不是开机降温"
+            text += "，稳态气流箭头、流线和循环圆点，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点是示意流向，不是开机降温"
         }
         return text
     }
 
+    private var animatesFlow: Bool {
+        !reduceMotion && flow?.quality == "passed" && !(flow?.lines.isEmpty ?? true)
+    }
+
     /// All geometry is projected first, then fitted with one uniform scale so
     /// the room keeps its proportions; padding leaves room for the legend.
-    private func draw(in context: inout GraphicsContext, canvasSize: CGSize) {
+    private func draw(in context: inout GraphicsContext, canvasSize: CGSize, phase: Double) {
         let projection = IsometricProjection(yawRadians: yaw.wrappedValue)
         let roomPoints = projection.roomCorners(scene)
         var allPoints = roomPoints
@@ -142,7 +153,7 @@ public struct RoomWireframeView: View {
         }
 
         if let flow {
-            drawFlow(flow, projection: projection, fit: fit, in: &context)
+            drawFlow(flow, projection: projection, fit: fit, phase: phase, in: &context)
         }
 
         // Seat markers: sample points, drawn on top so they stay visible.
@@ -189,9 +200,18 @@ public struct RoomWireframeView: View {
         _ flow: FlowOverlay,
         projection: IsometricProjection,
         fit: (scale: CGFloat, offset: CGSize),
+        phase: Double,
         in context: inout GraphicsContext
     ) {
         let maxMag = flow.stats.maxMag ?? flow.glyphs.map(\.mag).max() ?? 0.01
+        // 「送风」/「回风」 name where the mesh actually injects and
+        // extracts air: the full-span band at the terminal height.
+        if let supply = scene.supply {
+            drawTerminalLabel(supply, text: "送风", color: .blue, projection: projection, fit: fit, in: &context)
+        }
+        if let returnAir = scene.returnAir {
+            drawTerminalLabel(returnAir, text: "回风", color: .orange, projection: projection, fit: fit, in: &context)
+        }
         for line in flow.lines {
             guard line.points.count >= 2 else { continue }
             var path = Path()
@@ -200,6 +220,20 @@ public struct RoomWireframeView: View {
                 path.addLine(to: Self.apply(projection.screenPoint(point.position), transform: fit))
             }
             context.stroke(path, with: .color(.cyan.opacity(0.85)), lineWidth: 1.6)
+            let points = line.points.map(\.position)
+            for bead in 0..<RoomDisplayLayout.flowParticleBeadCount {
+                guard let sample = RoomDisplayLayout.polylineSample(
+                    points: points,
+                    phase: RoomDisplayLayout.flowBeadPhase(
+                        clock: phase,
+                        index: bead,
+                        count: RoomDisplayLayout.flowParticleBeadCount
+                    )
+                ) else { continue }
+                let center = Self.apply(projection.screenPoint(sample), transform: fit)
+                let rect = CGRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7)
+                context.fill(Path(ellipseIn: rect), with: .color(.cyan))
+            }
         }
         for glyph in flow.glyphs {
             let start = Self.apply(projection.screenPoint(glyph.position), transform: fit)
@@ -215,6 +249,23 @@ public struct RoomWireframeView: View {
             path.addLine(to: end)
             context.stroke(path, with: .color(.cyan), lineWidth: 1.8)
         }
+    }
+
+    private func drawTerminalLabel(
+        _ patch: WallPatchScene,
+        text: String,
+        color: Color,
+        projection: IsometricProjection,
+        fit: (scale: CGFloat, offset: CGSize),
+        in context: inout GraphicsContext
+    ) {
+        // Same device-side anchor as the 3D glyphs: beside and above the box.
+        let anchor = RoomDisplayLayout.terminalLabelAnchor(patch, scene: scene)
+        let point = Self.apply(projection.screenPoint(anchor), transform: fit)
+        let label = Text(text).font(.title3.weight(.bold)).foregroundStyle(color)
+        // Offset dark copy first: a cheap shadow so the label reads over the heatmap.
+        context.draw(label.foregroundStyle(.black.opacity(0.75)), at: CGPoint(x: point.x + 1, y: point.y + 1))
+        context.draw(label, at: point)
     }
 
     private func drawSlice(

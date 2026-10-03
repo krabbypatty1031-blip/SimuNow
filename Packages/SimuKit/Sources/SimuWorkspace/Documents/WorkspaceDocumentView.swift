@@ -1,6 +1,7 @@
 import SwiftUI
 import SimuCore
 import SimuSimulation
+import SimuVisualization
 import UniformTypeIdentifiers
 
 /// Native document binding is the persisted authority. Each window has its own
@@ -16,6 +17,7 @@ public struct WorkspaceDocumentView: View {
     @State private var migratingURL: URL?
     @State private var busy = false
     @State private var notice: String?
+    private let rendererCapability: RendererCapabilities
     private let io = ProjectPackageIO()
     #if os(macOS)
     @SwiftUI.Environment(\.newDocument) private var newDocument
@@ -27,8 +29,9 @@ public struct WorkspaceDocumentView: View {
     @State private var importNotes: [String] = []
     #endif
 
-    public init(document: Binding<SimuNowDocument>, localAnalysisClient: any LocalAnalysisSubmitting = LocalAnalysisClient.unavailable) {
+    public init(document: Binding<SimuNowDocument>, localAnalysisClient: any LocalAnalysisSubmitting = LocalAnalysisClient.production(), rendererCapability: RendererCapabilities = .current) {
         _document = document
+        self.rendererCapability = rendererCapability
         let value = document.wrappedValue
         let store = WorkspaceStore(localAnalysisClient: localAnalysisClient)
         store.load(value.project, baselineScenarioID: value.metadata.baselineScenarioID,
@@ -37,7 +40,7 @@ public struct WorkspaceDocumentView: View {
         _store = State(initialValue: store)
     }
     public var body: some View {
-        WorkspaceView(store: store, packageIssues: document.integrityReport.issues.filter {
+        WorkspaceView(store: store, nativeEntries: document.preservedEntries, nativeSidefileRevision: document.nativeSidefileRevision, rendererCapability: rendererCapability, packageIssues: document.integrityReport.issues.filter {
             $0.code.hasPrefix("weather_asset_") || ["baseline_reference", "package_metadata", "project_contract"].contains($0.code)
         }, onImportJSON: { importingJSON = true }, onImportWeather: { id in
             weatherScenarioID = id; weatherRevision = store.revision; importingWeather = true
@@ -92,6 +95,9 @@ public struct WorkspaceDocumentView: View {
     private func connect() {
         // Capture the native binding alone, avoiding store -> callback -> view -> store.
         let documentBinding = $document
+        store.persistNativeAnalysis = { artifact in
+            documentBinding.wrappedValue = try documentBinding.wrappedValue.appendingNativeAnalysis(artifact,expectedProjectID: artifact.manifest.projectID)
+        }
         store.validateDocumentChange = { state in
             _ = try documentBinding.wrappedValue.applyingWorkspaceState(state)
         }

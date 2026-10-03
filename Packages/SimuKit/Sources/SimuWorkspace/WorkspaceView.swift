@@ -2,10 +2,14 @@ import SwiftUI
 import SimuCore
 import SimuDesignSystem
 import SimuVisualization
+import SimuSimulation
 
 @MainActor
 public struct WorkspaceView: View {
     @State private var store: WorkspaceStore
+    private let nativeEntries: [String:ProjectPackageEntry]
+    private let rendererCapability: RendererCapabilities
+    private let nativeSidefileRevision: UUID
     private let packageIssues: [ValidationIssue]
     private let onImportJSON: (@MainActor () -> Void)?
     private let onImportWeather: (@MainActor (UUID) -> Void)?
@@ -13,10 +17,11 @@ public struct WorkspaceView: View {
     @State private var replacement: WorkspaceSheet?
     @State private var focusEntityID: UUID?
 
-    public init(store: WorkspaceStore, packageIssues: [ValidationIssue] = [],
+    public init(store: WorkspaceStore, nativeEntries: [String:ProjectPackageEntry] = [:], nativeSidefileRevision: UUID = UUID(), rendererCapability: RendererCapabilities = .current, packageIssues: [ValidationIssue] = [],
                 onImportJSON: (@MainActor () -> Void)? = nil,
                 onImportWeather: (@MainActor (UUID) -> Void)? = nil) {
         _store = State(initialValue: store)
+        self.rendererCapability = rendererCapability; self.nativeEntries = nativeEntries; self.nativeSidefileRevision = nativeSidefileRevision
         self.packageIssues = packageIssues
         self.onImportJSON = onImportJSON; self.onImportWeather = onImportWeather
     }
@@ -46,6 +51,11 @@ public struct WorkspaceView: View {
         } message: {
             Text("创建完成后会替换当前输入，保留项目包的已有附件。可以撤销此次替换；已有计算结果不代表新输入的结果。")
         }
+        .onAppear { if store.preview.enabled { store.preview.update(previewInput,registry:store.modelRegistry,persist:persistPreview) } }
+        .onChange(of: previewInput) { _, input in
+            store.preview.update(input,registry: store.modelRegistry,persist: persistPreview)
+        }
+        .onDisappear { store.preview.stop() }
         .alert("操作未完成", isPresented: Binding(get: { store.presentedError != nil },
             set: { if !$0 { store.presentedError = nil } })) {
             Button("好", role: .cancel) { store.presentedError = nil }
@@ -60,7 +70,7 @@ public struct WorkspaceView: View {
                     }
                 }.pickerStyle(.menu)
             }
-            Label(saveBlocked ? "项目需要修复，修复前不能保存" : "草稿可保存", systemImage: saveBlocked ? "exclamationmark.triangle" : "doc.badge.checkmark")
+            Label(saveBlocked ? "项目需要修复，修复前不能保存" : "草稿可保存", systemImage: saveBlocked ? "exclamationmark.triangle" : "checkmark.circle")
                 .foregroundStyle(saveBlocked ? Color.orange : Color.secondary)
             HStack {
                 Text("计算输入待补充：\(preparationIssues.count) 项").font(.caption).foregroundStyle(.secondary)
@@ -72,8 +82,11 @@ public struct WorkspaceView: View {
         switch store.selection ?? .workspace {
         case .workspace:
             if let project = store.project, let id = store.selectedScenarioID, !project.geometry.rooms.isEmpty {
+                VStack(spacing:0) {
+                ScrollView { AirflowPreviewPanelView(store:store,input:previewInput).padding() }.frame(maxHeight:240)
                 RoomObjectsView(project: project, scenarioID: id, registry: store.modelRegistry,
-                                focusEntityID: focusEntityID, onCommit: commit)
+                                focusEntityID: focusEntityID, overlay: store.preview.overlay, rendererCapability: rendererCapability, onCommit: commit)
+                }
             } else {
                 EmptyStateView("建立房间模型", symbol: "square.dashed", message: "通过矩形房间向导或办公室、教室模板开始；未知输入可保留为草稿。")
             }
@@ -82,9 +95,10 @@ public struct WorkspaceView: View {
                 ScenarioListView(project: project, selectedScenarioID: store.selectedScenarioID,
                     baselineScenarioID: store.baselineScenarioID, onSelect: { store.selectedScenarioID = $0 },
                     onCommit: commit, onSetBaseline: { try store.setBaseline($0) })
+                ScrollView { PreviewComparisonView(store: store, additionalIssues: packageIssues).padding() }.frame(maxHeight:260)
             }
         case .runs:
-            EmptyStateView("计算引擎尚未接入", symbol: "waveform.path", message: "当前可以编辑和保存模型、检查输入、捕获方案快照。快照不是计算结果。")
+            NativeAnalysisHistoryView(store:store,entries:nativeEntries,revision:nativeSidefileRevision)
         case .reports:
             EmptyStateView("暂无有效报告", symbol: "doc.text", message: "后续接入计算和质量检查后才可生成报告；当前模型不能给出能耗、舒适或节省结论。")
         }
@@ -127,7 +141,7 @@ public struct WorkspaceView: View {
             }
             Section("输入状态") {
                 Text(saveBlocked ? "需要修复" : "草稿完整性通过")
-                Text(preparationIssues.isEmpty ? "输入准备检查通过；计算引擎尚未接入。" : "当前方案仍有 \(preparationIssues.count) 项计算输入待补充。")
+                Text(preparationIssues.isEmpty ? "输入准备检查通过；本地规则仍需明确采用展示档案。" : "当前方案仍有 \(preparationIssues.count) 项计算输入待补充。")
                 Button("定位输入问题") { sheet = .issues }
                 Button("查看未知与假设") { sheet = .assumptions }
             }
@@ -191,6 +205,12 @@ public struct WorkspaceView: View {
             Form { content() }.formStyle(.grouped).navigationTitle(title)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { sheet = nil } } }
         }.modifier(EditorSheetSize())
+    }
+    private var previewInput: PreviewWorkspaceInput {
+        .init(project:store.project,scenarioID:store.selectedScenarioID,configuration:store.selectedScenarioID.flatMap { store.analysisConfiguration?.configuration(scenarioID:$0,kind:.airflowPreview) }, additionalIssues:packageIssues)
+    }
+    private func persistPreview(_ artifact:NativeAnalysisArtifact) throws {
+        guard let persist=store.persistNativeAnalysis else { throw NativeArtifactError.unsupportedRecord };try persist(artifact)
     }
     private var saveBlocked: Bool { allIssues.contains { $0.blocks.contains(.projectIntegrity) } }
     private var preparationIssues: [ValidationIssue] { allIssues.filter { $0.blocks.contains(.inputPreparation) } }

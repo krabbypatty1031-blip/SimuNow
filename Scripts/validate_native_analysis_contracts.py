@@ -6,7 +6,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 root=Path(__file__).resolve().parents[1]
 folder=Path(sys.argv[1])
 files=sorted(folder.glob('*.json'))
-if len(files)!=15: raise SystemExit(f'Expected 15 actual Swift records, found {len(files)}')
+expected={f'{kind}-{tag}.json' for kind in ['airflowPreview','powerEstimate','steadyHeatBalance'] for tag in ['request','result','event','manifest','configuration']} | {'n3-production-request.json','n3-production-result.json'}
+if {p.name for p in files} != expected: raise SystemExit('Native Swift output names differ: '+str({p.name for p in files} ^ expected))
+if len(files)!=17: raise SystemExit(f'Expected 17 actual Swift records including production N3, found {len(files)}')
 map_={'request':'local-analysis-request','result':'local-analysis-result','event':'local-analysis-event','manifest':'analysis-artifact-manifest','configuration':'analysis-configuration'}
 validators={}
 for tag,name in map_.items():
@@ -34,4 +36,12 @@ schema=validators['request'].schema
 assert schema['$defs']['AnalysisIssue']['properties']['message']=={'type':'string'}
 assert schema['$defs']['AnalysisArtifactManifest']['properties']['owner']['const']=='com.simunow.native-analysis'
 assert 'const' not in schema['$defs']['PreviewPath']['properties']['id']
-print('Native contracts: 15 real Swift records + 6 rejection mutations + independent field assertions passed.')
+production=json.loads((folder/'n3-production-result.json').read_text())
+new_mutations=[]
+a=copy.deepcopy(production);a['payload']['value']['sourcePortID']='bad-uuid';new_mutations.append(a)
+a=copy.deepcopy(production);a['payload']['value']['relations'][1]['hitPosition']['x']='3';new_mutations.append(a)
+a=copy.deepcopy(production);a['payload']['value']['paths'][0]['id']=-1;new_mutations.append(a)
+a=copy.deepcopy(production);a['payload']['value']['emissionRejections']=[{'pathID':1,'reason':'invented'}];new_mutations.append(a)
+for node in new_mutations:
+    if validators['result'].is_valid(node): raise SystemExit('Independent schema accepted invalid N3 evidence')
+print('Native contracts: 17 real Swift records (including production N3) + 10 rejection mutations + independent field assertions passed.')

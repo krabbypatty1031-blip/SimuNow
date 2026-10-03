@@ -46,11 +46,11 @@ public struct RoomViewportContainer: View {
                 if let descriptor, descriptor.projectID == project.id {
                     if !isCurrent { Text("正在更新房间；所示为上一份几何，选择暂不可用。") .font(.caption).foregroundStyle(.secondary) }
                     if descriptor.bounds != nil {
-                        RealityKitRoomViewport(descriptor: descriptor,selection: selection,overlay: overlay, inputEnabled: isCurrent, onSelect: { if isCurrent { onSelect($0) } })
+                        RealityKitRoomViewport(descriptor: descriptor,selection: selection,overlay: isCurrent ? overlay : .empty, inputEnabled: isCurrent, onSelect: { if isCurrent { onSelect($0) } })
                     } else { ContentUnavailableView("没有可显示的三维几何",systemImage: "cube",description: Text("请检查下方问题和对象；二维与属性表单仍可使用。")) }
                 } else { ProgressView("正在准备房间几何…").frame(minHeight: 260) }
             } else {
-                RoomPlanView(project: project,scenarioID: scenarioID,selection: planSelection,registry: registry,placing: placing,
+                RoomPlanView(project: project,scenarioID: scenarioID,selection: planSelection,registry: registry,placing: placing,overlay: overlay,
                              onSelect: { onSelect(.init($0)) },onPlace: onPlace)
             }
             if let selected = descriptor?.object(selection) {

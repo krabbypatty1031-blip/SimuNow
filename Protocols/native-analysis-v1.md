@@ -75,3 +75,19 @@ NativeArtifactCodec 在后台构造/检查不可变 artifact，身份/假设/内
 专用 Debug 构建传 `OTHER_SWIFT_FLAGS='$(inherited) -D SIMUNOW_NATIVE_PROBE'` 可直接启动独立 probe WindowGroup；普通 Mac Debug 的 Developer 菜单也可打开 probe，不改用户文档。N2 采用自管 PerspectiveCameraComponent + .none 实现可复现 reset/focus，系统 orbit/dolly 保留验证入口，不能两套控制同时写相机。实际显示/交互与最低系统运行证据单独记录。
 
 官方 API 依据：[RealityView camera](https://developer.apple.com/documentation/realitykit/realityviewcameracontent/camera)、[CameraControls orbit](https://developer.apple.com/documentation/realitykit/cameracontrols/orbit)、[PerspectiveCameraComponent](https://developer.apple.com/documentation/realitykit/perspectivecameracomponent)。构建核对使用本机公开 SDK 声明；没有导入私有 SDK 模块。
+
+## N3 规则生产接入与兼容补充
+
+`AirflowPreviewExecutor` 是首个生产方法，genericCone v1；固定 UInt32 seed / UInt64 Halton 索引，最多64路径×128段、128盒体、512关注点。strength 的单位仍为 `1`。没有新增 CFD、风速、温度、PMV 或舒适质量语义。
+
+结果 v1 兼容增加可选证据：`sourcePortID`、`geometryToleranceMeters`、`wallSourceOffsetMeters`、`emissionRejections(pathID,reason)`，关系的 `hitPosition`。旧记录缺这些字段仍可读；新记录由独立 schema 和 NativeAnalysisCodec 严格验证。旧 App 不识别的新侧文件内容继续按项目包 opaque 附件保留，不覆盖或迁移 project v2 / P0 / package v1。Python 开发验证器读取同一独立 schema 并校验实际 Swift 生产 JSON；消费者执行没有 Python 依赖。
+
+闭边界 slab 对同数值容差内 hit，先确定全局最小 t，再在固定 `[minT,minT+tol/segmentLength]` 集中取 UUID 字典序最小者；BVH 仅筛选候选，使用同一最终规则，不允许 pairwise tolerance 连锁使结果随遍历改变。几何容差与墙源偏移分别保存。开口/回风能力说明在缓存 payload 中固定不变；当前开启/回风状态警告由最新输入就绪度负责，避免同 computationHash 配上旧条件 notes。
+
+Workspace 的配置采用冻结项目/方案/原配置草稿，通过同一 P2 完整值 undo。Coordinator 编码载荷预算12份/24MiB、会话索引256条；这是受控数据预算，不是进程 RAM 保证。只驱逐驻留载荷/会话索引，不删除已保存 run、opaque 文件或比较引用。保存历史通过 manifest 轻量索引并逐份完整校验 lazy 读取；所有写入仍由最新文档 binding 合并，DocumentGroup 或用户导出负责真正写盘。
+
+### N3 边界开销与不可变值复用
+
+`ProjectCodec.validate/validateSnapshot` 与对应 encode 执行相同结构和插件载荷检查，仅不序列化未使用的 bytes。`AnalysisInputResolver.prepare` 返回同一次验证的 request/readiness；`validatedRequestData` 在完整 wire、hash、readiness 检查后返回编码数据供 artifact 使用，公开可变/篡改 request 仍会拒绝。没有“可信 hash 即跳过验证”的入口。
+
+JSON wire 输出保持排序、Foundation 字符串 escaping 与原 number token；canonical 数字保持 Int64/UInt64 精度、负零归一与 opaque 原拼写。原生侧文件 append 仅当 document 的公开 project/metadata 与构造时已验证值相等、assets 与旧值相等时复用输入编码/天气摘要；完整输出文件/目录/字节预算仍检查，任何输入/资产变化走完整构造。生产平台入口持有全 App 共享 client，窗口拥有独立 coordinator；2 running/8 queued 为进程级登记上限。

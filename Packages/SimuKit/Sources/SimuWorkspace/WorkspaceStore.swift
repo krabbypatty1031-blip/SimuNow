@@ -18,6 +18,8 @@ public final class WorkspaceStore {
     public var presentedError: String?
     public let modelRegistry: ModelRegistry
     public let projectValidator: ProjectValidator
+    public let preview: PreviewCoordinator
+    @ObservationIgnored public var persistNativeAnalysis: (@MainActor @Sendable (NativeAnalysisArtifact) throws -> Void)?
     public let localAnalysisClient: any LocalAnalysisSubmitting
     public let simulationClient: any SimulationClient
     private var undoHistory: [WorkspaceHistoryEntry] = []
@@ -32,6 +34,7 @@ public final class WorkspaceStore {
         self.projectValidator = projectValidator
         self.simulationClient = simulationClient
         self.localAnalysisClient = localAnalysisClient
+        self.preview = PreviewCoordinator(client: localAnalysisClient)
     }
 
     public var currentScenario: Scenario? {

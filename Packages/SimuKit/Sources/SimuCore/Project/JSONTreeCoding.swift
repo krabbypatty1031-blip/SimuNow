@@ -116,6 +116,7 @@ final class TreeStorage {
     var object: [String: TreeStorage]?
     var array: [TreeStorage]?
     func read() throws -> JSONValue {
+        try Task.checkCancellation()
         if let object { return .object(try object.mapValues { try $0.read() }) }
         if let array { return .array(try array.map { try $0.read() }) }
         guard let node else { throw ProjectDataError.contract("empty encoder") }; return node

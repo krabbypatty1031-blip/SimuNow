@@ -149,12 +149,36 @@
     "AirflowPreviewPayload": {
       "additionalProperties": false,
       "properties": {
+        "emissionRejections": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PreviewEmissionRejection"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "maxItems": 64
+        },
         "excludedEntities": {
           "items": {
             "format": "uuid",
             "type": "string"
           },
           "type": "array"
+        },
+        "geometryToleranceMeters": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "notes": {
           "items": {
@@ -183,12 +207,33 @@
           "maxItems": 512,
           "type": "array"
         },
+        "sourcePortID": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "strengthUnit": {
           "const": "1",
           "type": "string"
         },
         "validEmissionCount": {
           "type": "integer"
+        },
+        "wallSourceOffsetMeters": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -3123,6 +3168,28 @@
       ],
       "type": "object"
     },
+    "PreviewEmissionRejection": {
+      "additionalProperties": false,
+      "properties": {
+        "pathID": {
+          "maximum": 63,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reason": {
+          "enum": [
+            "emission_in_obstacle",
+            "emission_outside_domain"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "pathID",
+        "reason"
+      ],
+      "type": "object"
+    },
     "PreviewPath": {
       "additionalProperties": false,
       "properties": {
@@ -3138,6 +3205,8 @@
           ]
         },
         "id": {
+          "maximum": 63,
+          "minimum": 0,
           "type": "integer"
         },
         "points": {
@@ -3203,6 +3272,16 @@
             {
               "format": "uuid",
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hitPosition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position3D"
             },
             {
               "type": "null"

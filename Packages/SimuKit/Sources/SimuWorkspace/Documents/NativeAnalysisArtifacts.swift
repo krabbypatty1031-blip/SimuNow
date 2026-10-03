@@ -35,9 +35,9 @@ public struct NativeArtifactCodec: Sendable {
     public func make(request: LocalAnalysisRequest, result: LocalAnalysisResult) throws -> NativeAnalysisArtifact {
         guard request.identity == result.identity, request.method == result.method,
               result.assumptions == request.resolvedInput.adoptedAssumptions else { throw NativeArtifactError.identityMismatch }
-        try AnalysisInputResolver(registry: registry).validate(request)
+        let input = try AnalysisInputResolver(registry: registry).validatedRequestData(request)
         let codec = NativeAnalysisCodec(registry: registry)
-        let input = try codec.encodeRequest(request), output = try codec.encodeResult(result)
+        let output = try codec.encodeResult(result)
         guard input.count <= Self.maximumInputBytes, output.count <= Self.maximumResultBytes else { throw NativeArtifactError.resourceLimit("Native input/result exceeds budget") }
         let manifest = AnalysisArtifactManifest(runID: request.identity.runID, scenarioID: request.identity.scenarioID,
             projectID: request.resolvedInput.snapshot.projectID, files: [
@@ -171,5 +171,30 @@ private extension Dictionary where Key == String, Value == ProjectPackageEntry {
         }
         try nested.setNativeEntry(value, at: Array(components.dropFirst()), allowReplace: allowReplace)
         self[key] = .directory(nested)
+    }
+}
+
+/// Lightweight saved-file index. Decodes a bounded manifest, never all resident paths.
+public struct NativeSavedAnalysisIndex: Equatable, Sendable, Identifiable {
+    public let id:UUID
+    public let scenarioID:UUID
+    public let resultBytes:Int
+    public let relativePath:String
+}
+public extension NativeArtifactCodec {
+    func index(entries:[String:ProjectPackageEntry],projectID:UUID) -> [NativeSavedAnalysisIndex] {
+        guard case .directory(let runs)=entries["runs"] else { return [] }
+        return runs.keys.sorted().compactMap { key in
+            guard let runID=UUID(uuidString:key),case .directory(let run)=runs[key],case .directory(let native)=run["native-analysis"],
+                  case .file(let data)=native["manifest.json"],data.count <= Self.maximumManifestBytes,
+                  let manifest=try? NativeAnalysisCodec(registry:registry).decodeManifest(data),manifest.runID == runID,manifest.projectID == projectID,
+                  let output=manifest.files.first(where:{$0.relativePath == "result.json"}),output.byteCount <= Self.maximumResultBytes else { return nil }
+            return .init(id:runID,scenarioID:manifest.scenarioID,resultBytes:output.byteCount,relativePath:"runs/\(key)/native-analysis")
+        }
+    }
+    func load(runID:UUID,entries:[String:ProjectPackageEntry],projectID:UUID) throws -> NativeAnalysisArtifact {
+        let path="runs/\(runID.uuidString.lowercased())/native-analysis"
+        guard case .directory(let files)=ProjectPackageEntry.directory(entries).entry(at:path) else { throw NativeArtifactError.invalidManifest }
+        return try decode(files,expectedRunID:runID,expectedProjectID:projectID)
     }
 }

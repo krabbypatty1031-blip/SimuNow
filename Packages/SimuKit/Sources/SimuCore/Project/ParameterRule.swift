@@ -73,7 +73,7 @@ public struct ProjectValidator: Sendable {
     public init(rules: [any ProjectValidationRule] = [ParameterRule(),IdentityRule(),GeometryRule(),PhysicsRule()]) { self.rules = rules }
     public func validate(_ project: ProjectDocument, registry: ModelRegistry) throws -> ValidationReport {
         // Run the strict structural boundary before semantic rules on programmatically built values.
-        _ = try ProjectCodec(registry:registry).encode(project)
+        try ProjectCodec(registry:registry).validate(project)
         let tree = try JSONTreeCoding.encode(project)
         let issues = try rules.flatMap { try $0.validate(project,registry:registry) }.map { issue in
             guard issue.entityID == nil else { return issue }

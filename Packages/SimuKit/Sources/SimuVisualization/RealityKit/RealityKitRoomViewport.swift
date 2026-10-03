@@ -53,6 +53,7 @@ private struct NativeRoomViewport: View {
     @State private var controller: RoomSceneController
     @State private var preparedOverlay = RoomSceneOverlay.empty
     @State private var overlayPreparationFailure: String?
+    @State private var panMode = false
     @State private var dragStart: RoomCameraState?
     @State private var magnifyStart: RoomCameraState?
     @SwiftUI.Environment(\.colorScheme) private var colorScheme
@@ -109,9 +110,13 @@ private struct NativeRoomViewport: View {
                                 else { return }
                                 if dragStart == nil { dragStart = controller.camera }
                                 guard var next = dragStart else { return }
-                                next.orbit(
-                                    horizontalDegrees: -Double(event.translation.width) * 0.3,
-                                    verticalDegrees: Double(event.translation.height) * 0.3)
+                                if panMode, let bounds = descriptor.bounds {
+                                    next.pan(horizontal: -Double(event.translation.width) / max(1, width),
+                                             vertical: Double(event.translation.height) / max(1, height), roomBounds: bounds)
+                                } else {
+                                    next.orbit(horizontalDegrees: -Double(event.translation.width) * 0.3,
+                                               verticalDegrees: Double(event.translation.height) * 0.3)
+                                }
                                 controller.setCamera(next)
                             }.onEnded { event in
                                 let isClick =
@@ -154,31 +159,16 @@ private struct NativeRoomViewport: View {
                     controller.updateViewport(width: Double(size.width), height: Double(size.height))
                 }
             }
-            .frame(minHeight: 260, idealHeight: 340)
+            .frame(minHeight: 140, maxHeight: .infinity)
             .background(
                 colorScheme == .dark ? Color(white: 0.08) : Color(white: 0.96),
                 in: RoundedRectangle(cornerRadius: 8)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
-            LazyVGrid(columns: [.init(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-                cameraButton("左转", "arrow.counterclockwise") { controller.orbit(horizontalDegrees: -15) }
-                cameraButton("右转", "arrow.clockwise") { controller.orbit(horizontalDegrees: 15) }
-                cameraButton("放大", "plus.magnifyingglass") { controller.zoom(factor: 0.8) }
-                cameraButton("缩小", "minus.magnifyingglass") { controller.zoom(factor: 1.25) }
-                cameraButton("俯视", "square.3.layers.3d.top.filled") { controller.top() }
-                cameraButton("等轴重置", "arrow.uturn.backward") { controller.reset() }
-                cameraButton("聚焦选中", "scope") { controller.focus(selection) }.disabled(
-                    descriptor.object(selection)?.focusBounds == nil)
-            }.buttonStyle(.bordered).controlSize(.small)
             ViewThatFits(in: .horizontal) {
-                HStack { visibilityControls }
-                VStack(alignment: .leading) { visibilityControls }
-            }
-            Text("米制 Z-up · 拖动旋转，滚轮或捏合缩放，点选查看；对象清单提供无手势操作。")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if !overlay.explanation.isEmpty {
-                Text(overlay.explanation).font(.caption).fixedSize(horizontal: false, vertical: true)
-            }
+                HStack { compactCameraTools }
+                VStack(alignment: .leading, spacing: 6) { compactCameraTools }
+            }.controlSize(.small)
             if let issue = overlayPreparationFailure ?? controller.overlayRenderingIssue
                 ?? overlay.validationMessage
             {
@@ -215,6 +205,36 @@ private struct NativeRoomViewport: View {
                 NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
             ) { _ in controller.clearReusableCaches() }
         #endif
+    }
+    @ViewBuilder private var compactCameraTools: some View {
+        Menu {
+            Section("视角") {
+                cameraButton("俯视", "square.3.layers.3d.top.filled") { controller.top() }
+                cameraButton("重置视角", "arrow.uturn.backward") { controller.reset() }
+                cameraButton("聚焦选中", "scope") { controller.focus(selection) }.disabled(descriptor.object(selection)?.focusBounds == nil)
+            }
+            Section("旋转与缩放") {
+                cameraButton("左转", "arrow.counterclockwise") { controller.orbit(horizontalDegrees: -15) }
+                cameraButton("右转", "arrow.clockwise") { controller.orbit(horizontalDegrees: 15) }
+                cameraButton("放大", "plus.magnifyingglass") { controller.zoom(factor: 0.8) }
+                cameraButton("缩小", "minus.magnifyingglass") { controller.zoom(factor: 1.25) }
+            }
+            Section("平移视野") {
+                cameraButton("向左", "arrow.left") { pan(-0.08, 0) }
+                cameraButton("向右", "arrow.right") { pan(0.08, 0) }
+                cameraButton("向上", "arrow.up") { pan(0, 0.08) }
+                cameraButton("向下", "arrow.down") { pan(0, -0.08) }
+            }
+            Section("房间表面") { visibilityControls }
+        } label: { Label("相机与表面", systemImage: "camera") }
+        Toggle("拖动平移", isOn: $panMode).toggleStyle(.button)
+        Text(panMode ? "拖动平移 · 滚轮缩放" : "拖动旋转 · 滚轮缩放").font(.caption).foregroundStyle(.secondary)
+    }
+    private func pan(_ x: Double, _ y: Double) {
+        guard let bounds = descriptor.bounds else { return }
+        var next = controller.camera
+        next.pan(horizontal: x, vertical: y, roomBounds: bounds)
+        controller.setCamera(next)
     }
     private func cameraButton(_ title: String, _ symbol: String, action: @escaping @MainActor () -> Void)
         -> some View

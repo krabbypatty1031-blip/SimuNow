@@ -23,26 +23,28 @@ public struct RoomWizardView: View {
     }
 
     public var body: some View {
-        Form {
-            Section {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("第 \(step + 1) / 4 步：\(titles[step])").font(.headline)
                 ProgressView(value: Double(step + 1), total: 4).accessibilityLabel("建模进度")
-            }
+            }.padding(20)
+            Divider()
+            EditorForm {
             switch step {
             case 0:
-                Section("项目") {
-                    TextField("项目名称", text: $name)
+                EditorSection("项目") {
+                    EditorTextField(title: "项目名称", text: $name)
                     Picker("空间用途", selection: $spaceType) {
                         Text("办公室").tag(SpaceType.office)
                         Text("教室").tag(SpaceType.classroom)
                     }
-                    TextField("房间名称", text: $draft.name)
+                    EditorTextField(title: "房间名称", text: $draft.name)
                 }
             case 1:
-                Section("房间尺寸") { RoomDimensionFields(draft: $draft) }
-                Section("朝向") { NorthBearingFields(draft: $draft.northAngle) }
+                EditorSection("房间尺寸") { RoomDimensionFields(draft: $draft) }
+                EditorSection("朝向") { NorthBearingFields(draft: $draft.northAngle) }
             case 2:
-                Section("门窗") {
+                EditorSection("门窗") {
                     if openings.isEmpty { Text("尚未添加门窗；可以在创建后继续补充。").foregroundStyle(.secondary) }
                     ForEach(openings, id: \.id) { opening in
                         HStack {
@@ -59,32 +61,28 @@ public struct RoomWizardView: View {
                     Button("添加门窗", systemImage: "plus") { openingSheet = .init(id: UUID(), isNew: true) }
                 }
             default:
-                Section("创建摘要") {
+                EditorSection("创建摘要") {
                     LabeledContent("项目", value: name)
                     LabeledContent("房间", value: draft.name)
                     LabeledContent("用途", value: spaceType == .office ? "办公室" : "教室")
+                    LabeledContent("宽度 × 进深 × 高度", value: [draft.width, draft.depth, draft.height].map { $0.isKnown ? $0.valueText + " m" : "未知" }.joined(separator: " × "))
                     LabeledContent("门窗", value: "\(openings.count) 个")
                     Text("将创建一个基准方案。几何和物理参数可以明确标记未知；本地预览和各类估算分别检查所需输入。")
                         .font(.caption).foregroundStyle(.secondary)
                     Text("围护暴露和边界模式尚未配置；请在使用条件中按实际情况设置。窗参数、通风与环境参数保持未知。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section {
-                    DisclosureGroup("查看未知、假设与预设") {
-                        if let project = try? buildProject() { ParameterAssumptionsView(project: project, registry: registry) }
-                    }
-                }
             }
-            if let error { Section("请修正后继续") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
-            Section {
-                HStack {
-                    if step > 0 { Button("上一步") { step -= 1; error = nil } }
-                    Spacer()
-                    Button(step == 3 ? "创建项目" : "下一步") { advance() }
-                }
+            if let error { EditorSection("请修正后继续") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
             }
+            Divider()
+            HStack {
+                if step > 0 { Button("上一步") { step -= 1; error = nil } }
+                Spacer()
+                Button(step == 3 ? "创建项目" : "继续") { advance() }.buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }.padding(16)
         }
-        .formStyle(.grouped)
         .navigationTitle("创建矩形房间")
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDiscard = true } } }
         .interactiveDismissDisabled()
@@ -103,7 +101,7 @@ public struct RoomWizardView: View {
                         openingID: selection.isNew ? nil : selection.id, registry: registry) { candidate, _ in
                         openings = candidate.geometry.rooms.first { $0.id == draft.id }?.openings ?? []
                     }
-                }
+                }.modifier(EditorSheetSize())
             } else { Text("请先完成房间字段并修正输入错误。") }
         }
     }

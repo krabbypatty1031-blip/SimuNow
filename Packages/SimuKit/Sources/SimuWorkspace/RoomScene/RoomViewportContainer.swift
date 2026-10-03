@@ -19,6 +19,9 @@ public struct RoomViewportContainer: View {
     private let onPlace: @MainActor (Position3D) -> Void
     private let onEdit: @MainActor (RoomSceneSelectionTarget) -> Void
     private let canEdit: @MainActor (RoomSceneSelectionTarget) -> Bool
+    @State private var modeBeforePlacement: RoomViewportMode?
+    @State private var showLegend = false
+    @State private var showGeometry = false
     @State private var mode: RoomViewportMode
     @State private var descriptor: SceneDescriptor?
     @State private var completedInput: RoomSceneBuildInput?
@@ -41,6 +44,10 @@ public struct RoomViewportContainer: View {
                     Text("三维查看").tag(RoomViewportMode.threeDimensional)
                     Text("二维编辑").tag(RoomViewportMode.plan)
                 }.pickerStyle(.segmented).disabled(placing)
+                HStack(spacing: 0) {
+                    Button("二维") { mode = .plan }.keyboardShortcut("2", modifiers: .command)
+                    Button("三维") { if capability.supportsNonAR3D { mode = .threeDimensional } }.keyboardShortcut("3", modifiers: .command)
+                }.frame(width: 0, height: 0).clipped().accessibilityHidden(true).disabled(placing)
             } else { Text(capability.explanation).font(.caption).foregroundStyle(.secondary) }
             if mode == .threeDimensional && capability.supportsNonAR3D && !placing {
                 if let descriptor, descriptor.projectID == project.id {
@@ -53,14 +60,10 @@ public struct RoomViewportContainer: View {
                 RoomPlanView(project: project,scenarioID: scenarioID,selection: planSelection,registry: registry,placing: placing,overlay: overlay,
                              onSelect: { onSelect(.init($0)) },onPlace: onPlace)
             }
-            if let selected = descriptor?.object(selection) {
-                Label("已选：" + selected.title,systemImage: "checkmark.circle.fill")
-                Text(selected.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false,vertical: true)
-                if let target = selected.target {
-                    Button("编辑所选属性") { onEdit(target) }.disabled(!isCurrent || !canEdit(target))
-                }
-            }
             if let descriptor {
+                HStack {
+                    Button("表面与门窗") { showGeometry.toggle() }.popover(isPresented: $showGeometry) {
+                    ScrollView { VStack(alignment: .leading, spacing: 10) {
                 DisclosureGroup("房间表面与门窗 · \(descriptor.objects.filter { [.room,.surface,.opening].contains($0.key.category) }.count) 项") {
                     ForEach(descriptor.objects.filter { [.room,.surface,.opening].contains($0.key.category) }) { item in
                         ViewThatFits(in: .horizontal) {
@@ -81,9 +84,22 @@ public struct RoomViewportContainer: View {
                         }
                     }
                 }
+                    }.padding().frame(width: 300) }.frame(height: 360)
+                    }
+                    Button("符号图例", systemImage: "info.circle") { showLegend.toggle() }.popover(isPresented: $showLegend) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label("家具 · 按尺寸显示的盒体", systemImage: "square.fill")
+                            Label("座位 · 人员位置的示意标记", systemImage: "chair.fill")
+                            Label("采样点 · 指定的关注位置", systemImage: "smallcircle.filled.circle")
+                            Label("热源 · 独立的热量输入点", systemImage: "flame")
+                            Label("空调 · 点位符号，无机身几何", systemImage: "air.conditioner.horizontal")
+                            Label("风口 · 箭头为输入方向", systemImage: "arrow.up.right")
+                            Label("温控测点 · 控制取样位置", systemImage: "thermometer")
+                            MethodBoundaryView()
+                        }.font(.callout).padding().frame(width: 310)
+                    }
+                }.controlSize(.small)
             }
-            Text("家具按模型尺寸显示；空调、人员、座位和点位使用示意符号。三维显示不代表气流或热量结果。")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false,vertical: true)
         }
         .task(id: RoomSceneBuildInput(project: project,scenarioID: scenarioID)) {
             let input = RoomSceneBuildInput(project: project,scenarioID: scenarioID), registry = registry
@@ -92,7 +108,10 @@ public struct RoomViewportContainer: View {
             guard !Task.isCancelled else { return }
             descriptor = built; completedInput = input
         }
-        .onChange(of: placing) { _, value in if value { mode = .plan } }
+        .onChange(of: placing) { _, value in
+            if value { modeBeforePlacement = mode; mode = .plan }
+            else if let previous = modeBeforePlacement { mode = capability.supportsNonAR3D ? previous : .plan; modeBeforePlacement = nil }
+        }
         .onChange(of: capability.supportsNonAR3D) { _, available in if !available { mode = .plan } }
     }
     @ViewBuilder private func geometryObjectActions(_ item: RoomSceneObject) -> some View {

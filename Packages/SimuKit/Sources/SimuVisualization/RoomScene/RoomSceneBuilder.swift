@@ -103,9 +103,9 @@ public enum RoomSceneBuilder {
                 // The display offset keeps the linked record selectable; it is not another input point.
                 _ = b.symbol(key, title: seat.name + " / 人员", detail: "关联人员示意，显示于座位上方 0.18 m；非人体几何或采样点。", point: .init(x: seat.position.x, y: seat.position.y, z: seat.position.z+0.18), roomID: seat.roomID, material: .occupant, radius: 0.08, target: .object(.init(kind: .seat, objectID: seat.id)))
             }
-            for (index,item) in input.usage.equipment.enumerated() {
+            for item in input.usage.equipment {
             if Task.isCancelled { b.issue(nil, "display_cancelled", "场景准备已取消。"); return b.finish() }
-                _ = b.symbol(.init(category: .equipment, modelID: item.id), title: "设备热源 \(index+1)", detail: "热源点位示意，与家具实体分开。", point: item.position, roomID: item.roomID, material: .equipment, radius: 0.085, target: .object(.init(kind: .equipment, objectID: item.id)))
+                _ = b.symbol(.init(category: .equipment, modelID: item.id), title: "热源 · " + item.id.uuidString.prefix(6), detail: "热源点位示意，与家具实体分开。", point: item.position, roomID: item.roomID, material: .equipment, radius: 0.085, target: .object(.init(kind: .equipment, objectID: item.id)))
             }
             for device in input.hvac {
             if Task.isCancelled { b.issue(nil, "display_cancelled", "场景准备已取消。"); return b.finish() }

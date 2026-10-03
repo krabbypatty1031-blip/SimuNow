@@ -29,7 +29,7 @@ public struct ScenarioListView: View {
     }
 
     public var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 12) {
             Section("方案") {
                 if project.scenarios.isEmpty {
                     Text("尚无方案；先创建房间或应用模板。")
@@ -40,7 +40,7 @@ public struct ScenarioListView: View {
                             Image(systemName: scenario.id == selectedScenarioID ? "checkmark.circle.fill" : "circle")
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(scenario.name)
-                                Text("\(scenario.inputs.usage.seats.count) 个座位 · \(scenario.inputs.hvac.count) 台空调 · 待计算")
+                                Text("\(scenario.inputs.usage.seats.count) 个座位 · \(scenario.inputs.hvac.count) 台空调")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -55,7 +55,7 @@ public struct ScenarioListView: View {
                 }
             }
             if let scenario = selectedScenario {
-                Section("所选方案：\(scenario.name)") {
+                Menu("管理：" + scenario.name) {
                     Button("复制为候选", systemImage: "doc.on.doc") {
                         editName = .init(scenarioID: scenario.id, mode: .copy, initialName: candidateName(for: scenario))
                     }
@@ -77,7 +77,7 @@ public struct ScenarioListView: View {
                     }
                 }
             }
-            Section("编辑与结果状态") {
+            DisclosureGroup("共享范围与保存说明") {
                 Text("各方案保存独立的使用条件、空调与评价输入。房间、门窗和家具几何由整个项目共享。")
                 Text("复制候选不会修改基准。编辑快照是输入的独立副本；后续编辑不会改变已捕获快照。输入检查与引擎可用性分别判断。")
                     .foregroundStyle(.secondary)
@@ -88,7 +88,7 @@ public struct ScenarioListView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+
         .sheet(item: $editName) { request in
             ScenarioNameSheet(request: request) { name in
                 switch request.mode {
@@ -156,8 +156,8 @@ private struct ScenarioNameSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("方案名称", text: $name)
+            EditorForm {
+                EditorTextField(title: "方案名称", text: $name)
                 if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             }
             .navigationTitle(request.mode == .copy ? "复制为候选" : "重命名方案")
@@ -180,8 +180,6 @@ private struct ScenarioNameSheet: View {
         .confirmationDialog("放弃尚未保存的名称？", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("放弃修改", role: .destructive) { dismiss() }
         }
-        #if os(macOS)
-        .frame(minWidth: 360, minHeight: 180)
-        #endif
+        .modifier(EditorSheetSize(compact: true))
     }
 }

@@ -28,49 +28,51 @@ public struct OpeningEditorView: View {
     }
 
     public var body: some View {
-        Form {
+        EditorForm {
             if let binding = Binding($draft), let room = project.geometry.rooms.first(where: { $0.id == roomID }) ?? baseProject.geometry.rooms.first(where: { $0.id == roomID }) {
-                Section("类型与所属表面") {
+                EditorSection("类型与所属表面") {
                     Picker("类型", selection: binding.kind) {
                         Text("窗").tag(OpeningKind.window)
                         Text("门").tag(OpeningKind.door)
                     }
                     Picker("表面", selection: binding.surfaceID) {
                         ForEach(room.surfaces.filter { ![.floor, .ceiling].contains($0.face) || $0.id == baseline?.surfaceID }, id: \.id) {
-                            Text(RoomIssuePresentation.surfaceName($0.face)).tag($0.id)
+                            Text(RoomIssuePresentation.wallTitle($0.face)).tag($0.id)
                         }
                     }
                     if let face = room.surfaces.first(where: { $0.id == binding.wrappedValue.surfaceID })?.face {
-                        Text(RoomIssuePresentation.surfaceName(face)).font(.caption).foregroundStyle(.secondary)
+                        DisclosureGroup("计算坐标详情") { Text(RoomIssuePresentation.surfaceName(face)).font(.caption) }
                     }
                     Text("偏移从表面的计算坐标最小角开始；U/V 按上方方向递增。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("位置与尺寸") {
+                OpeningElevationView(room: room, draft: binding.wrappedValue, registry: registry)
+                EditorSection("位置与尺寸") {
                     PhysicalParameterEditor("U 偏移", draft: binding.offsetU, quantity: LengthTag.self, range: .nonnegative)
                     PhysicalParameterEditor("V 偏移", draft: binding.offsetV, quantity: LengthTag.self, range: .nonnegative)
                     PhysicalParameterEditor("宽度（U）", draft: binding.width, quantity: LengthTag.self, range: .positive)
                     PhysicalParameterEditor("高度（V）", draft: binding.height, quantity: LengthTag.self, range: .positive)
                 }
-                Section {
+                EditorSection {
                     Text("修改会影响全部方案。新增窗的 U 值、SHGC、遮阳系数及门窗开启比例保持未知。窗改为门时会删除对应窗配置。")
                         .font(.caption).foregroundStyle(.secondary)
                     if isDirty { Label("门窗草稿尚未提交。", systemImage: "pencil.circle").font(.caption) }
                     if hasConflict { Label(conflictMessage, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
-                    Button(openingID == nil ? "添加门窗" : "应用门窗修改") { apply() }
-                        .disabled(hasConflict)
+
                 }
             } else { Text("房间或门窗已经不存在。") }
-            if let error { Section("修改未提交") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
+            if let error { EditorSection("修改未提交") { Text(error).foregroundStyle(.orange).textSelection(.enabled) } }
         }
-        .formStyle(.grouped)
-        #if os(macOS)
-        .frame(minWidth: 560, idealWidth: 680, minHeight: 500, idealHeight: 640)
-        #endif
+
+        .environment(\.editorEntityID, openingID ?? draft?.id)
+        .modifier(EditorSheetSize())
         .onChange(of: project) { _, _ in if !isDirty { reload() } }
         .onChange(of: isDirty) { _, dirty in if !dirty && project != baseProject { reload() } }
         .navigationTitle(openingID == nil ? "添加门窗" : "编辑门窗")
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { if isDirty { showDiscard = true } else { dismiss() } } } }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("取消") { if isDirty { showDiscard = true } else { dismiss() } } }
+            ToolbarItem(placement: .confirmationAction) { Button(openingID == nil ? "添加门窗" : "应用并关闭") { apply() }.disabled(hasConflict || draft == nil).keyboardShortcut(.defaultAction) }
+        }
         .interactiveDismissDisabled(isDirty)
         .confirmationDialog("放弃尚未提交的门窗修改？", isPresented: $showDiscard, titleVisibility: .visible) {
             Button("放弃修改", role: .destructive) { dismiss() }

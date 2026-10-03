@@ -498,3 +498,27 @@ private struct NativeCPUExecutor: LocalAnalysisExecutor {
     #expect(events.first?.stage == .accepted && events.last?.stage == .cancelled)
     #expect(events.filter { $0.stage.isTerminal }.count == 1)
 }
+
+@Test func historyPresentationPersistsWithoutChangingImmutableAnalysisEvidence() throws {
+    let project = try nativeProject(), request = try nativeRequest(project: project)
+    let artifact = try NativeArtifactCodec().make(request: request, result: nativeResult(request))
+    let before = Date()
+    let document = try SimuNowDocument(project: project).appendingNativeAnalysis(artifact, expectedProjectID: project.id)
+    let reopened = try SimuNowDocument(package: document.makeFileWrapper())
+    let index = NativeArtifactCodec().index(entries: reopened.preservedEntries, projectID: project.id)
+    let presentation = try #require(index.first?.presentation)
+    #expect(presentation.scenarioName == project.scenarios[0].name)
+    #expect(presentation.method == request.method.kind)
+    #expect(presentation.recordedAt >= before && presentation.recordedAt <= Date())
+    #expect(try NativeArtifactCodec().load(runID: request.identity.runID, entries: reopened.preservedEntries, projectID: project.id) == artifact)
+    var entries = reopened.preservedEntries
+    guard case .directory(var runs) = entries["runs"], case .directory(var run) = runs[request.identity.runID.uuidString.lowercased()],
+          case .file(let bytes) = run["presentation.json"], var tree = try JSONValue(data: bytes).fields else {
+        Issue.record("Missing history display metadata"); return
+    }
+    tree["version"] = .number("99")
+    run["presentation.json"] = .file(try JSONValue.object(tree).data())
+    runs[request.identity.runID.uuidString.lowercased()] = .directory(run); entries["runs"] = .directory(runs)
+    #expect(NativeArtifactCodec().index(entries: entries, projectID: project.id).first?.presentation == nil)
+    #expect(try NativeArtifactCodec().load(runID: request.identity.runID, entries: entries, projectID: project.id) == artifact)
+}

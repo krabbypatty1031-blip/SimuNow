@@ -21,7 +21,7 @@
 | 11 | [验收案例](References/11-native-acceptance-cases.md) | 92项具体输入/预期结果、人工与自动证据要求 |
 | 12 | [验证](Delivery/validation.md)、[平台](Delivery/platform-and-release.md)、[风险](Delivery/risks.md) | 开发与发布门槛 |
 | 13 | [状态](Delivery/status.md)、[证据](Delivery/verification.md)、[决策](Delivery/decisions.md)、[验收台账](Delivery/native-acceptance-status.md)、[整合审查](Delivery/native-integration-review.md) | 已实现事实与新路线分开 |
-| 14 | [Mac UI 修复清单](UI修复清单.md) | 99 项审查发现、优先级、证据类型、设计方向与验收要求；修复均待处理 |
+| 14 | [Mac UI 修复清单](UI修复清单.md) | 99 项审查发现、验收要求与逐项源码实现记录；平台验收待验证 |
 
 ## 如何逐项执行
 
@@ -44,7 +44,7 @@ flowchart TD
   N5 --> N6[N6 实测校准与可选扩展]
 ```
 
-**当前：N1～N4代码已整合；N4代理交接后，主工作区最终修复的201项共享Swift、完整契约和双端构建均通过。** 实际平台未验收项保留台账。本次用户最新目标为按N1→N2→N3→N4逐类实施，包含这四阶段全部任务；N5及PDF暂不实施；下表优先级保留原规划，不能据此缩减本次范围或提前并行下一类别。
+**当前：N1～N6代码已接入，N5/N6 提交为 `25c13bf`；本次用户进一步授权通过 PR 整合 UI 修复。** 旧 N1～N4 的共享测试与双端构建是当时版本证据，新增 N5/N6 和 UI 改动仍需 Apple 平台编译与操作验收。源码实现、自动检查、真实数据与发布门槛分别记录；下表保留原规划优先级。
 
 | 工作包 | 定位 | 优先级 |
 |---|---|---|

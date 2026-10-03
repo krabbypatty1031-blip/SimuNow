@@ -448,6 +448,25 @@ private actor N3GateClock: PreviewDelayClock {
             == nil)
 }
 
+@Test func previewComparisonUsesExplicitBaselineInsteadOfScenarioOrder() async throws {
+    let project = try N3TestFixture.make()
+    var configurations = AnalysisConfigurationStore(projectID: project.id)
+    var results: [LocalAnalysisResult] = []
+    for (index, scenario) in project.scenarios.enumerated() {
+        let configuration = index == 0 ? n3Config(angle: 20) : n3Config()
+        configurations.set(configuration, scenarioID: scenario.id)
+        let request = try AnalysisInputResolver().request(
+            project: project, scenarioID: scenario.id, method: .init(kind: .airflowPreview),
+            configuration: configuration)
+        results.append(try await n3Result(request))
+    }
+    let rows = PreviewComparisonBuilder.rows(project: project, configuration: configurations,
+        results: results, baselineScenarioID: project.scenarios[1].id)
+    #expect(rows[0].result == nil)
+    #expect(rows[0].reason?.contains("同口径") == true)
+    #expect(rows[1].result != nil && rows[2].result != nil)
+}
+
 @Test func n3ZeroEmissionOffsetCannotEscapeThinObstacle() throws {
     var project = try n3Project()
     let roomID = project.geometry.rooms[0].id

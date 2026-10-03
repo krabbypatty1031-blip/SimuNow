@@ -36,7 +36,7 @@ struct ObjectParameterField: View {
     }
 }
 @ViewBuilder func objectTextField(_ title: String, text: Binding<String>) -> some View {
-    TextField(title, text: text)
+    EditorTextField(title: title, text: text)
         .textFieldStyle(.roundedBorder)
         .accessibilityLabel(title)
 }
@@ -53,9 +53,10 @@ struct ObjectPositionFields: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.subheadline.bold())
-            objectTextField("X（m）", text: $draft.x)
-            objectTextField("Y（m）", text: $draft.y)
-            objectTextField("Z（m）", text: $draft.z)
+            objectTextField("横向距离 X（m）", text: $draft.x)
+            objectTextField("纵向距离 Y（m）", text: $draft.y)
+            objectTextField("离地高度 Z（m）", text: $draft.z)
+            PositionPreview(x: draft.x, y: draft.y, z: draft.z)
         }
     }
 }
@@ -74,7 +75,7 @@ struct ObjectHeatFields: View {
         ObjectParameterField(title: "总显热", unit: "W", draft: $draft.sensible)
         ObjectParameterField(title: "对流比例", unit: "0–1", draft: $draft.convective)
         ObjectParameterField(title: "潜热", unit: "W", draft: $draft.latent)
-        Text("辐射显热由总显热 ×（1 − 对流比例）得到，不重复计入热源。未知参数会阻断计算准备。").font(.caption).foregroundStyle(.secondary)
+        Text("辐射显热由总显热 ×（1 − 对流比例）得到，不重复计入热源。未知热量不会阻断合法的几何规则预览。").font(.caption).foregroundStyle(.secondary)
     }
 }
 struct ObjectScheduleRow: Identifiable, Equatable {
@@ -96,14 +97,14 @@ struct ObjectScheduleDraft: Equatable {
 struct ObjectScheduleFields: View {
     @Binding var draft: ObjectScheduleDraft
     var body: some View {
-        Text("使用半开区间 [起始, 结束)，范围 0–1440 分钟。计算前应连续覆盖完整代表日。").font(.caption).foregroundStyle(.secondary)
+        Text("使用本地时钟；结束 24:00 表示日末。相邻时段不重复计算，停用时段请显式记录。").font(.caption).foregroundStyle(.secondary)
         ForEach($draft.rows) { $row in
             VStack(alignment: .leading, spacing: 8) {
-                objectTextField("起始分钟", text: $row.start)
-                objectTextField("结束分钟", text: $row.end)
+                ClockMinuteField(title: "开始", text: $row.start)
+                ClockMinuteField(title: "结束", text: $row.end)
                 ObjectParameterField(title: "启用 / 占用比例", unit: "0–1", draft: $row.fraction)
                 Button("删除时间段", role: .destructive) { draft.rows.removeAll { $0.id == row.id } }
-            }
+            }.environment(\.editorFieldOrdinal, draft.rows.firstIndex { $0.id == row.id })
         }
         Button("添加时间段", systemImage: "plus") {
             draft.rows.append(.init(.init(startMinute: 0, endMinute: 1440, fraction: .unknown(reason: "待确认使用条件"))))

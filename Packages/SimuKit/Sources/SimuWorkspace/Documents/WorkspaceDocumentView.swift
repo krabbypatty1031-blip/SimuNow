@@ -15,6 +15,9 @@ public struct WorkspaceDocumentView: View {
     @State private var weatherScenarioID: UUID?
     @State private var weatherRevision: UInt64?
     @State private var migratingURL: URL?
+    @State private var weatherReturnScenarioID: UUID?
+    @State private var weatherReturnRevision = UUID()
+    @State private var operationTitle = ""
     @State private var busy = false
     @State private var notice: String?
     private let rendererCapability: RendererCapabilities
@@ -41,14 +44,14 @@ public struct WorkspaceDocumentView: View {
         _store = State(initialValue: store)
     }
     public var body: some View {
-        WorkspaceView(store: store, nativeEntries: document.preservedEntries, nativeSidefileRevision: document.nativeSidefileRevision, rendererCapability: rendererCapability, packageIssues: document.integrityReport.issues.filter {
+        WorkspaceView(store: store, nativeEntries: document.preservedEntries, nativeSidefileRevision: document.nativeSidefileRevision, rendererCapability: rendererCapability, weatherReturnScenarioID: weatherReturnScenarioID, weatherReturnRevision: weatherReturnRevision, packageIssues: document.integrityReport.issues.filter {
             $0.code.hasPrefix("weather_asset_") || ["baseline_reference", "package_metadata", "project_contract"].contains($0.code)
-        }, onImportJSON: { importingJSON = true }, onImportWeather: { id in
+        }, onImportJSON: { weatherReturnScenarioID = nil; importingJSON = true }, onImportWeather: { id in
             weatherScenarioID = id; weatherRevision = store.revision; importingWeather = true
         })
         .id(document.documentInstanceID)
         .overlay(alignment: .bottom) {
-            if busy { ProgressView("正在读取文件…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)).padding() }
+            if busy { ProgressView(operationTitle).padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)).padding() }
         }
         .onAppear { connect() }
         .task(id: NativeRestorationInput(project: document.project, configuration: store.analysisConfiguration,
@@ -87,7 +90,21 @@ public struct WorkspaceDocumentView: View {
         .fileImporter(isPresented: $importingWeather, allowedContentTypes: [.data, .text]) { result in
             switch result {
             case .success(let url): importWeather(url)
-            case .failure(let error): store.presentedError = error.localizedDescription
+            case .failure(let error):
+                notice = "天气未导入：\(error.localizedDescription)。已应用的条件仍保留。"
+                weatherReturnScenarioID = weatherScenarioID
+            }
+        }
+        .onChange(of: importingWeather) { _, shown in
+            if !shown {
+                Task { @MainActor in
+                    await Task.yield()
+                    if !busy, notice == nil, let id = weatherScenarioID {
+                        // Keep the target until completion; isPresented may change
+                        // before the importer's completion callback is delivered.
+                        weatherReturnScenarioID = id; weatherReturnRevision = UUID()
+                    }
+                }
             }
         }
         .confirmationDialog("迁移旧版 v1 草稿为新项目？", isPresented: Binding(
@@ -96,7 +113,7 @@ public struct WorkspaceDocumentView: View {
             Button("取消", role: .cancel) { migratingURL = nil }
         } message: { Text("原 JSON 不会改写。v1 缺少的模型参数保持未知，需要继续补充。") }
         .alert("文件操作", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
-            Button("好", role: .cancel) { notice = nil }
+            Button("好", role: .cancel) { notice = nil; if weatherReturnScenarioID != nil { weatherReturnRevision = UUID() } }
         } message: { Text(notice ?? "") }
         #if os(iOS)
         .sheet(isPresented: $editingImport, onDismiss: {
@@ -189,6 +206,7 @@ public struct WorkspaceDocumentView: View {
     }
     private func importJSON(_ url: URL, migrating: Bool) {
         guard !busy else { return }
+        operationTitle = (migrating ? "正在迁移 " : "正在导入 ") + url.lastPathComponent + " · 新项目"
         busy = true
         Task {
             defer { busy = false }
@@ -197,19 +215,21 @@ public struct WorkspaceDocumentView: View {
                 #if os(macOS)
                 let value = imported.document
                 newDocument(value)
-                if !imported.notes.isEmpty { notice = imported.notes.joined(separator: "\n") }
+                notice = "已将 \(url.lastPathComponent) 导入为新项目“\(value.project.name)”。原 JSON 保留。" + (imported.notes.isEmpty ? "" : "\n" + imported.notes.joined(separator: "\n"))
                 #else
                 importedDocument = imported.document
                 importNotes = imported.notes
                 editingImport = true
                 #endif
             } catch ProjectPackageError.explicitMigrationRequired { migratingURL = url }
-            catch { store.presentedError = error.localizedDescription }
+            catch { store.presentedError = "文件“\(url.lastPathComponent)”未导入：\(error.localizedDescription)。原文件及当前项目保留，可重新选择 JSON。" }
         }
     }
     private func importWeather(_ url: URL) {
         guard !busy, let id = weatherScenarioID, let revision = weatherRevision else { return }
         let original = document
+        let scenarioName = original.project.scenarios.first { $0.id == id }?.name ?? "原方案"
+        operationTitle = "正在导入 \(url.lastPathComponent) · 方案“\(scenarioName)”"
         busy = true
         Task {
             defer { busy = false; weatherScenarioID = nil; weatherRevision = nil }
@@ -226,7 +246,12 @@ public struct WorkspaceDocumentView: View {
                 document = imported
                 do { try store.replaceProject(imported.project, actionName: "导入天气文件") }
                 catch { document = original; throw error }
-            } catch { store.presentedError = error.localizedDescription }
+                weatherReturnScenarioID = id
+                notice = "已将 \(url.lastPathComponent) 加入方案“\(scenarioName)”的项目附件。请通过系统文档保存写入磁盘；返回使用条件继续编辑。"
+            } catch {
+                weatherReturnScenarioID = id
+                notice = "天气“\(url.lastPathComponent)”未加入方案“\(scenarioName)”：\(error.localizedDescription)。已应用的条件保留；返回后可重新导入。"
+            }
         }
     }
 }

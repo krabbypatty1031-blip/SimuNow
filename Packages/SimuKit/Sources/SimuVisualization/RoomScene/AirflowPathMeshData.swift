@@ -82,7 +82,7 @@ extension RoomSceneOverlay {
             paths: try paths.map { path in
                 try Task.checkCancellation()
                 return .init(
-                    id: path.id, points: path.points, blocked: path.blocked,
+                    id: path.id, points: path.points, blocked: path.blocked, hitEntityID: path.hitEntityID,
                     meshData: try AirflowPathMeshBuilder.build(path))
             }, explanation: explanation)
     }

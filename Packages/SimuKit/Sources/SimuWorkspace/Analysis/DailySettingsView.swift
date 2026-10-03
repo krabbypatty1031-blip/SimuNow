@@ -62,8 +62,8 @@ public struct DailySettingsView: View {
     private var ports: [AirPort] { scenario.inputs.hvac.flatMap { $0.ports.filter { $0.role == .supply } } }
     var body: some View {
         NavigationStack {
-            Form {
-                Section("出风口") {
+            EditorForm {
+                EditorSection("出风口") {
                     Picker("调整的送风口", selection: $portID) {
                         ForEach(scenario.inputs.hvac, id: \.id) { device in
                             ForEach(device.ports.filter { $0.role == .supply }, id: \.id) { port in
@@ -79,7 +79,7 @@ public struct DailySettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let error { Text(error).foregroundStyle(.red) }
-            }.formStyle(.grouped).navigationTitle("调整送风方向")
+            }.navigationTitle("调整送风方向")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("应用调整") { apply() }.disabled(portID == nil) }
@@ -87,9 +87,7 @@ public struct DailySettingsView: View {
         }
         .onAppear { portID = ports.first?.id; loadAngles() }
         .onChange(of: portID) { _, _ in loadAngles() }
-        #if os(macOS)
-        .frame(minWidth: 400, minHeight: 360)
-        #endif
+        .modifier(EditorSheetSize(compact: true))
     }
     private func loadAngles() {
         guard let port = ports.first(where: { $0.id == portID }) else { return }

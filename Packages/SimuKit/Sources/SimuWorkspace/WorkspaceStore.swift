@@ -332,8 +332,8 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .workspace: "房间工作区"
-        case .scenarios: "方案对比"
-        case .runs: "计算任务"
+        case .scenarios: "方案比较"
+        case .runs: "运行历史"
         case .reports: "分析报告"
         case .measurements: "现场测量"
         }

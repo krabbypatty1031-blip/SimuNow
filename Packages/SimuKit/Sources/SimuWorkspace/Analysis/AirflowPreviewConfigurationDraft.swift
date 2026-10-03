@@ -7,7 +7,7 @@ public enum PreviewConfigurationEditingError: Error, LocalizedError, Sendable, E
     case invalidNumber(String)
     public var errorDescription: String? {
         switch self {
-        case .staleDraft: "项目、方案或档案已改变；请关闭并重新打开展示档案。"
+        case .staleDraft: "项目、方案或假设已改变；请关闭并重新打开预览假设。"
         case .invalidNumber(let field): "\(field) 需填写支持范围内的有效数值。"
         }
     }
@@ -48,7 +48,7 @@ public struct AirflowPreviewConfigurationDraft: Identifiable, Sendable {
             (1...45).contains(angle)
         else { throw PreviewConfigurationEditingError.invalidNumber("扩散半角") }
         guard let seed = UInt32(seedText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            throw PreviewConfigurationEditingError.invalidNumber("seed")
+            throw PreviewConfigurationEditingError.invalidNumber("路径排列编号")
         }
         let profile: AirflowPreviewConfiguration
         if case .airflowPreview(let value) = original?.payload { profile = value } else { profile = .init() }
@@ -62,7 +62,7 @@ public struct AirflowPreviewConfigurationDraft: Identifiable, Sendable {
             assumptions.append(
                 .init(
                     id: next.profileID, version: next.profileVersion, source: next.source,
-                    meaning: "用户明确采用几何展示档案；实际数值保存于配置，不代表实测风速、温度或舒适。"))
+                    meaning: "用户明确采用几何预览假设；实际数值保存于配置，不代表实测风速、温度或舒适。"))
         }
         let configuration = AnalysisConfiguration(
             configVersion: original?.configVersion ?? 1,

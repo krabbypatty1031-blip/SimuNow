@@ -22,7 +22,9 @@ def ts(t):
     if t.endswith('?'): return {'anyOf':[ts(t[:-1]),{'type':'null'}]}
     if t.startswith('[') and t.endswith(']'): return {'type':'array','items':ts(t[1:-1])}
     return copy.deepcopy(primitive.get(t, quantities.get(t, ref(t))))
-texts = '\n'.join(p.read_text() for p in (CORE/'Analysis').glob('*.swift'))
+# Consumer reports have an explicit ISO-8601/redaction boundary owned by the N5/N6
+# generator. Do not discover unrelated DTOs into every existing native schema.
+texts = '\n'.join(p.read_text() for p in (CORE/'Analysis').glob('*.swift') if p.name != 'ConsumerEvidence.swift')
 for name, protocols, body in re.findall(r'public struct (\w+):([^\{]+)\{(.*?)(?=\npublic (?:struct|enum|typealias)|\Z)', texts, re.S):
     if 'Codable' not in protocols: continue
     props,required = {},[]

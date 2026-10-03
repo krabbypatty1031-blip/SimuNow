@@ -155,7 +155,21 @@ N3生产方法采用明确接受的genericCone v1：无量纲场、确定性Halt
 
 文档采用不序列化的documentInstanceID：同一次打开的完整值事务保留，独立读取即使projectID相同也生成新实例；nativeSidefileRevision继续独立标记附件变化。完成事件先后台严格验证，再核对identity/sequence/generation；结果封装保存任务句柄并传播取消，返回后重核会话。未变项目/元数据复用验证基线，公开值修改、编辑与保存仍执行完整检查。根新增10项生命周期、实例、缓存依据、重复序号及撤销回归均通过；冻结最终源码201项共享Swift、完整契约与双端构建通过。实际界面、最低运行时及可访问性仍缺证据，不据此宣称整体完成；详[N1～N4最终审查](N1-N4-final-review.md)。
 
-## ADR-023：持续空间工作区与共享编辑布局（2026-10-03，源码采用，平台待验证）
+## ADR-023：N5 固定比较与匿名派生证据（2026-10-03，代码实现）
+
+最新用户授权 N5/N6，取代此前仅 N1～N4 范围。复用完整输入/config undo 和 DocumentGroup 唯一写入；比较仅在用户冻结时生成 owner/version/bodyHash 记录，后台校验真实父文件及口径，写入时对最新 binding 核对父字节。有界重开恢复，不将现输入拼到旧快照。方案复制显式携带源 scenario ID，解决同输入、不同档案时选错配置的问题。
+
+匿名报告/测量摘要是独立 exportVersion/hashFormat；源 inputHash 留作追溯，派生 exportHash 对固定摘要编码，不修改原 run。公共来源采用精确允许引用，私有名称、几何、自由备注不随摘要输出。报告只读固定值；CoreText PDF 同一文本分页，PDF 失败保留文字/JSON。ShareLink/原生 FileExporter 使用内存值，避免自管临时文件或第二磁盘写入者。
+
+17 项核心/纯值 Swift、44 项 Python 及 8 份真实 Swift wire/17 个反例通过；Apple SDK、PDF实际页/系统分享/安装未验，见 N5-N6-implementation。不能沿用旧 N4 构建日志证明新分支通过。
+
+## ADR-024：N6 独立研究门槛与扫描近似（2026-10-03，研究实现）
+
+有限射流只认有仪表依据的出口速度、独立留出与固定安装/风档/实测范围。Decoded accepted flag 不作为授权，ScopedFiniteJetModel 必须对原 dataset 再拟合；预测核对当前安装 origin/direction。网格边界最优、超误差或留出泄漏保留拒绝。动态 RC/CO₂ 用显式室外交换与分段常量精确积分，CPU 网格限定封闭 2D MAC/Boussinesq、mask/CFL/守恒；不注册生产规则或提升 basis。
+
+RoomPlan 原坐标经中央 transform，世界轴包围盒矩形近似需用户确认；转换/编码后台封装，项目与原扫描附件同一个文档事务。原始本地 JSON 与来源/hash 保留，性能、设备、门窗和关注点仍需人工输入。专业节点只提供严格 opt-in API，不配置默认服务、启动探测或 Mac 网络权限；无机构节点/真实数据时产品启用 no-go。详细公式、预算、合成 CPU 基准与停止条件见 N6-research-specifications。
+
+## ADR-025：持续空间工作区与共享编辑布局（2026-10-03，源码采用，平台待验证）
 
 触发：用户要求处理全部 99 项 Mac UI 清单，并隔离正在进行的 paco-development 工作。采用基于 `eda5d5c` 的新工作树/分支。画布占据可用空间，对象清单、可收属性区和按需分析面板分别承载查找、选择与结果；导航突出方案比较和运行历史。没有接入报告/PDF。
 
@@ -163,7 +177,7 @@ N3生产方法采用明确接受的genericCone v1：无量纲场、确定性Halt
 
 权衡：减少持续长说明和固定预览高度，技术依据仍可展开；没有增添任意家具旋转、门扇开启模型或真实风速/温度结果。尺寸、辅助焦点和菜单在 macOS/iOS 的实际表现尚需编译与实机验收，源码语法检查不证明界面可用。
 
-## ADR-024：历史展示元数据与分析证据分离（2026-10-03，源码采用）
+## ADR-026：历史展示元数据与分析证据分离（2026-10-03，源码采用）
 
 触发：历史 UUID 列表缺少可识别的时间与方案，而原运行证据必须不可变。采用独立 `runs/<id>/presentation.json`，记录结果加入项目时的方案名称、方法和时间，具体字段见 [协议](../../Protocols/run-presentation-v1.md)。不修改 physical v2、原 run input/result/manifest 或分析输入哈希。
 

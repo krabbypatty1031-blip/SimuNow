@@ -1,5 +1,23 @@
 # 工程验证记录
 
+## UI 与 N5/N6 合并验证（2026-10-03）
+
+基点 `eda5d5c`，N5/N6 提交 `25c13bf`，UI 提交 `3039c19`；独立工作树 `/workspace/SimuNow-ui-integration`。6 个冲突文件人工整合，保持 UI 布局并接回日常设置、固定比较、报告、测量和源方案配置复制。
+
+- 合并源码的 Foundation harness：19 项 Swift 测试通过；除原 17 项消费者核心/值测试，还执行 UI 分支既有时钟与字段定位两个回归。UI helper 为真实 `InputDisplay`、`ValidationPresentation` 和 `RoomIssuePresentation` 源码值片段，无 UI framework stub，不代表 SwiftUI 类型检查。
+- 8 份真实 Swift 输出、17 个拒绝反例的独立 Python 消费者 schema 检查通过；44 项 Python 回归及四组 schema 生成漂移检查通过。
+- 164 份 Swift 源码以 Swift 6 语法解析通过；原共享 scheme 和 N5 工程生成器保留，最低系统仍为 macOS14/iOS17。
+- 无 Xcode/Apple SDK：完整共享包、两端构建、实际 UI/PDF/扫描/VoiceOver 验收仍 notAvailable。旧分支的历史构建日志不能替代合并版本证据。
+
+## N5/N6 提交前复核（2026-10-03）
+
+用户追加授权提交、推送本工作区 N5/N6 实现，并通过 PR 合并 UI 修复。提交基点为 `eda5d5c`；保留既有演示稿、共享 scheme 和未知项目附件。
+
+- 重新执行 Linux Foundation harness：17 项真实 Swift 核心/值层测试通过；8 份真实 Swift wire 及 17 个拒绝反例通过独立 Python 契约校验。
+- 重新执行 Backend 测试：44 项通过；项目模型、本地分析、消费者证据及 Python schema 生成检查无漂移；`git diff --check` 通过。
+- 当前环境没有 Xcode；这次复核不提供 Apple SDK 编译、PDF 页面、RoomPlan 真机或 UI 操作验收证据。
+- UI 分支须在可读取的远端取得后再做差异审查、冲突处理和 PR 合并；本次 N5/N6 提交不代表 UI 修复已整合。
+
 路线说明（2026-10-03）：下文已有构建/运行/环境记录为对应日期事实。旧P1安装“下一步”属于当时引擎路线；当前开工按Plans/README的N1–N6，未产生本地分析/RealityKit运行证据。
 
 日期：2026-10-02；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
@@ -260,3 +278,22 @@ N4代理提交713e06e精确整合为c502e81，随后根代理修复已实现功�
 本轮无需修改 pbxproj，新增文件由已有 Swift Package target 收集。没有改变求解公式、未知默认值、原物理输入 schema、部署最低版本或 N5 报告能力；GUI 方法检查仍不等于物理验证。实现入口与平台验收路径见 [逐项记录](UI-repairs-implementation.md)。
 
 本轮原始日志保存在忽略目录 `Artifacts/UI-Repair/python-tests.log` 与 `source-checks.json`。
+
+## N5/N6 本轮代码与 Linux 检查（2026-10-03）
+
+用户新增授权 N5/N6，分支 `paco-development`、基线 `eda5d5c`。完整任务状态与 Apple 待验脚本见 [本轮交接](N5-N6-implementation.md)，新增协议见 [固定证据 v1](../../Protocols/consumer-evidence-v1.md)。旧 N1～N4 验证段落为历史证据，不代表本轮新增 SwiftUI/PDF/RoomPlan 分支已通过构建。
+
+| 检查 | 结果 | 证据/边界 |
+|---|---|---|
+| `Scripts/check_portable_native.sh` | pass | Swift 6.0.3；17 项真实 Core/Simulation/Reporting 与纯 Workspace 值层测试；临时 Apple swift-crypto SHA-256 shim，无生产依赖改动 |
+| Python 完整 unittest | pass | 锁定 pydantic/jsonschema；44 项，其中 5 项新解析/坏输入/预算测试 |
+| 消费者真实 wire/schema | pass | 8 份真实 Swift 输出，17 个未来版本/额外字段/坏引用/时区/单位反例；匿名 exportHash 和校准原父数据复核 |
+| 领域/native/消费者/worker schema 漂移 | pass | 旧 native 生成器排除独立 ConsumerEvidence DTO，保持既有 v1 schema 完全不变 |
+| Swift 6 全源语法解析 | pass | 不解析 Apple SDK 类型、不能替代编译 |
+| Xcode 工程生成/资源检查 | pass（静态） | 幂等，schemes 与基线字节一致；原创 PNG/JSON/隐私 plist 结构检查；Apple asset/string 编译未验 |
+| `Scripts/check.sh test` | notAvailable | Linux 缺 SwiftUI；4 项新增文档/相机/事务平台回归未运行，旧整包回归未重跑 |
+| `Scripts/check.sh mac` / `ios` | notAvailable | xcodebuild 不存在；没有本轮双端构建成功 |
+| unsigned archive | notAvailable | 脚本主动拒绝无 Xcode；未产出可安装/签名包 |
+| PDF页面/系统分享/RoomPlan/VoiceOver/试用 | notAvailable | Linux 无 Apple UI/扫描/读屏，须执行交接脚本后逐项保存真实证据 |
+
+日志与真实合成 wire、CPU 8/16/32 方格 benchmark 在忽略的 `Artifacts/N5-N6/`。网格只记录合成守恒/散度/数组估算与单次 Debug CPU 时间，不作为真机预算、内存峰值或真实空间场验证。Swift/Python 全部通过后仍不将 N5 标发布就绪，不升级 N6 为通用物理模型。

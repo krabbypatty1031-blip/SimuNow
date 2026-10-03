@@ -1,0 +1,52 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "receiptVersion": {
+      "const": 1
+    },
+    "runID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "inputHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "engine": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "qualityPassed": {
+      "type": "boolean"
+    },
+    "benchmarkReference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "resultReference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    }
+  },
+  "required": [
+    "receiptVersion",
+    "runID",
+    "inputHash",
+    "engine",
+    "engineVersion",
+    "qualityPassed",
+    "benchmarkReference",
+    "resultReference"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.local/schemas/professional-review-receipt.schema.json"
+}

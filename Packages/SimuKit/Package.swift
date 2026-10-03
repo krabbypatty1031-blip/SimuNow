@@ -22,6 +22,8 @@ let package = Package(
             "SimuCore", "SimuSimulation", "SimuVisualization", "SimuReporting", "SimuDesignSystem"
         ]),
         .testTarget(name: "SimuCoreTests", dependencies: ["SimuCore", "SimuSimulation", "SimuVisualization", "SimuWorkspace"]),
-        .testTarget(name: "SimuExtensionTests", dependencies: ["SimuCore"])
+        .testTarget(name: "SimuExtensionTests", dependencies: ["SimuCore"]),
+        .testTarget(name: "SimuConsumerTests", dependencies: ["SimuCore", "SimuSimulation", "SimuReporting"]),
+        .testTarget(name: "SimuConsumerWorkflowTests", dependencies: ["SimuCore", "SimuSimulation", "SimuWorkspace", "SimuVisualization"])
     ]
 )

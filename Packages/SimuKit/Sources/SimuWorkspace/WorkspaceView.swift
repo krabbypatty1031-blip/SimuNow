@@ -45,7 +45,7 @@ public struct WorkspaceView: View {
         NavigationSplitView {
             List(selection: $store.selection) {
                 Section("工作流程") {
-                    ForEach(WorkspaceDestination.allCases.filter { $0 != .reports }) { destination in
+                    ForEach(WorkspaceDestination.allCases) { destination in
                         Label(destination.title, systemImage: destination.symbol).tag(destination)
                     }
                 }
@@ -91,6 +91,9 @@ public struct WorkspaceView: View {
                 store.selectedScenarioID = id; focusEntityID = id; focusField = "代表日"; focusOrdinal = nil
                 sheet = .conditions(id)
             }
+        }
+        .onChange(of: store.selection) { _, _ in
+            if sheet == .dailySettings { sheet = nil }
         }
         .onAppear { if store.preview.enabled { store.preview.update(previewInput,registry:store.modelRegistry,persist:persistPreview) } }
         .onChange(of: previewInput) { _, input in
@@ -141,7 +144,7 @@ public struct WorkspaceView: View {
             } else {
                 VStack(spacing: 16) {
                     EmptyStateView("建立你的房间", symbol: "square.dashed", message: "创建房间，设置空调方向，再观察假设路径和家具遮挡。未知物理输入可以保留。")
-                    Button("从办公室 / 教室模板开始") { requestCreation(.templates) }.buttonStyle(.borderedProminent)
+                    Button("从家庭 / 办公室 / 教室模板开始") { requestCreation(.templates) }.buttonStyle(.borderedProminent)
                     Button("手动输入房间尺寸") { requestCreation(.wizard) }
                 }.padding()
             }
@@ -150,11 +153,16 @@ public struct WorkspaceView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         PreviewComparisonView(store: store, additionalIssues: packageIssues)
+                        FixedPreviewComparisonView(store: store, entries: nativeEntries, revision: nativeSidefileRevision)
                         EstimateComparisonView(store:store,entries:nativeEntries,revision:nativeSidefileRevision,additionalIssues:packageIssues)
                         DisclosureGroup("管理方案 · 复制、名称与基准") {
                             ScenarioListView(project: project, selectedScenarioID: store.selectedScenarioID,
                                 baselineScenarioID: store.baselineScenarioID, onSelect: { store.selectedScenarioID = $0 },
-                                onCommit: commit, onSetBaseline: { try store.setBaseline($0) })
+                                onCommit: commit, onSetBaseline: { try store.setBaseline($0) },
+                                onCopy: { edited, sourceID in
+                                    guard store.project == project else { throw PreviewConfigurationEditingError.staleDraft }
+                                    try store.replaceProject(edited, actionName: "复制方案", copiedFromScenarioID: sourceID)
+                                })
                         }
                     }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -162,20 +170,24 @@ public struct WorkspaceView: View {
         case .runs:
             NativeAnalysisHistoryView(store:store,entries:nativeEntries,revision:nativeSidefileRevision)
         case .reports:
-            VStack {
-            EmptyStateView("报告功能尚未接入", symbol: "doc.text", message: "已保存的气流规则与电量、费用、显热情景可在工作区和运行历史查看。完整舒适、年度节能与报告导出仍待开发。")
-            Button("查看已有运行结果") { store.selection = .runs }
-            }
+            LocalReportView(store: store, entries: nativeEntries, revision: nativeSidefileRevision)
+        case .measurements:
+            MeasurementWorkspaceView(store: store, entries: nativeEntries, revision: nativeSidefileRevision)
         }
     }
     @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {
         ToolbarItemGroup {
             Menu {
                 Button("矩形房间向导") { requestCreation(.wizard) }
-                Button("办公室 / 教室模板") { requestCreation(.templates) }
+                Button("家庭 / 办公室 / 教室模板") { requestCreation(.templates) }
+                #if os(iOS)
+                Button("RoomPlan 扫描 / 手动回退") { requestCreation(.capture) }
+                #endif
                 if let onImportJSON { Button("导入 JSON 为新项目", action: onImportJSON) }
             } label: { Label("创建与导入", systemImage: "plus") }
             if store.selection == .workspace {
+                Button("日常设置", systemImage: "slider.horizontal.3") { sheet = .dailySettings }
+                    .disabled(store.currentScenario == nil)
                 Button("属性", systemImage: "sidebar.right") { inspectorPresented.toggle() }
                     .keyboardShortcut("i", modifiers: [.command, .option])
             }
@@ -202,6 +214,35 @@ public struct WorkspaceView: View {
     }
     @ViewBuilder private func sheetContent(_ destination: WorkspaceSheet) -> some View {
         switch destination {
+        case .dailySettings:
+            if let id = store.selectedScenarioID {
+                sheetFrame("日常设置") {
+                    DailySettingsView(store: store, onRoom: { sheet = .room($0) },
+                        onAdvanced: { sheet = .conditions(id) }, onObject: { objectID in
+                            selectedSceneKey = sceneKey(for: objectID)
+                            inspectorPresented = true
+                            focusEntityID = objectID
+                            sheet = .object(objectID)
+                        })
+                }
+            }
+        case .capture:
+            let instance = store.documentInstanceID, inputRevision = store.revision
+            RoomCaptureWorkflowView(onManual: { sheet = .wizard }) { snapshot, original in
+                let worker = Task.detached { try RoomCaptureArtifact.make(snapshot, original: original) }
+                let artifact = try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+                try Task.checkCancellation()
+                try store.validateNativeDocumentContext(instanceID: instance)
+                guard store.revision == inputRevision else { throw PreviewConfigurationEditingError.staleDraft }
+                try store.applyRoomCapture(artifact)
+            }
+        case .direction:
+            if let project = store.project, let scenario = store.currentScenario {
+                DailyDirectionEditor(project: project, scenario: scenario) { candidate in
+                    guard store.project == project, store.selectedScenarioID == scenario.id else { throw PreviewConfigurationEditingError.staleDraft }
+                    try store.replaceProject(candidate, actionName: "调整送风方向")
+                }
+            }
         case .wizard:
             NavigationStack { RoomWizardView(registry: store.modelRegistry) { try store.createRoomProject($0) } }.modifier(EditorSheetSize())
         case .templates:
@@ -301,9 +342,21 @@ public struct WorkspaceView: View {
         Button(store.preview.currentResult == nil ? "设置并预览" : "预览与遮挡结果", systemImage: "wind") { showingPreview.toggle() }
             .buttonStyle(.borderedProminent)
             .popover(isPresented: $showingPreview) {
-                ScrollView { AirflowPreviewPanelView(store: store, input: previewInput, onLocate: { id in
-                    selectedSceneKey = sceneKey(for: id); inspectorPresented = true; showingPreview = false
-                }, onRepair: { issue in showingPreview = false; locateAnalysis(issue) }).padding(18) }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        AirflowPreviewPanelView(store: store, input: previewInput, onLocate: { id in
+                            selectedSceneKey = sceneKey(for: id); inspectorPresented = true; showingPreview = false
+                        }, onRepair: { issue in showingPreview = false; locateAnalysis(issue) })
+                        DisclosureGroup("条件建议与依据") {
+                            SuggestionCardsView(store: store, onDirection: {
+                                showingPreview = false; sheet = .direction
+                            }, onObject: { id in
+                                selectedSceneKey = sceneKey(for: id)
+                                inspectorPresented = true; showingPreview = false
+                            })
+                        }
+                    }.padding(18)
+                }
                     .frame(minWidth: 320, idealWidth: 380, maxWidth: 520, minHeight: 280, idealHeight: 440, maxHeight: 540)
             }
         Button("更新预览", systemImage: "arrow.clockwise") {
@@ -423,7 +476,7 @@ public struct WorkspaceView: View {
     }
 }
 private enum WorkspaceSheet: Hashable, Identifiable {
-    case wizard, templates, object(UUID), room(UUID), opening(UUID, UUID), conditions(UUID), assumptions, issues, snapshot, identity
+    case wizard, templates, object(UUID), room(UUID), opening(UUID, UUID), conditions(UUID), assumptions, issues, snapshot, identity, dailySettings, direction, capture
     var id: Self { self }
 }
 private struct ProjectNameView: View {

@@ -13,22 +13,27 @@ public struct RealityKitRoomViewport: View {
     private let selection: SceneObjectKey?
     private let overlay: RoomSceneOverlay
     private let inputEnabled: Bool
+    private let cameraOverride: RoomCameraState?
+    private let onCameraChange: (@MainActor (RoomCameraState) -> Void)?
     private let onSelect: @MainActor (SceneObjectKey?) -> Void
     public init(
         descriptor: SceneDescriptor, selection: SceneObjectKey?, overlay: RoomSceneOverlay = .empty,
         inputEnabled: Bool = true,
+        cameraOverride: RoomCameraState? = nil, onCameraChange: (@MainActor (RoomCameraState) -> Void)? = nil,
         onSelect: @escaping @MainActor (SceneObjectKey?) -> Void
     ) {
         self.descriptor = descriptor
         self.selection = selection
         self.overlay = overlay
         self.inputEnabled = inputEnabled
+        self.cameraOverride = cameraOverride; self.onCameraChange = onCameraChange
         self.onSelect = onSelect
     }
     public var body: some View {
         if #available(macOS 15, iOS 18, *) {
             NativeRoomViewport(
                 descriptor: descriptor, selection: selection, overlay: overlay, inputEnabled: inputEnabled,
+                cameraOverride: cameraOverride, onCameraChange: onCameraChange,
                 onSelect: onSelect)
         } else {
             Text(RendererCapabilities.current.explanation).foregroundStyle(.secondary)
@@ -42,6 +47,8 @@ private struct NativeRoomViewport: View {
     let selection: SceneObjectKey?
     let overlay: RoomSceneOverlay
     let inputEnabled: Bool
+    let cameraOverride: RoomCameraState?
+    let onCameraChange: (@MainActor (RoomCameraState) -> Void)?
     let onSelect: @MainActor (SceneObjectKey?) -> Void
     @State private var controller: RoomSceneController
     @State private var preparedOverlay = RoomSceneOverlay.empty
@@ -53,12 +60,14 @@ private struct NativeRoomViewport: View {
     @SwiftUI.Environment(\.scenePhase) private var scenePhase
     init(
         descriptor: SceneDescriptor, selection: SceneObjectKey?, overlay: RoomSceneOverlay,
-        inputEnabled: Bool, onSelect: @escaping @MainActor (SceneObjectKey?) -> Void
+        inputEnabled: Bool, cameraOverride: RoomCameraState?, onCameraChange: (@MainActor (RoomCameraState) -> Void)?,
+        onSelect: @escaping @MainActor (SceneObjectKey?) -> Void
     ) {
         self.descriptor = descriptor
         self.selection = selection
         self.overlay = overlay
         self.inputEnabled = inputEnabled
+        self.cameraOverride = cameraOverride; self.onCameraChange = onCameraChange
         self.onSelect = onSelect
         _controller = State(initialValue: RoomSceneController(bounds: descriptor.bounds))
     }
@@ -144,6 +153,7 @@ private struct NativeRoomViewport: View {
                 .onAppear {
                     controller.resume()
                     controller.updateViewport(width: width, height: height)
+                    if let cameraOverride { controller.setCamera(cameraOverride) }
                 }
                 .onChange(of: viewport.size) { _, size in
                     controller.updateViewport(width: Double(size.width), height: Double(size.height))
@@ -188,6 +198,8 @@ private struct NativeRoomViewport: View {
             controller.suspend()
         }
         .onChange(of: scenePhase) { _, phase in controller.setForeground(phase == .active) }
+        .onChange(of: cameraOverride) { _, value in if let value, controller.camera != value { controller.setCamera(value) } }
+        .onChange(of: controller.camera) { _, value in onCameraChange?(value) }
         #if os(iOS)
             .onReceive(
                 NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)

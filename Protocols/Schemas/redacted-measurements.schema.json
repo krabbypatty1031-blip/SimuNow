@@ -1,0 +1,174 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "owner": {
+      "const": "com.simunow.redacted-measurements"
+    },
+    "exportVersion": {
+      "const": 1
+    },
+    "hashFormat": {
+      "const": "sha256.sorted-json.v1"
+    },
+    "exportHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "summaryVersion": {
+          "const": 1
+        },
+        "sourceSHA256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "records": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "quantity": {
+                "enum": [
+                  "airSpeed",
+                  "outletSpeed",
+                  "outletFlow",
+                  "temperature",
+                  "electricalPower",
+                  "relativeHumidity",
+                  "co2"
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "unit": {
+                "enum": [
+                  "m/s",
+                  "m3/s",
+                  "degC",
+                  "W",
+                  "%",
+                  "ppm"
+                ]
+              },
+              "quality": {
+                "enum": [
+                  "valid",
+                  "suspect",
+                  "missing",
+                  "rejected"
+                ]
+              },
+              "partition": {
+                "enum": [
+                  "calibration",
+                  "validation",
+                  "unassigned"
+                ]
+              },
+              "doorState": {
+                "enum": [
+                  "open",
+                  "closed",
+                  "unknown"
+                ]
+              },
+              "windowState": {
+                "enum": [
+                  "open",
+                  "closed",
+                  "unknown"
+                ]
+              },
+              "deviceAlias": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "instrumentAlias": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "fanAlias": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "quantity",
+              "unit",
+              "quality",
+              "partition",
+              "doorState",
+              "windowState",
+              "instrumentAlias",
+              "fanAlias"
+            ]
+          }
+        },
+        "rejectedRowCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "redactedFields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
+      },
+      "required": [
+        "summaryVersion",
+        "sourceSHA256",
+        "records",
+        "rejectedRowCount",
+        "redactedFields",
+        "limitations"
+      ]
+    }
+  },
+  "required": [
+    "owner",
+    "exportVersion",
+    "hashFormat",
+    "exportHash",
+    "snapshot"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simunow.local/schemas/redacted-measurements.schema.json"
+}

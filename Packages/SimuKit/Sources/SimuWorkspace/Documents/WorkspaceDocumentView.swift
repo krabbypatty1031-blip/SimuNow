@@ -54,6 +54,28 @@ public struct WorkspaceDocumentView: View {
             if busy { ProgressView(operationTitle).padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)).padding() }
         }
         .onAppear { connect() }
+        .task(id: NativeRestorationInput(project: document.project, configuration: store.analysisConfiguration,
+                                        scenarioID: store.selectedScenarioID, revision: document.nativeSidefileRevision)) {
+            let instance = document.documentInstanceID, sideRevision = document.nativeSidefileRevision
+            let inputRevision = store.revision, entries = document.preservedEntries
+            let input = NativeRestorationInput(project: document.project, configuration: store.analysisConfiguration,
+                                              scenarioID: store.selectedScenarioID, revision: sideRevision)
+            let worker = Task.detached {
+                let artifacts = try NativeEvidenceRestoration.restore(input, entries: entries)
+                return (artifacts, try? NativeEvidenceRestoration.restoreCost(input, artifacts: artifacts, entries: entries))
+            }
+            let restored = try? await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+            guard !Task.isCancelled, store.revision == inputRevision,
+                  (try? store.validateNativeDocumentContext(instanceID: instance, sidefileRevision: sideRevision)) != nil else { return }
+            for artifact in restored?.0 ?? [] {
+                switch artifact.result.method.kind {
+                case .airflowPreview: store.preview.analysis.restore([artifact])
+                case .powerEstimate: store.estimates.power.restore([artifact])
+                case .steadyHeatBalance: store.estimates.heat.restore([artifact])
+                }
+            }
+            if let cost = restored?.1 { store.estimates.restoreFixedCost(cost) }
+        }
         .onChange(of: document.project) { _, _ in synchronizeExternalChanges() }
         .onChange(of: document.analysisConfigurationData) { _, _ in synchronizeExternalChanges() }
         .onChange(of: document.metadata) { _, _ in synchronizeExternalChanges() }
@@ -133,6 +155,24 @@ public struct WorkspaceDocumentView: View {
         store.persistCostEvaluation = { [weak store] artifact in
             try documentBinding.wrappedValue.validateDocumentInstance(instance)
             let next = try documentBinding.wrappedValue.appendingCostEvaluation(artifact,expectedProjectID:artifact.record.projectID)
+            documentBinding.wrappedValue = next
+            store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
+        }
+        store.persistComparison = { [weak store] artifact in
+            try documentBinding.wrappedValue.validateDocumentInstance(instance)
+            let next = try documentBinding.wrappedValue.appendingComparison(artifact)
+            documentBinding.wrappedValue = next
+            store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
+        }
+        store.persistMeasurements = { [weak store] artifact in
+            try documentBinding.wrappedValue.validateDocumentInstance(instance)
+            let next = try documentBinding.wrappedValue.appendingMeasurements(artifact)
+            documentBinding.wrappedValue = next
+            store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
+        }
+        store.persistCalibration = { [weak store] artifact in
+            try documentBinding.wrappedValue.validateDocumentInstance(instance)
+            let next = try documentBinding.wrappedValue.appendingCalibration(artifact)
             documentBinding.wrappedValue = next
             store?.updateNativeDocumentContext(instanceID: next.documentInstanceID, sidefileRevision: next.nativeSidefileRevision)
         }

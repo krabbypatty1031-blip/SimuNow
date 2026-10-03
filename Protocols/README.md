@@ -7,11 +7,16 @@ N1 新增 [Swift 本地分析 v1](native-analysis-v1.md)：独立 request/event/
 
 UI 修复新增 [可选运行展示信息 v1](run-presentation-v1.md)，为历史提供保存时方案名称和加入项目时间；独立于物理输入和不可变分析证据。
 
+N5/N6 新增 [固定证据/测量/匿名导出 v1](consumer-evidence-v1.md)，原项目和 native 方法版本不变。严格 schema 由独立消费者生成器维护；Python 解析只用于开发验证。
+
 ## 文件
 
 - Schemas/local-analysis-request.schema.json、local-analysis-event.schema.json、local-analysis-result.schema.json：本地方法与 typed payload。
 - Schemas/analysis-configuration.schema.json、analysis-artifact-manifest.schema.json：独立本地配置与不可变 run 文件索引。
 - Schemas/cost-evaluation.schema.json、comparison-snapshot.schema.json：N4固定父run的独立费用评价与纯值比较，精确货币数值使用Decimal字符串。
+- Schemas/comparison-record.schema.json、measurement-dataset.schema.json、jet-calibration.schema.json、room-capture.schema.json：固定比较、本地测量/独立留出研究与扫描几何。
+- Schemas/redacted-report.schema.json、redacted-measurements.schema.json：独立匿名派生摘要。
+- Schemas/professional-review-configuration.schema.json、professional-review-receipt.schema.json：未启用的可选节点边界。
 - Schemas/project-document.schema.json：ProjectDocument v2。
 - Schemas/scenario-input-snapshot.schema.json：ScenarioInputSnapshot v2，尚非运行请求。
 - Schemas/run-presentation.schema.json：App 可选历史展示信息，不参与分析输入与有效性判定。

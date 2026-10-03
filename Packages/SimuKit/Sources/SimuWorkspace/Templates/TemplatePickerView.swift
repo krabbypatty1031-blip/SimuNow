@@ -21,6 +21,14 @@ public struct TemplatePickerView: View {
         self.onApply = onApply
     }
 
+    private var templateDescription: String {
+        switch kind {
+        case .home: "家庭：起居空间与活动位置；适合观察日常送风方向与家具遮挡。"
+        case .office: "办公室：小组工位与桌体；适合观察不同送风方向与遮挡。"
+        case .classroom: "教室：成排座位与可选讲台；适合查找密集关注点。"
+        }
+    }
+
     public var body: some View {
         NavigationStack {
             EditorForm {
@@ -30,7 +38,7 @@ public struct TemplatePickerView: View {
                             Text(kind.title).tag(kind)
                         }
                     }.pickerStyle(.segmented)
-                    Text(kind == .office ? "办公室：小组工位与桌体；适合观察不同送风方向与遮挡。" : "教室：成排座位与可选讲台；适合查找密集关注点。")
+                    Text(templateDescription)
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
                     Text("模板带有明确的布局假设，物理输入保持待补充。应用模板将替换项目全部几何与方案。")
                         .font(.footnote).foregroundStyle(.secondary)

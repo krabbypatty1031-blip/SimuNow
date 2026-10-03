@@ -29,6 +29,10 @@ public final class ThermalEstimateCoordinator {
     public init(client:any LocalAnalysisSubmitting) { power=AnalysisCoordinator(client:client);heat=AnalysisCoordinator(client:client) }
     deinit { validationTask?.cancel();costTask?.cancel() }
     public func coordinator(_ kind:AnalysisKind)->AnalysisCoordinator { kind == .steadyHeatBalance ? heat:power }
+    public func restoreFixedCost(_ record: CostEvaluationRecord) {
+        guard !evaluatingCost else { return }
+        cost = record; costPersistence = .saved
+    }
     public func currentResult(_ kind:AnalysisKind)->LocalAnalysisResult? {
         guard !validating,let request=prepared[kind] else { return nil }
         return coordinator(kind).result(scenarioID:request.identity.scenarioID,inputHash:request.identity.inputHash)

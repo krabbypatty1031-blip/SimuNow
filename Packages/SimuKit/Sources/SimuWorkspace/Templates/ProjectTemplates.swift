@@ -3,10 +3,12 @@ import SimuCore
 
 /// These are editable examples of a layout, not measured rooms or physical benchmarks.
 public enum ProjectTemplateKind: String, CaseIterable, Identifiable, Sendable {
-    case office, classroom
+    case office, classroom, home
 
     public var id: String { "simunow.template.\(rawValue)" }
-    public var title: String { self == .office ? "小办公室" : "单间教室" }
+    public var title: String {
+        switch self { case .office: "小办公室"; case .classroom: "单间教室"; case .home: "家庭房间" }
+    }
     public var version: Int { 1 }
     public var descriptor: ProjectTemplateDescriptor {
         .init(id: id, version: version, title: title,
@@ -72,6 +74,13 @@ public struct ProjectTemplateOptions: Equatable, Sendable {
     }
 
     public static func defaults(for kind: ProjectTemplateKind) -> Self {
+        if kind == .home {
+            return .init(projectName: "家庭房间项目", width: 5, depth: 4, height: 2.8,
+                         seatCount: 2, rows: 1, columns: 2, columnSpacing: 1.8, rowSpacing: 1.5,
+                         deskWidth: 1.2, deskDepth: 0.6, deskHeight: 0.6,
+                         activeStartMinute: 1080, activeEndMinute: 1440,
+                         includeFurniture: true, includeOccupants: false, includeEquipment: false)
+        }
         if kind == .office {
             return .init(projectName: "办公室项目", width: 6, depth: 5, height: 3,
                          seatCount: 4, rows: 2, columns: 2, columnSpacing: 2.2, rowSpacing: 1.8,
@@ -183,12 +192,12 @@ public enum ProjectTemplateFactory {
             let x = margin + options.deskWidth / 2 + Double(index % options.columns) * options.columnSpacing
             let y = margin + Double(index / options.columns) * options.rowSpacing
             let seatID = UUID()
-            seats.append(.init(id: seatID, roomID: roomID, name: "\(kind == .office ? "工位" : "座位") \(index + 1)",
+            seats.append(.init(id: seatID, roomID: roomID, name: "\(kind == .office ? "工位" : kind == .home ? "关注位置" : "座位") \(index + 1)",
                                position: .init(x: x, y: y, z: 0.6), samples: [
                                 .init(id: UUID(), position: .init(x: x, y: y, z: 1.1))
                                ]))
             if options.includeFurniture {
-                obstacles.append(.init(id: UUID(), roomID: roomID, name: "桌体 \(index + 1)", shape: try ExtensionRecord(BoxObstacle(
+                obstacles.append(.init(id: UUID(), roomID: roomID, name: "\(kind == .home ? "家具盒体" : "桌体") \(index + 1)", shape: try ExtensionRecord(BoxObstacle(
                     origin: .init(x: x - options.deskWidth / 2, y: y + deskOffset, z: 0),
                     dimensions: .init(width: length(options.deskWidth, "桌宽", defaults.deskWidth),
                                       depth: length(options.deskDepth, "桌深", defaults.deskDepth),
@@ -238,7 +247,7 @@ public enum ProjectTemplateFactory {
                                              sensorPosition: seats[0].samples[0].position, schedule: schedule)]
         }
         let project = ProjectDocument(id: UUID(), name: options.projectName.trimmingCharacters(in: .whitespacesAndNewlines),
-                                      spaceType: kind == .office ? .office : .classroom,
+                                      spaceType: kind == .office ? .office : kind == .home ? .home : .classroom,
                                       geometry: .init(rooms: [room], obstacles: obstacles), scenarios: [scenario])
         let report = try ProjectValidator().validate(project, registry: .builtIn)
         guard report.passes(.projectIntegrity) else {

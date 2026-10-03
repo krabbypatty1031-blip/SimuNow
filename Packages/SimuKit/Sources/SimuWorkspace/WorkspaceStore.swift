@@ -22,6 +22,9 @@ public final class WorkspaceStore {
     public let projectValidator: ProjectValidator
     public let estimates: ThermalEstimateCoordinator
     @ObservationIgnored public var persistCostEvaluation: (@MainActor @Sendable (NativeCostEvaluationArtifact) throws -> Void)?
+    @ObservationIgnored public var persistComparison: (@MainActor @Sendable (FixedComparisonArtifact) throws -> Void)?
+    @ObservationIgnored public var persistMeasurements: (@MainActor @Sendable (MeasurementArtifact) throws -> Void)?
+    @ObservationIgnored public var persistCalibration: (@MainActor @Sendable (CalibrationArtifact) throws -> Void)?
     public let preview: PreviewCoordinator
     @ObservationIgnored public var persistNativeAnalysis: (@MainActor @Sendable (NativeAnalysisArtifact) throws -> Void)?
     public let localAnalysisClient: any LocalAnalysisSubmitting
@@ -117,8 +120,25 @@ public final class WorkspaceStore {
         revision &+= 1
     }
 
-    public func replaceProject(_ candidate: ProjectDocument, actionName: String) throws {
+    public func replaceProject(_ candidate: ProjectDocument, actionName: String, copiedFromScenarioID: UUID? = nil) throws {
         var next = state(for: candidate)
+        // P2 copying preserves nested entity IDs but creates a new scenario identity.
+        // Copy explicit method assumptions alongside the scenario, never an old run binding.
+        if let previous = project, previous.id == candidate.id {
+            for added in candidate.scenarios where !previous.scenarios.contains(where: { $0.id == added.id }) {
+                let matches = previous.scenarios.filter { $0.inputs == added.inputs && $0.evaluation == added.evaluation }
+                let source = copiedFromScenarioID.flatMap { id in matches.first { $0.id == id } } ?? (matches.count == 1 ? matches.first : nil)
+                if copiedFromScenarioID != nil, source?.id != copiedFromScenarioID { throw PreviewConfigurationEditingError.staleDraft }
+                if let source,
+                   let configuration = analysisConfiguration {
+                    var copied = next.analysisConfiguration ?? .init(projectID: candidate.id)
+                    for entry in configuration.entries where entry.scenarioID == source.id {
+                        copied.set(entry.configuration, scenarioID: added.id)
+                    }
+                    next.analysisConfiguration = copied
+                }
+            }
+        }
         if let id = next.baselineScenarioID, !candidate.scenarios.contains(where: { $0.id == id }) {
             throw WorkspaceEditingError.invalidBaseline
         }
@@ -137,6 +157,9 @@ public final class WorkspaceStore {
 
     public func createRoomProject(_ project: ProjectDocument) throws {
         try commit(.init(project: project, baselineScenarioID: project.scenarios.first?.id), actionName: "创建房间")
+    }
+    public func applyRoomCapture(_ artifact: RoomCaptureArtifact) throws {
+        try commit(.init(project: artifact.project, baselineScenarioID: artifact.project.scenarios.first?.id, importedCapture: artifact), actionName: "确认扫描包围盒")
     }
 
     public func setBaseline(_ id: UUID) throws {
@@ -276,11 +299,14 @@ public struct WorkspaceProjectState: Equatable, Sendable {
     public var templateID: String?
     public var templateVersion: Int?
     public var analysisConfiguration: AnalysisConfigurationStore?
+    public var importedCapture: RoomCaptureArtifact?
     public init(project: ProjectDocument, baselineScenarioID: UUID? = nil,
-                templateID: String? = nil, templateVersion: Int? = nil, analysisConfiguration: AnalysisConfigurationStore? = nil) {
+                templateID: String? = nil, templateVersion: Int? = nil, analysisConfiguration: AnalysisConfigurationStore? = nil,
+                importedCapture: RoomCaptureArtifact? = nil) {
         self.analysisConfiguration = analysisConfiguration
         self.project = project; self.baselineScenarioID = baselineScenarioID
         self.templateID = templateID; self.templateVersion = templateVersion
+        self.importedCapture = importedCapture
     }
 }
 private struct WorkspaceHistoryEntry {
@@ -299,7 +325,7 @@ public enum WorkspaceEditingError: Error, LocalizedError {
 }
 
 public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
-    case workspace, scenarios, runs, reports
+    case workspace, scenarios, runs, reports, measurements
 
     public var id: String { rawValue }
 
@@ -309,6 +335,7 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
         case .scenarios: "方案比较"
         case .runs: "运行历史"
         case .reports: "分析报告"
+        case .measurements: "现场测量"
         }
     }
 
@@ -318,6 +345,7 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
         case .scenarios: "square.stack.3d.up"
         case .runs: "waveform.path"
         case .reports: "doc.text"
+        case .measurements: "sensor"
         }
     }
 }

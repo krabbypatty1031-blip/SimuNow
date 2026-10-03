@@ -100,13 +100,13 @@ import SimuSimulation
             if current,let amount=cost.payload.totalCostDecimal { Text("参考日窗口费用：\(displayDecimal(amount,digits:cost.configuration.displayFractionDigits)) \(cost.configuration.currency ?? "待补充")；情景估算").font(.headline) }
             else if current { Text("费用待补充；电量仍可用。").font(.caption) }
             if current {
-                if let lo=cost.payload.lowerCostDecimal,let hi=cost.payload.upperCostDecimal,lo != hi { Text("已声明费用情景范围：\(displayDecimal(lo,digits:cost.configuration.displayFractionDigits))…\(displayDecimal(hi,digits:cost.configuration.displayFractionDigits)) \(cost.configuration.currency ?? "currency")；无概率。").font(.caption) }
+                if let lo=cost.payload.lowerCostDecimal,let hi=cost.payload.upperCostDecimal,lo != hi { Text("已声明费用情景范围：\(displayDecimal(lo,digits:cost.configuration.displayFractionDigits))…\(displayDecimal(hi,digits:cost.configuration.displayFractionDigits)) \(cost.configuration.currency ?? "币种")；无概率。").font(.caption) }
                 ForEach(Array(cost.payload.missingReasons.enumerated()),id:\.offset){_,m in Text(m.reason).font(.caption)}
                 Text(persistence(store.estimates.costPersistence)).font(.caption).foregroundStyle(.secondary)
             }
             DisclosureGroup("固定费用片段与来源") {
                 ForEach(Array(cost.payload.segments.enumerated()),id:\.offset){_,s in
-                    Text("\(s.startMinute)…\(s.endMinute) min · \(s.energyKWhDecimal) kWh × \(s.rateDecimal) \(cost.configuration.currency ?? "currency")/kWh = \(s.costDecimal)").font(.caption)
+                    Text("\(s.startMinute)…\(s.endMinute) min · \(s.energyKWhDecimal) kWh × \(s.rateDecimal) \(cost.configuration.currency ?? "币种")/kWh = \(s.costDecimal)").font(.caption)
                     Text(source(s.source)).font(.caption2).textSelection(.enabled)
                 }
                 Text("排除：\(cost.configuration.excludedCosts.joined(separator:"、"))；不另加未知税费，不外推年度收益。").font(.caption)
@@ -134,7 +134,7 @@ import SimuSimulation
         case .steadyHeatBalance(let p):
             Text("代表时刻\(InputDisplay.clock(String(p.conditionMinute))) · UA：\(p.coverage?.conductanceScope ?? "待声明") · 内部：\(p.coverage?.internalSensibleScope ?? "待声明") · 空气条件：\(p.coverage?.airPropertyConditions ?? "待声明")").font(.caption)
             ForEach(ThermalEstimateValidation.heatTerms+["indoorTemperature","outdoorTemperature","density","specificHeat"],id:\.self){f in
-                if let v=ThermalEstimateValidation.heatParameter(p,field:f) { Text("\(f)：\(v.value?.formatted() ?? "未知") \(v.unit)").font(.caption);if let s=v.source { Text(source(s)).font(.caption2).textSelection(.enabled) } }
+                if let v=ThermalEstimateValidation.heatParameter(p,field:f) { Text("\(heatFieldTitle(f))：\(v.value?.formatted() ?? "未知") \(v.unit)").font(.caption);if let s=v.source { Text(source(s)).font(.caption2).textSelection(.enabled) } }
             }
             ForEach(p.internalSources ?? [],id:\.entityID){entry in
                 Text("冻结内部源 \(entry.entityID.uuidString) · \(entry.description)").font(.caption)

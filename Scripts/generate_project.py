@@ -35,8 +35,10 @@ def generate():
         "SimuNowiOS": ref("Apps/SimuNowiOS/SimuNowiOSApp.swift", "sourcecode.swift"),
     }
     assets = ref("Apps/Shared/Assets.xcassets", "folder.assetcatalog")
+    privacy = ref("Apps/Shared/PrivacyInfo.xcprivacy", "text.xml")
+    localization = ref("Apps/Shared/Localizable.xcstrings", "text.json.xcstrings")
     configs = {name: ref(f"Configurations/{name}.xcconfig", "text.xcconfig") for name in ("Shared", "macOS", "iOS")}
-    root_refs = list(sources.values()) + [assets] + list(configs.values())
+    root_refs = list(sources.values()) + [assets, privacy, localization] + list(configs.values())
     root_refs.append(ref("Configurations/Info.plist", "text.plist.xml"))
     root_refs.append(ref("Apps/SimuNowMac/SimuNowMac.entitlements", "text.plist.entitlements"))
     for path in ("README.md", "AGENTS.md"):
@@ -53,10 +55,13 @@ def generate():
         package_product = obj(f"{name}-package-product", f"isa = XCSwiftPackageProductDependency; package = {local_package}; productName = SimuWorkspace;")
         source_build = obj(f"{name}-source-build", f"isa = PBXBuildFile; fileRef = {sources[name]};")
         resource_build = obj(f"{name}-resource-build", f"isa = PBXBuildFile; fileRef = {assets};")
+        privacy_build = obj(f"{name}-privacy-build", f"isa = PBXBuildFile; fileRef = {privacy};")
+        localization_build = obj(f"{name}-localization-build", f"isa = PBXBuildFile; fileRef = {localization};")
         framework_build = obj(f"{name}-framework-build", f"isa = PBXBuildFile; productRef = {package_product};")
         phases = []
         for kind, build_ref in (("Sources", source_build), ("Resources", resource_build), ("Frameworks", framework_build)):
-            phases.append(obj(f"{name}-{kind}", f"isa = PBX{kind}BuildPhase; buildActionMask = 2147483647; files = ({build_ref},); runOnlyForDeploymentPostprocessing = 0;"))
+            files = f"{build_ref},{privacy_build},{localization_build}" if kind == "Resources" else build_ref
+            phases.append(obj(f"{name}-{kind}", f"isa = PBX{kind}BuildPhase; buildActionMask = 2147483647; files = ({files},); runOnlyForDeploymentPostprocessing = 0;"))
 
         build_configs = []
         for mode in ("Debug", "Release"):

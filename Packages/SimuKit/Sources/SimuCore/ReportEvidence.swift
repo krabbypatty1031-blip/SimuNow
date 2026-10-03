@@ -96,6 +96,11 @@ public struct ReportEvidence: Codable, Equatable, Sendable {
         self.comfortAssumptions = comfortAssumptions
     }
 
+    /// Explanation-only packs stay on the report page; they are not a recommendation PDF.
+    public var containsExportableRecommendation: Bool {
+        cards.contains { $0.kind != .explanation && $0.qualityPassed }
+    }
+
     /// L2 identities plus any L1 identities the cards cite. Built from this object, not the live draft.
     public var citedRunIDs: [UUID] {
         var ids = candidates.map(\.runID)

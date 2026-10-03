@@ -1,7 +1,28 @@
 # 工程验证记录
 
-日期：2026-10-03（P4 App 手测 C–E / ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（P5-05 失败路径与离线 PDF / P4 App 手测 C–E / ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。手测 App 为 **SimuNowMac Debug**（`SimuNowMacDebug.entitlements` 不含 `app-sandbox`）；Release 仍沙盒，不能把本次 exec 当作沙盒产品闭环。
+
+## P5-05 离线演示（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` | 通过，SimuCoreTests 164 + SimuVisualizationTests 10 | 新增 `WorkspaceReportTests` 3 项、`mixedBasisIsExplanationOnlyAndRefusesExport`。无候选不导出；质量失败抛 `notExportable` 且不写文件；办公室两候选无叙述器写出 PDF |
+| Python `unittest discover -s Backend/tests` | 通过，116 项 | `test_recommend` 增口径不同 → 只说明、`can_export_recommendation` 为假 |
+| `Scripts/check.sh mac` / `ios` | BUILD SUCCEEDED | 报告页有证据才显示「导出证据 PDF」；质量失败只显示说明与状态行；iOS 仍不写 PDF |
+| 办公室夹具数字 | 自动化锁定 | 模板 clo=0.5 / met=1.2 / RH 50% / MRT 26 °C；电价 1.2 HKD/kWh「比赛演示假设，非真实电价」。两候选用 P4 手测座位 24.21 / 24.43 °C 与 L1 1033.112 W → 代表日 **10.33112 kWh / 12.397 HKD**。PDF 含两个 run ID、达标比例、HKD、电价声明。状态行「未配置叙述器，仅证据表」 |
+| App Debug 点击 L1→L2→固定→导出 | 本会话未重跑 | 预期沿用 P4 手测：默认口 24.43–24.73 °C，降低口 24.21–24.50 °C，L1 3099.335 / 1033.112 W。用户须在 Xcode 选 SimuNowMac Debug 点一遍；单测不能代替该手测 |
+
+不得当作产品功能：Release 沙盒 App 内 exec 引擎；叙述器 API 连通；全年电费或回收期；达标比例=实测满意率；质量失败场进有效建议 PDF。
+
+### Debug 手测清单（待用户点）
+
+1. 办公室模板。确认舒适默认与演示电价可见。
+2. 选 `test/engines`。未配置时 L1/L2 按钮不可点。
+3. 提交代表日 L1 → 固定。提交代表工况 L2（默认口）→ 固定。
+4. 改送风口 z0/z1 为 2.10–2.28 m（人数/时段/设定/送风温度不变）→ 再 L2 → 固定。
+5. 分析报告页应见运行 / 舒适 / 改造三卡；按钮文案是「导出证据 PDF」，不是「生成报告」。
+6. 导出 PDF：两个 run ID、达标比例（模型）、代表日 HKD、电价声明。拔掉 `SIMUNOW_REPORT_API_KEY` 后再导出仍成功，状态行「未配置叙述器，仅证据表」。
 
 ## P4 App 手测（2026-10-03，办公室模板，引擎 `test/engines`）
 

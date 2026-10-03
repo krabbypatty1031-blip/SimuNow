@@ -83,7 +83,18 @@ public enum RecommendationClassifier: Sendable {
             )]
         }
 
-        let comparable = sameBasis(asLeadOf: candidates.filter(isQualityPassedField))
+        let fields = candidates.filter(isQualityPassedField)
+        // A mixed basis is not a quieter comparison: it cannot become a recommendation PDF.
+        if let reason = mixedBasisReason(fields) {
+            return [explanation(
+                id: "basis-mismatch",
+                title: "口径不同",
+                detail: reason + "。不能作为有效推荐。",
+                candidates: fields
+            )]
+        }
+
+        let comparable = sameBasis(asLeadOf: fields)
         var cards: [RecommendationCard] = []
         if let constraint = constraintCard(comparable) {
             cards.append(constraint)
@@ -122,6 +133,22 @@ public enum RecommendationClassifier: Sendable {
             }
             return evalCount > 0 && passCount == 0
         }
+    }
+
+    /// True only when a card is a quality-passed recommendation, not an explanation.
+    public static func canExportRecommendation(from candidates: [CandidateRun]) -> Bool {
+        cards(from: candidates).contains { $0.kind != .explanation && $0.qualityPassed }
+    }
+
+    /// Any occupancy, hours, or temperature mismatch versus the lead field.
+    private static func mixedBasisReason(_ candidates: [CandidateRun]) -> String? {
+        guard let lead = candidates.first else { return nil }
+        for candidate in candidates.dropFirst() {
+            if let reason = CandidateRun.basisMismatch(lead.basis, candidate.basis) {
+                return reason
+            }
+        }
+        return nil
     }
 
     /// Keep the lead basis. A mismatched candidate stays out of the comparison

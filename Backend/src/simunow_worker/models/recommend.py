@@ -137,6 +137,22 @@ def _retrofit(candidates: list[dict]) -> dict:
     }
 
 
+def can_export_recommendation(candidates: list[dict]) -> bool:
+    """Explanation-only packs stay visible; they are not a recommendation PDF."""
+    return any(card["kind"] != "explanation" and card.get("qualityPassed") for card in classify_cards(candidates))
+
+
+def _mixed_basis_reason(candidates: list[dict]) -> str | None:
+    if not candidates:
+        return None
+    lead = candidates[0].get("basis") or {}
+    for item in candidates[1:]:
+        reason = _basis_mismatch(lead, item.get("basis") or {})
+        if reason:
+            return reason
+    return None
+
+
 def classify_cards(candidates: list[dict]) -> list[dict]:
     """Order is constraint, then comfort, then cost. No feasible field yields one explanation."""
     if not candidates:
@@ -159,6 +175,16 @@ def classify_cards(candidates: list[dict]) -> list[dict]:
                 "no-feasible-seats",
                 "已评座位均未通过模型门",
                 "已评座位全部未通过温度、风速或 PMV 门。这里只说明触犯的约束。",
+                passed,
+            )
+        ]
+    if mixed := _mixed_basis_reason(passed):
+        # Mixed occupancy or setpoints cannot be ranked as a recommendation.
+        return [
+            _explanation(
+                "basis-mismatch",
+                "口径不同",
+                mixed + "。不能作为有效推荐。",
                 passed,
             )
         ]

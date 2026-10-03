@@ -141,6 +141,30 @@ import SimuCore
     #expect(!operation.detail.contains("无电费差"))
 }
 
+/// Mixed occupancy or setpoints cannot be ranked. The pack explains and refuses export.
+@Test func mixedBasisIsExplanationOnlyAndRefusesExport() throws {
+    let office = try ProjectTemplates.bundled(named: "office").project
+    let low = try candidate(
+        name: "8人",
+        draft: office,
+        seatMinC: 24.21,
+        passRatio: 1,
+        passCount: 8,
+        evalCount: 8,
+        watts: 1033.112
+    )
+    var crowded = low
+    crowded.name = "10人"
+    crowded.identity = RunIdentity(scenarioID: office.id, inputHash: "hash-10")
+    crowded.basis.occupantCount = 10
+    let cards = RecommendationClassifier.cards(from: [low, crowded])
+    #expect(cards.count == 1)
+    #expect(cards[0].kind == .explanation)
+    #expect(cards[0].detail.contains("口径不同"))
+    #expect(cards[0].detail.contains("不能作为有效推荐"))
+    #expect(!RecommendationClassifier.canExportRecommendation(from: [low, crowded]))
+}
+
 /// Equal L1 day costs must say so. A missing delta is not a hidden savings claim.
 @Test func operationCardStatesNoElectricityDifferenceWhenCostsMatch() throws {
     let office = try ProjectTemplates.bundled(named: "office").project

@@ -406,21 +406,67 @@ public final class WorkspaceStore {
     public var highlightedRunID: UUID?
     /// Optional. When nil, export still writes the evidence PDF.
     public var reportNarrator: (any ReportNarrator)?
+    /// Production reads `SIMUNOW_REPORT_BASE_URL`. Tests turn this off so export never hits the network.
+    public var allowEnvironmentNarrator = true
+    /// Last export or block note shown on the report page and inspector.
+    public var reportMessage: String?
 
-    /// Narrate when a narrator or `SIMUNOW_REPORT_BASE_URL` is configured.
+    /// Button copy stays this phrase. A missing API key must not rename it to 「生成报告」.
+    public static let evidenceExportLabel = "导出证据 PDF"
+    public static let evidenceOnlyNarratorStatus = "未配置叙述器，仅证据表"
+    public static let blockedExportStatus = "质量未通过、座位不可行或口径不同，不能导出有效建议 PDF。"
+
+    /// Narrate when a narrator is injected or (in production) configured from the environment.
     /// Missing key or a failed request still writes the evidence tables.
     public func writeEvidencePDF(to url: URL) async throws {
-        guard let evidence = reportEvidence else {
-            throw EvidencePDFError.writeFailed
+        guard canExportEvidencePDF, let evidence = reportEvidence else {
+            reportMessage = Self.blockedExportStatus
+            throw EvidencePDFError.notExportable
         }
-        let narrator = reportNarrator ?? OpenAICompatibleNarrator.configuredFromEnvironment()
+        let narrator = resolvedReportNarrator()
         let narration = await narrator?.narrate(evidence)
         try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
+        // Narration is optional. A nil result is still a successful evidence PDF.
+        reportMessage = narration == nil ? Self.evidenceOnlyNarratorStatus : "已导出证据 PDF"
     }
 
     public var reportEvidence: ReportEvidence? {
         guard !candidateRuns.isEmpty else { return nil }
         return ReportEvidence.build(from: candidateRuns)
+    }
+
+    /// Quality-failed or mixed-basis packs can be read; they cannot be exported as a recommendation.
+    public var canExportEvidencePDF: Bool {
+        reportEvidence?.containsExportableRecommendation == true
+    }
+
+    public var isReportNarratorConfigured: Bool {
+        if reportNarrator != nil { return true }
+        guard allowEnvironmentNarrator else { return false }
+        guard OpenAICompatibleNarrator.configuredFromEnvironment() != nil else { return false }
+        guard let key = OpenAICompatibleNarrator.keyFromEnvironmentOrKeychain(), !key.isEmpty else {
+            return false
+        }
+        return true
+    }
+
+    /// Empty pin list stays an empty state. Failed-only packs explain why export is hidden.
+    public var reportStatusLine: String? {
+        guard reportEvidence != nil else { return nil }
+        if !canExportEvidencePDF {
+            return reportMessage ?? Self.blockedExportStatus
+        }
+        if let reportMessage { return reportMessage }
+        if !isReportNarratorConfigured {
+            return Self.evidenceOnlyNarratorStatus
+        }
+        return nil
+    }
+
+    private func resolvedReportNarrator() -> (any ReportNarrator)? {
+        if let reportNarrator { return reportNarrator }
+        guard allowEnvironmentNarrator else { return nil }
+        return OpenAICompatibleNarrator.configuredFromEnvironment()
     }
 
     /// Card run IDs jump back to the comparison page, which still shows the frozen record.

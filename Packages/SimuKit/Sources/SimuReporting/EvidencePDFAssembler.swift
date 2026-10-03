@@ -8,6 +8,8 @@ import CoreText
 public enum EvidencePDFError: Error, Equatable {
     /// iOS has no PDFKit writer in this phase. Callers must not invent a stand-in document.
     case unsupportedPlatform
+    /// Quality failed, no feasible seats, or mixed basis. The page may explain; it must not write a recommendation PDF.
+    case notExportable
     case writeFailed
 }
 

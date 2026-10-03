@@ -245,6 +245,13 @@ public struct RoomEditorForm: View {
                         .accessibilityLabel(message)
                 }
             }
+            Section("报告") {
+                // Export lives on the report page so this inspector never shows a greyed 「生成报告」.
+                Text(store.reportStatusLine ?? "固定通过质量检查的候选后，到分析报告页导出证据 PDF。叙述器未配置时仍导出证据表。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(store.reportStatusLine ?? "报告导出说明")
+            }
             Section("座位") {
                 ForEach(store.project?.occupancy?.seats ?? []) { seat in
                     SeatEditor(

@@ -99,6 +99,26 @@ class RecommendTests(unittest.TestCase):
         self.assertLess(kinds.index("comfort"), kinds.index("operation"))
         self.assertLess(kinds.index("operation"), kinds.index("retrofit"))
 
+    def test_mixed_basis_is_explanation_and_refuses_export(self):
+        from simunow_worker.models.recommend import can_export_recommendation, classify_cards
+
+        eight = _candidate(runID="11111111-1111-1111-1111-111111111111", seatPassRatio=1)
+        ten_basis = dict(eight["basis"])
+        ten_basis["occupantCount"] = 10
+        ten = _candidate(
+            name="10人",
+            runID="22222222-2222-2222-2222-222222222222",
+            basis=ten_basis,
+            seatPassRatio=1,
+        )
+        cards = classify_cards([eight, ten])
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["kind"], "explanation")
+        self.assertIn("口径不同", cards[0]["detail"])
+        self.assertIn("不能作为有效推荐", cards[0]["detail"])
+        self.assertFalse(can_export_recommendation([eight, ten]))
+        self.assertTrue(can_export_recommendation([eight, _candidate(runID="22222222-2222-2222-2222-222222222222", supplyZ0=2.10, supplyZ1=2.28, seatTMinC=24.21)]))
+
     def test_evidence_copies_candidate_numbers_and_schema_keys(self):
         from simunow_worker.models.recommend import build_evidence
 

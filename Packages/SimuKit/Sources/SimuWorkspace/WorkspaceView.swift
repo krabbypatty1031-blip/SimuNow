@@ -421,7 +421,7 @@ public struct WorkspaceView: View {
     }
 
     /// Pinned evidence only. No candidates keeps the empty state, and the export
-    /// control stays hidden until there is a pack to cite.
+    /// control stays hidden until there is a quality-passed recommendation to cite.
     @ViewBuilder
     private var reportDetail: some View {
         if let evidence = store.reportEvidence {
@@ -434,21 +434,31 @@ public struct WorkspaceView: View {
                     ForEach(evidence.cards) { card in
                         reportCard(card)
                     }
-                    #if os(macOS)
-                    Button("导出证据 PDF") {
-                        Task { await exportEvidencePDF() }
+                    if let status = store.reportStatusLine {
+                        Text(status)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel(status)
                     }
-                    .accessibilityLabel("导出证据 PDF")
+                    #if os(macOS)
+                    if store.canExportEvidencePDF {
+                        Button(WorkspaceStore.evidenceExportLabel) {
+                            Task { await exportEvidencePDF() }
+                        }
+                        .accessibilityLabel(WorkspaceStore.evidenceExportLabel)
+                    }
                     #else
-                    Text("证据 PDF 在 Mac 上导出。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    if store.canExportEvidencePDF {
+                        Text("证据 PDF 在 Mac 上导出。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     #endif
                 }
                 .padding()
             }
         } else {
-            EmptyStateView("暂无报告", symbol: "doc.text", message: "通过质量检查的结果可用于生成建议报告。")
+            EmptyStateView("暂无报告", symbol: "doc.text", message: "固定通过质量检查的候选后，这里显示建议。没有候选时不能导出。")
         }
     }
 
@@ -489,6 +499,10 @@ public struct WorkspaceView: View {
         guard let url = ProjectLocationPicker.requestEvidencePDFURL() else { return }
         do {
             try await store.writeEvidencePDF(to: url)
+        } catch EvidencePDFError.notExportable {
+            store.reportMessage = WorkspaceStore.blockedExportStatus
+        } catch EvidencePDFError.unsupportedPlatform {
+            store.packageError = "证据 PDF 仅在 Mac 上导出"
         } catch {
             store.packageError = "证据 PDF 导出失败"
         }

@@ -296,3 +296,131 @@ import SimuWorkspace
     #expect(!store.metricText(named: "p_elec_w").contains("非当前"))
     #expect(store.dayCostText() == "30.000 HKD")
 }
+
+/// Lowering the supply and re-running only L2 leaves L1 watts behind.
+/// Pin still accepts the current L2, but the frozen L1 cost must not read as the current draft.
+@MainActor
+@Test func pinAfterSupplyHeightL2RerunMarksStaleL1Watts() async throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let l1 = try L1Accounting.evaluate(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        draft: draft,
+        context: L1DayContext(weatherPath: "weather/HK.epw", weatherHash: "h", coolingLoadW: 6000)
+    )
+    let l2 = SimulationResult(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        state: .succeeded,
+        quality: .passed,
+        metrics: [
+            ResultMetric(name: "seat_t_c_min", value: 24.5, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: false)
+        ]
+    )
+    let l1Client = RecordingL1Client()
+    await l1Client.prepare(result: l1)
+    let l2Client = RecordingL2Client()
+    await l2Client.prepare(result: l2)
+    let store = WorkspaceStore(l1Client: l1Client, l2Client: l2Client)
+    store.loadOfficeTemplate()
+    store.applyElectricityTariff(CostAssumptions.demo)
+    await store.submitL1()
+    await store.submitL2()
+    let supply = try #require(store.project?.hvac?.supply)
+    store.applySupplyTerminal(
+        wall: supply.wall,
+        s0: supply.s0.value,
+        s1: supply.s1.value,
+        z0: 2.10,
+        z1: 2.28,
+        source: .user
+    )
+    #expect(store.fieldIssues.isEmpty)
+    #expect(store.l1Freshness == .stale)
+    #expect(!store.canPinCandidate)
+    await store.submitL2()
+    #expect(store.l2Freshness == .current)
+    #expect(store.l1Freshness == .stale)
+    #expect(store.canPinCandidate)
+    store.pinCurrentAsCandidate(named: "降低风口")
+    let record = try #require(store.candidateRuns.first)
+    #expect(record.dayCost.cost != nil)
+    #expect(record.dayCost.cost != 0)
+    #expect(record.dayCost.electricPowerW == 2000)
+    #expect(record.dayCost.occupiedHours == 10)
+    #expect(store.candidateFreshness(record) == .current)
+    #expect(record.l1Identity?.inputHash != record.identity.inputHash)
+    #expect(store.candidateL1Freshness(record) == .stale)
+    let power = store.candidateL1PowerText(record)
+    let cost = store.candidateL1CostText(record)
+    #expect(power.contains("非当前草稿"))
+    #expect(!power.contains("当前输入"))
+    #expect(cost.contains("非当前草稿"))
+    #expect(!cost.contains("当前输入"))
+}
+
+/// Same L1 watts priced at two tariffs are not a power saving.
+/// A currency change is not a saving either, and no percent is invented.
+@MainActor
+@Test func sameWattsDifferentTariffOmitsSavingsFigure() async throws {
+    let sameWatts = CostAccounting.representativeDay(
+        electricPowerW: 1000,
+        occupiedStart: "08:00",
+        occupiedEnd: "18:00",
+        tariff: .demo
+    )
+    let repriced = CostAccounting.representativeDay(
+        electricPowerW: 1000,
+        occupiedStart: "08:00",
+        occupiedEnd: "18:00",
+        tariff: CostAssumptions(pricePerKWh: 1.5, currency: "HKD", source: .user, reference: "演示改价")
+    )
+    let otherCurrency = CostAccounting.representativeDay(
+        electricPowerW: 1000,
+        occupiedStart: "08:00",
+        occupiedEnd: "18:00",
+        tariff: CostAssumptions(pricePerKWh: 2.4, currency: "USD", source: .user, reference: "演示换币")
+    )
+    #expect(sameWatts.cost != repriced.cost)
+    #expect(CostAccounting.savingsHKD(repriced, sameWatts, basisMismatch: nil) == nil)
+    #expect(CostAccounting.savingsHKD(otherCurrency, sameWatts, basisMismatch: nil) == nil)
+    #expect(CostAccounting.savingsHKD(repriced, sameWatts, basisMismatch: "口径不同（人数）") == nil)
+
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let l1 = try L1Accounting.evaluate(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        draft: draft,
+        context: L1DayContext(weatherPath: "weather/HK.epw", weatherHash: "h", coolingLoadW: 6000)
+    )
+    let l2 = SimulationResult(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        state: .succeeded,
+        quality: .passed,
+        metrics: [
+            ResultMetric(name: "seat_t_c_min", value: 24.5, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: false)
+        ]
+    )
+    let l1Client = RecordingL1Client()
+    await l1Client.prepare(result: l1)
+    let l2Client = RecordingL2Client()
+    await l2Client.prepare(result: l2)
+    let store = WorkspaceStore(l1Client: l1Client, l2Client: l2Client)
+    store.loadOfficeTemplate()
+    store.applyElectricityTariff(CostAssumptions.demo)
+    await store.submitL1()
+    await store.submitL2()
+    store.pinCurrentAsCandidate(named: "基准")
+    store.applyElectricityTariff(CostAssumptions(
+        pricePerKWh: 1.5,
+        currency: "HKD",
+        source: .user,
+        reference: "演示改价"
+    ))
+    #expect(store.l1Freshness == .current)
+    await store.submitL2()
+    store.pinCurrentAsCandidate(named: "改价")
+    #expect(store.basisMismatchText == nil)
+    #expect(store.candidateRuns.count == 2)
+    #expect(store.candidateRuns[0].identity.runID != store.candidateRuns[1].identity.runID)
+    #expect(store.candidateRuns[0].dayCost.electricPowerW == store.candidateRuns[1].dayCost.electricPowerW)
+    #expect(store.candidateRuns[0].dayCost.cost != store.candidateRuns[1].dayCost.cost)
+    #expect(store.comparisonSavingsText == nil)
+}

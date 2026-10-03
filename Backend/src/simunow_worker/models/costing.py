@@ -71,17 +71,21 @@ def representative_day_cost(
     energy = None
     cost = None
     currency = None
+    price = None
     if electric_power_w is not None and hours is not None:
         energy = _quantize(Decimal(str(electric_power_w)) / Decimal(1000) * hours, "0.00001")
         if _has_price(tariff):
             cost = _quantize(energy * Decimal(str(tariff["pricePerKWh"])), "0.001")
             currency = tariff["currency"]
+            # Frozen with the snapshot so a later price edit is not a watt saving.
+            price = float(tariff["pricePerKWh"])
     return {
         "electric_power_w": None if electric_power_w is None else float(electric_power_w),
         "occupied_hours": None if hours is None else float(hours),
         "energy_kwh": None if energy is None else float(energy),
         "cost": None if cost is None else float(cost),
         "currency": currency,
+        "price_per_kwh": price,
         "energy_omitted": energy is None,
         "cost_omitted": cost is None,
         "retrofit_quote": "待报价",
@@ -89,12 +93,23 @@ def representative_day_cost(
 
 
 def savings_hkd(high: dict, low: dict, basis_mismatch: str | None) -> float | None:
-    """Subtract two L1 day costs. A basis mismatch returns None, not a scaled watt."""
+    """Subtract two L1 day costs that share currency, tariff and hours.
+
+    A basis mismatch, a different unit price, or a different currency returns
+    None. The figure is the two electric powers at that shared price, not a
+    tariff delta and not one power times a coefficient.
+    """
     if basis_mismatch:
         return None
     if high.get("cost") is None or low.get("cost") is None:
         return None
     if high.get("electric_power_w") is None or low.get("electric_power_w") is None:
+        return None
+    if high.get("occupied_hours") != low.get("occupied_hours") or high.get("occupied_hours") is None:
+        return None
+    if high.get("currency") != low.get("currency") or not high.get("currency"):
+        return None
+    if high.get("price_per_kwh") != low.get("price_per_kwh") or high.get("price_per_kwh") is None:
         return None
     delta = _quantize(Decimal(str(high["cost"])) - Decimal(str(low["cost"])), "0.001")
     return float(delta)

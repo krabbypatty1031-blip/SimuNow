@@ -57,6 +57,27 @@ class CostAccountingTests(unittest.TestCase):
         self.assertIsNone(savings_hkd(high, low, basis_mismatch="口径不同（人数）"))
         self.assertNotEqual(saved, 1500 * 0.1)
 
+    def test_same_watts_different_tariff_or_currency_has_no_savings(self):
+        from simunow_worker.models.costing import savings_hkd
+
+        base = representative_day_cost(1000, "08:00", "18:00", DEMO_TARIFF)
+        repriced = representative_day_cost(
+            1000,
+            "08:00",
+            "18:00",
+            {"pricePerKWh": 1.5, "currency": "HKD", "source": "user"},
+        )
+        other = representative_day_cost(
+            1000,
+            "08:00",
+            "18:00",
+            {"pricePerKWh": 2.4, "currency": "USD", "source": "user"},
+        )
+        self.assertNotEqual(base["cost"], repriced["cost"])
+        self.assertIsNone(savings_hkd(repriced, base, basis_mismatch=None))
+        self.assertIsNone(savings_hkd(other, base, basis_mismatch=None))
+        self.assertIsNone(savings_hkd(repriced, base, basis_mismatch="口径不同（人数）"))
+
 
 if __name__ == "__main__":
     unittest.main()

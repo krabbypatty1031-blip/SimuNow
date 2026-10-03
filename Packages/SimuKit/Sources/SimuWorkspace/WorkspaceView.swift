@@ -322,11 +322,16 @@ public struct WorkspaceView: View {
             }
             .font(.footnote)
             HStack(spacing: 12) {
-                LabeledContent("L1 电功率", value: record.dayCost.powerText)
-                LabeledContent("代表日电量", value: record.dayCost.energyText)
-                LabeledContent("代表日电费", value: record.dayCost.costText)
+                LabeledContent("L1 电功率", value: store.candidateL1PowerText(record))
+                LabeledContent("代表日电量", value: store.candidateL1EnergyText(record))
+                LabeledContent("代表日电费", value: store.candidateL1CostText(record))
             }
             .font(.footnote)
+            if store.candidateL1Freshness(record) == .stale {
+                Text("L1 电功率与代表日电费属于固定时的 L1，输入已改，非当前草稿。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
             HStack(spacing: 12) {
                 LabeledContent("座位最低温", value: candidateMetric(record, "seat_t_c_min"))
                 LabeledContent("座位最高温", value: candidateMetric(record, "seat_t_c_max"))

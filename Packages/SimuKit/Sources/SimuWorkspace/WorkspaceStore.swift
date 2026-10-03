@@ -442,24 +442,28 @@ public final class WorkspaceStore {
             slice: lastL2Result == nil ? nil : lastFieldSlice,
             basis: basis,
             draft: project,
-            dayCost: frozenDayCost(project: project)
+            dayCost: frozenDayCost(project: project),
+            l1Identity: lastL1Result?.identity
         )
         candidateRuns.append(record)
     }
 
-    /// Side-by-side HKD difference of two L1 day costs. Hidden when the
-    /// candidates do not share a basis, so a mismatch never shows a savings figure.
+    /// Side-by-side difference of two L1 day costs that share currency and tariff.
+    /// Hidden when the candidates do not share a basis, or when the delta would
+    /// only be a price change. No percent is invented for a mismatched tariff.
     public var comparisonSavingsText: String? {
         guard basisMismatchText == nil else { return nil }
         let priced = candidateRuns.filter { $0.dayCost.cost != nil && $0.dayCost.electricPowerW != nil }
         guard let high = priced.max(by: { ($0.dayCost.cost ?? 0) < ($1.dayCost.cost ?? 0) }),
               let low = priced.min(by: { ($0.dayCost.cost ?? 0) < ($1.dayCost.cost ?? 0) }),
               high.identity.runID != low.identity.runID,
+              let currency = high.dayCost.currency,
+              high.dayCost.currency == low.dayCost.currency,
               let saved = CostAccounting.savingsHKD(high.dayCost, low.dayCost, basisMismatch: nil),
               saved != 0 else {
             return nil
         }
-        return String(format: "代表日电费相差 %.3f HKD（两次 L1 电功率之差，不是系数估算）", saved)
+        return String(format: "代表日电费相差 %.3f %@（两次 L1 电功率之差，不是系数估算）", saved, currency)
     }
 
     /// Day cost of the stored L1 watts. Hours come from that run's schedule
@@ -532,9 +536,38 @@ public final class WorkspaceStore {
     /// Per-candidate freshness against the live draft: a pinned record whose
     /// input hash matches the current draft is current; anything else is
     /// stale. Freshness is independent of the record's own quality.
+    /// This is the pinned run (L2 when that was what pin froze), not the L1 watts.
     public func candidateFreshness(_ record: CandidateRun) -> ResultFreshness {
         guard let hash = currentInputHash() else { return .stale }
         return record.identity.inputHash == hash ? .current : .stale
+    }
+
+    /// Freshness of the L1 snapshot frozen on the candidate. Nil when pin had no L1.
+    /// A current L2 does not make these watts current.
+    public func candidateL1Freshness(_ record: CandidateRun) -> ResultFreshness? {
+        guard let identity = record.l1Identity, let hash = currentInputHash() else { return nil }
+        return identity.freshness(relativeTo: hash)
+    }
+
+    public func candidateL1PowerText(_ record: CandidateRun) -> String {
+        annotatedL1(record, text: record.dayCost.powerText, hasValue: record.dayCost.electricPowerW != nil)
+    }
+
+    public func candidateL1EnergyText(_ record: CandidateRun) -> String {
+        annotatedL1(record, text: record.dayCost.energyText, hasValue: record.dayCost.energyKWh != nil)
+    }
+
+    public func candidateL1CostText(_ record: CandidateRun) -> String {
+        annotatedL1(record, text: record.dayCost.costText, hasValue: record.dayCost.cost != nil)
+    }
+
+    /// Stale L1 watts stay visible on the card but are not described as the current draft.
+    private func annotatedL1(_ record: CandidateRun, text: String, hasValue: Bool) -> String {
+        guard hasValue, text != "未知" else { return text }
+        if candidateL1Freshness(record) == .stale {
+            return "\(text)（输入已改，非当前草稿）"
+        }
+        return text
     }
 
     #if os(macOS)

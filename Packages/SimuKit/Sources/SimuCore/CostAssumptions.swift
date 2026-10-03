@@ -44,6 +44,9 @@ public struct RepresentativeDayCost: Codable, Equatable, Sendable {
     public var energyKWh: Double?
     public var cost: Double?
     public var currency: String?
+    /// Unit price frozen with this snapshot. Tariff sits outside the physics hash,
+    /// so a later price edit must not be read as a change in L1 watts.
+    public var pricePerKWh: Double?
     public var energyOmitted: Bool
     public var costOmitted: Bool
     public var reason: String?
@@ -56,6 +59,7 @@ public struct RepresentativeDayCost: Codable, Equatable, Sendable {
         energyKWh: Double?,
         cost: Double?,
         currency: String?,
+        pricePerKWh: Double? = nil,
         energyOmitted: Bool,
         costOmitted: Bool,
         reason: String? = nil,
@@ -66,6 +70,7 @@ public struct RepresentativeDayCost: Codable, Equatable, Sendable {
         self.energyKWh = energyKWh
         self.cost = cost
         self.currency = currency
+        self.pricePerKWh = pricePerKWh
         self.energyOmitted = energyOmitted
         self.costOmitted = costOmitted
         self.reason = reason
@@ -79,6 +84,7 @@ public struct RepresentativeDayCost: Codable, Equatable, Sendable {
             energyKWh: nil,
             cost: nil,
             currency: nil,
+            pricePerKWh: nil,
             energyOmitted: true,
             costOmitted: true,
             reason: reason
@@ -146,6 +152,7 @@ public enum CostAccounting {
             energyKWh: energy,
             cost: cost,
             currency: currency,
+            pricePerKWh: priced ? tariff?.pricePerKWh : nil,
             energyOmitted: energy == nil,
             costOmitted: cost == nil,
             reason: omissionReason(
@@ -156,8 +163,10 @@ public enum CostAccounting {
         )
     }
 
-    /// Difference of two already-accounted day costs. A non-nil basis mismatch
-    /// hides the figure. The result is not one power times a coefficient.
+    /// Difference of two L1 day costs that share currency, tariff and occupied hours.
+    /// A basis mismatch, a tariff change or a currency change hides the figure.
+    /// The result is the two `p_elec_w` values at that shared price, not a tariff delta
+    /// and not one power times a coefficient.
     public static func savingsHKD(
         _ high: RepresentativeDayCost,
         _ low: RepresentativeDayCost,
@@ -165,7 +174,13 @@ public enum CostAccounting {
     ) -> Double? {
         guard basisMismatch == nil else { return nil }
         guard let highCost = high.cost, let lowCost = low.cost,
-              high.electricPowerW != nil, low.electricPowerW != nil else {
+              high.electricPowerW != nil, low.electricPowerW != nil,
+              let highHours = high.occupiedHours, let lowHours = low.occupiedHours,
+              decimal(highHours) == decimal(lowHours),
+              let highPrice = high.pricePerKWh, let lowPrice = low.pricePerKWh,
+              decimal(highPrice) == decimal(lowPrice),
+              let highCurrency = high.currency, let lowCurrency = low.currency,
+              highCurrency == lowCurrency else {
             return nil
         }
         return double(roundHalfUp(decimal(highCost) - decimal(lowCost), scale: 3))

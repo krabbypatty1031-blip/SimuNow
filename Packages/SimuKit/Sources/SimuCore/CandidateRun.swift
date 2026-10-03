@@ -22,6 +22,10 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
     /// L1 electric power and representative-day cost frozen at pin time.
     /// Absent L1 leaves the cost omitted, never 0.
     public var dayCost: RepresentativeDayCost
+    /// L1 identity frozen at pin time. Separate from `identity`, which is the
+    /// pinned run (current L2 when one exists). The comparison card uses this
+    /// hash so stale L1 watts are not labelled as the current draft.
+    public var l1Identity: RunIdentity?
 
     public init(
         name: String,
@@ -32,7 +36,8 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         slice: FieldSlice? = nil,
         basis: ComparisonBasis,
         draft: ProjectDraft,
-        dayCost: RepresentativeDayCost = .omitted(reason: "无 L1，代表日电费省略")
+        dayCost: RepresentativeDayCost = .omitted(reason: "无 L1，代表日电费省略"),
+        l1Identity: RunIdentity? = nil
     ) {
         self.name = name
         self.identity = identity
@@ -43,6 +48,7 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         self.basis = basis
         self.draft = draft
         self.dayCost = dayCost
+        self.l1Identity = l1Identity
     }
 
     /// Non-geometry inputs that must match before two candidates may be

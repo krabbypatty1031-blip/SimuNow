@@ -190,13 +190,16 @@ public struct ReportEvidence: Codable, Equatable, Sendable {
     }
 
     /// Snapshot pinned candidates. Metrics and hashes are copied; nothing is recomputed from a view.
-    public static func build(from candidates: [CandidateRun]) -> ReportEvidence {
+    public static func build(
+        from candidates: [CandidateRun],
+        copy: UserFacingCopy = .english
+    ) -> ReportEvidence {
         let runs = candidates.map(EvidenceRun.init(candidate:))
         let reference = candidates.compactMap { $0.draft.costAssumptions?.reference }.first
-            ?? "无电价来源"
+            ?? copy.noReference
         return ReportEvidence(
             candidates: runs,
-            pairDiff: CandidatePairDiff.build(from: candidates),
+            pairDiff: CandidatePairDiff.build(from: candidates, copy: copy),
             tariffReference: reference,
             comfortAssumptions: comfortAssumptions(from: candidates)
         )

@@ -20,87 +20,88 @@ public enum EvidencePDFAssembler {
     public static func write(
         evidence: ReportEvidence,
         report: GeneratedReport,
+        copy: UserFacingCopy = .english,
         to url: URL
     ) throws {
         #if os(macOS)
         let guarded = NarrationGuard.filter(report, evidence: evidence)
-        try writePDF(report: guarded, evidence: evidence, to: url)
+        try writePDF(report: guarded, evidence: evidence, copy: copy, to: url)
         #else
         throw EvidencePDFError.unsupportedPlatform
         #endif
     }
 
     /// Local appendix. Every figure is formatted from an evidence field.
-    static func appendix(evidence: ReportEvidence) -> String {
+    static func appendix(evidence: ReportEvidence, copy: UserFacingCopy = .english) -> String {
         var lines: [String] = []
-        lines.append("计算依据")
+        lines.append(copy.pdfCalculationBasis)
         if let price = evidence.candidates.compactMap(\.pricePerKWh).first {
             let currency = evidence.candidates.compactMap(\.currency).first ?? ""
-            lines.append("电价 \(format(price)) \(currency)/kWh")
+            lines.append(copy.pdfTariff(format(price), currency: currency))
         }
         let bandLow = evidence.candidates.first?.seatBandLowC ?? SeatFeasibility.airLowC
         let bandHigh = evidence.candidates.first?.seatBandHighC ?? SeatFeasibility.airHighC
-        lines.append("座位合适范围：\(format(bandLow))–\(format(bandHigh)) °C")
-        lines.append("方案")
+        lines.append(copy.pdfSeatBand(low: format(bandLow), high: format(bandHigh)))
+        lines.append(copy.pdfSchemes)
         for run in evidence.candidates {
             lines.append(run.name)
             if let count = run.windowCount, count > 0, let area = run.windowAreaM2 {
-                lines.append("窗户 \(count) 扇，面积 \(format(area)) m²")
+                lines.append(copy.pdfWindows(count: count, area: format(area)))
             } else if let count = run.windowCount, count > 0 {
-                lines.append("窗户 \(count) 扇")
+                lines.append(copy.pdfWindows(count: count, area: nil))
             }
             if let mean = run.indoorMeanC {
-                lines.append("室内平均温度 \(format(mean)) °C")
+                lines.append(copy.pdfIndoorMean(format(mean)))
             }
             if let minC = run.indoorMinC, let maxC = run.indoorMaxC {
-                lines.append("室内温度 \(format(minC))–\(format(maxC)) °C")
+                lines.append(copy.pdfIndoorRange(min: format(minC), max: format(maxC)))
             }
             if let minU = run.flowMinMps, let maxU = run.flowMaxMps {
-                lines.append("气流 \(format(minU))–\(format(maxU)) m/s")
+                lines.append(copy.pdfAirflow(min: format(minU), max: format(maxU)))
             } else if let speed = run.seatSpeedMaxMps {
-                lines.append("座位最大风速 \(format(speed)) m/s")
+                lines.append(copy.pdfSeatMaxSpeed(format(speed)))
             }
             if let cooling = run.coolingW {
-                lines.append("制冷量 \(format(cooling)) W")
+                lines.append(copy.pdfCooling(format(cooling)))
             }
             if let electric = run.electricPowerW {
-                lines.append("电功率 \(format(electric)) W")
+                lines.append(copy.pdfElectric(format(electric)))
             }
             if run.seatPassRatioOmitted || run.seatPassRatio == nil {
-                lines.append("合适的座位 不可评价")
+                lines.append(copy.pdfSeatsUnevaluable)
             } else if let ratio = run.seatPassRatio {
-                lines.append("合适的座位 \(format(ratio))")
+                lines.append(copy.pdfSeatsRatio(format(ratio)))
             }
             if let energy = run.dayEnergyKWh {
-                lines.append("代表日用电 \(format(energy)) kWh")
+                lines.append(copy.pdfDayEnergy(format(energy)))
             }
             if let annual = run.annualEnergyKWh {
-                lines.append("全年用电 \(format(annual)) kWh")
+                lines.append(copy.pdfYearEnergy(format(annual)))
             }
             if let cost = run.dayCost, let currency = run.currency {
-                lines.append("代表日电费 \(format(cost)) \(currency)")
+                lines.append(copy.pdfDayCost(format(cost), currency: currency))
             }
             if let annual = run.annualCost, let currency = run.currency {
-                lines.append("全年电费 \(format(annual)) \(currency)")
+                lines.append(copy.pdfYearCost(format(annual), currency: currency))
             }
             if let z0 = run.supplyZ0M, let z1 = run.supplyZ1M {
-                lines.append("出风口离地 \(format(z0))–\(format(z1)) m")
+                lines.append(copy.pdfSupplyHeight(z0: format(z0), z1: format(z1)))
             }
         }
-        lines.append("查看依据与限制")
+        lines.append(copy.pdfEvidenceAndLimits)
         if evidence.comfortAssumptions.isEmpty {
-            lines.append("还没有舒适假设")
+            lines.append(copy.pdfNoComfortAssumptions)
         } else {
             for item in evidence.comfortAssumptions {
-                let value = item.value.map(format) ?? "还没有"
+                let value = item.value.map(format) ?? copy.notYet
                 let reference = item.reference ?? ""
-                lines.append("\(UserFacingCopy.comfortKeyTitle(item.name)) \(value) \(item.unit) \(reference)")
+                lines.append("\(copy.comfortKeyTitle(item.name)) \(value) \(item.unit) \(reference)")
             }
         }
-        lines.append("两个方案的差异")
+        lines.append(copy.pdfPairDiffHeading)
         if let diff = evidence.pairDiff {
             if diff.inputChanges.isEmpty {
-                lines.append("两个方案输入相同")
+                lines.append(copy.pairDiffInputsSameShort)
             } else {
                 for change in diff.inputChanges {
                     lines.append(change.sentence)
@@ -110,25 +111,27 @@ public enum EvidencePDFAssembler {
                 lines.append(reason)
             }
             for delta in diff.resultDeltas {
-                // e.g. 座位最凉 24.21 → 24.43 °C（差 +0.22）
                 let first = delta.first.map { format($0) } ?? "—"
                 let second = delta.second.map { format($0) } ?? "—"
-                if let deltaValue = delta.delta {
-                    let sign = deltaValue >= 0 ? "+" : ""
-                    lines.append("\(delta.label) \(first) → \(second) \(delta.unit)（差 \(sign)\(format(deltaValue))）")
-                } else {
-                    lines.append("\(delta.label) \(first) → \(second) \(delta.unit)")
-                }
+                lines.append(
+                    copy.pairDeltaLine(
+                        label: delta.label,
+                        first: first,
+                        second: second,
+                        unit: delta.unit,
+                        delta: delta.delta
+                    )
+                )
             }
         } else {
-            lines.append("只有一个方案，没有差值")
+            lines.append(copy.pairDiffSingleScheme)
         }
-        lines.append("详细编号")
+        lines.append(copy.pdfDetailedIDs)
         for run in evidence.candidates {
             lines.append(run.name)
             lines.append(run.runID.uuidString)
             lines.append(run.inputHash)
-            lines.append(UserFacingCopy.qualityTitle(run.quality))
+            lines.append(copy.qualityTitle(run.quality))
         }
         return lines.joined(separator: "\n")
     }
@@ -142,6 +145,7 @@ public enum EvidencePDFAssembler {
     private static func writePDF(
         report: GeneratedReport,
         evidence: ReportEvidence,
+        copy: UserFacingCopy,
         to url: URL
     ) throws {
         let data = NSMutableData()
@@ -150,10 +154,11 @@ public enum EvidencePDFAssembler {
               let context = CGContext(consumer: consumer, mediaBox: &media, nil) else {
             throw EvidencePDFError.writeFailed
         }
-        let titleFont = CTFontCreateWithName("PingFangSC-Medium" as CFString, 18, nil)
-        let headingFont = CTFontCreateWithName("PingFangSC-Medium" as CFString, 13, nil)
-        let bodyFont = CTFontCreateWithName("PingFangSC-Regular" as CFString, 11, nil)
-        let captionFont = CTFontCreateWithName("PingFangSC-Regular" as CFString, 9, nil)
+        let chinese = copy.language == .chinese
+        let titleFont = CTFontCreateWithName((chinese ? "PingFangSC-Medium" : "Helvetica-Bold") as CFString, 18, nil)
+        let headingFont = CTFontCreateWithName((chinese ? "PingFangSC-Medium" : "Helvetica-Bold") as CFString, 13, nil)
+        let bodyFont = CTFontCreateWithName((chinese ? "PingFangSC-Regular" : "Helvetica") as CFString, 11, nil)
+        let captionFont = CTFontCreateWithName((chinese ? "PingFangSC-Regular" : "Helvetica") as CFString, 9, nil)
         let margin: CGFloat = 48
         let width = media.width - margin * 2
         var y = media.height - margin
@@ -199,25 +204,20 @@ public enum EvidencePDFAssembler {
 
         context.beginPDFPage(nil)
         drawWrapped(report.title, font: titleFont, lineHeight: 24)
-        drawWrapped(
-            "以下正文由 DeepSeek 根据计算结果整理。",
-            font: captionFont,
-            lineHeight: 13
-        )
+        drawWrapped(copy.pdfDeepSeekCaption, font: captionFont, lineHeight: 13)
         drawWrapped(report.summary, font: bodyFont, lineHeight: 16)
         for section in report.sections {
             drawWrapped(section.heading, font: headingFont, lineHeight: 18)
             drawWrapped(section.body, font: bodyFont, lineHeight: 16)
         }
         if !report.caveats.isEmpty {
-            drawWrapped("行动建议", font: headingFont, lineHeight: 18)
+            drawWrapped(copy.pdfSuggestedActions, font: headingFont, lineHeight: 18)
             for caveat in report.caveats {
                 drawWrapped(caveat, font: bodyFont, lineHeight: 16)
             }
         }
-        for line in appendix(evidence: evidence).components(separatedBy: "\n") {
-            let isHeading = line == "计算依据" || line == "方案" || line == "查看依据与限制" || line == "详细编号"
-                || line == "两个方案的差异" || line == "行动建议"
+        for line in appendix(evidence: evidence, copy: copy).components(separatedBy: "\n") {
+            let isHeading = copy.isPDFHeading(line)
             drawWrapped(line, font: isHeading ? headingFont : captionFont, lineHeight: isHeading ? 18 : 13)
         }
         context.endPDFPage()

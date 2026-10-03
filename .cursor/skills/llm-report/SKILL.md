@@ -9,7 +9,7 @@ description: >-
 
 # LLM 对比报告（顾问式）
 
-用户可见的对比说明由 DeepSeek 根据冻结证据 JSON 写成中文建议报告（ADR-021：不再有代码分类的「说明卡」，方案整理交给 AI）。运行时提示词只放在 `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`，不要另写一份会漂移的副本。
+用户可见的对比说明由 DeepSeek 根据冻结证据 JSON 写成建议报告（ADR-021：不再有代码分类的「说明卡」，方案整理交给 AI）。界面为英文时写英文报告，界面为中文时写中文报告。运行时提示词只放在 `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`，用 `systemPrompt(for:)` 按 `AppLanguage` 选择，不要另写一份会漂移的副本。
 
 ## 必须达成的效果
 
@@ -31,15 +31,25 @@ description: >-
 - 全年：`annualEnergyKWh` / `annualCost` = 代表日 × `occupiedDaysPerYear`（365）。不要改 L1 指标 `annual_kwh`（仍 omitted）
 - 不要让模型自己乘没出现过的系数，也不要编回收期或设备报价
 
-## 四节标题（原文）
+## 四节标题（原文，随界面语言）
+
+中文：
 
 1. `你的两个方案`（`candidates[0]` 是方案一，`candidates[1]` 是方案二）
 2. `用电对比`
 3. `座位舒适对比`
 4. `建议下一步`
 
+英文：
+
+1. `Your two schemes`
+2. `Energy comparison`
+3. `Seat comfort comparison`
+4. `What to try next`
+
 必须写出 EnergyPlus 和 OpenFOAM 这两个名称。不要写 UUID、`inputHash`、L1、L2、z0、PMV。
 
 ## 改提示词时
 
-改 `ReportWriterSkill.systemPrompt`，并同步本 skill 与 `NarratorGuardTests` 里对官方请求 system 消息的断言。不要把免责声明写回提示词。
+改 `ReportWriterSkill.systemPrompt(for:)` 的中英两份，并同步本 skill 与 `NarratorGuardTests` 里对官方请求 system 消息的断言（默认语言是英文）。不要把免责声明写回提示词。
+咨询助手 `ChatWriterSkill.systemPrompt(for:)` 同样跟界面语言，按钮名必须与当前语言 UI 一致。

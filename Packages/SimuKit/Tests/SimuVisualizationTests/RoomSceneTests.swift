@@ -65,7 +65,7 @@ import SimuVisualization
     let draft = try ProjectTemplates.bundled(named: "office").project
     let scene = try #require(RoomScene(draft: draft))
     #expect(scene.furniture.isEmpty)
-    #expect(!scene.accessibilitySummary.contains("家具"))
+    #expect(!scene.accessibilitySummary.contains("furniture"))
 }
 
 @Test func roomSceneCarriesDraftFurnitureInComputationMetres() throws {
@@ -80,7 +80,7 @@ import SimuVisualization
     #expect(box.origin == Position3D(x: 1, y: 2, z: 0))
     #expect(box.size == Position3D(x: 1.2, y: 0.6, z: 0.75))
     #expect(box.displayName == UserFacingCopy.furnitureTitle(index: 0))
-    #expect(scene.accessibilitySummary.contains("1 件家具"))
+    #expect(scene.accessibilitySummary.contains("1 piece(s) of furniture"))
     #expect(!scene.accessibilitySummary.contains("desk-1"))
     #expect(!scene.accessibilitySummary.contains("z0"))
 }
@@ -132,14 +132,14 @@ import SimuVisualization
     let scene = try #require(RoomScene(draft: draft))
     let summary = scene.accessibilitySummary
     #expect(summary.contains("6"))
-    #expect(summary.contains("窗"))
-    #expect(summary.contains("座位"))
-    #expect(summary.contains("出风"))
-    #expect(summary.contains("回风"))
+    #expect(summary.contains("window"))
+    #expect(summary.contains("seat"))
+    #expect(summary.contains("Supply"))
+    #expect(summary.contains("Return"))
     #expect(!summary.contains("S1"))
-    #expect(scene.seatDisplayNames.contains(where: { $0.contains("靠窗") }))
+    #expect(scene.seatDisplayNames.contains(where: { $0.contains("Window") }))
     for name in scene.seatDisplayNames {
         #expect(name != "S1")
-        #expect(!name.hasPrefix("S"))
+        #expect(name.range(of: #"^S\d+$"#, options: .regularExpression) == nil)
     }
 }

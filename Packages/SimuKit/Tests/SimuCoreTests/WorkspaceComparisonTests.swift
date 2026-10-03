@@ -184,5 +184,5 @@ import SimuWorkspace
     store.pinCurrentAsCandidate(named: "多人")
     #expect(store.candidateRuns.count == 2)
     #expect(store.candidatesShareBasis == false)
-    #expect(store.basisMismatchText?.contains("人数") == true)
+    #expect(store.basisMismatchText?.contains("occupants") == true)
 }

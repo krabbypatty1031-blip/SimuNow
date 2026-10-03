@@ -151,12 +151,15 @@ import PDFKit
     #expect(prompt.contains(ReportWriterSkill.adviceHeading))
     // ADR-021 follow-up: the model counsels the client, it does not
     // recite the evidence table. Opinion first, figures as support.
-    #expect(prompt.contains("顾问"))
-    #expect(prompt.contains("先说你的观点"))
-    #expect(prompt.contains("这意味着什么") || prompt.contains("对他们的生活意味着什么"))
-    #expect(prompt.contains("全年电费"))
+    #expect(prompt.contains("advisor"))
+    #expect(prompt.contains("view and conclusion"))
+    #expect(prompt.contains("what it means for the user"))
+    #expect(prompt.contains("yearly electricity cost"))
     #expect(!prompt.contains("不得推算全年电费"))
     #expect(!prompt.contains("不是全年电费"))
+    let chinesePrompt = ReportWriterSkill.systemPrompt(for: .chinese)
+    #expect(chinesePrompt.contains("顾问"))
+    #expect(chinesePrompt.contains(ReportWriterSkill.planSummaryHeading(for: .chinese)))
     let logText = lines.withLock { $0.joined(separator: "\n") }
     #expect(!logText.contains(secret))
 
@@ -175,7 +178,7 @@ import PDFKit
     let text = try #require(PDFDocument(url: url)?.string)
     #expect(text.contains("办公室送风对比"))
     #expect(text.contains("DeepSeek"))
-    #expect(text.contains("计算依据"))
+    #expect(text.contains("Calculation basis"))
     #endif
 }
 

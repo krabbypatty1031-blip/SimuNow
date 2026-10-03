@@ -21,14 +21,15 @@ public struct ListedAssumption: Equatable, Identifiable, Sendable {
     public var uncertainty: Double?
     public var unit: String?
     public var note: String?
+    public var copy: UserFacingCopy = .english
 
     public var id: String { path }
 
     /// Missing literature is unknown, not zero. Uncertainty is labeled in the quantity's unit.
     public var provenanceText: String {
-        var text = note ?? reference ?? "未知 / 无出处"
+        var text = note ?? reference ?? copy.unknownProvenance
         if let uncertainty, let unit {
-            text += " · 不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))"
+            text += " · \(copy.uncertainty) \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))"
         }
         return text
     }

@@ -68,10 +68,10 @@ public enum SeatFeasibility: Sendable {
     public static let isoAirHighC = 30.0
     public static let isoSpeedHighMps = 1.0
 
-    public static let coverageLabel = "合适的座位"
+    public static let coverageLabel = UserFacingCopy.english.coverageLabel
     /// Not "最不合适的座位": the seat may still pass every gate (farthest
     /// from band center). The label must not claim a failure the gates did not.
-    public static let worstSeatLabel = "最需要留意的座位"
+    public static let worstSeatLabel = UserFacingCopy.english.worstSeatLabel
 
     private static let omitReason = "not evaluable: no quality-passed seat samples"
     private static let method = "l2_seat_gate"
@@ -146,16 +146,19 @@ public enum SeatFeasibility: Sendable {
     }
 
     /// Omitted coverage is 不可评价. A real zero ratio stays 0%, with the counts beside it.
-    public static func coverageText(metrics: [ResultMetric]) -> String {
+    public static func coverageText(
+        metrics: [ResultMetric],
+        copy: UserFacingCopy = .english
+    ) -> String {
         guard let ratio = metrics.first(where: { $0.name == "seat_pass_ratio" }),
               !ratio.omitted,
               ratio.value != nil,
               let pass = metrics.first(where: { $0.name == "seat_pass_count" })?.value,
               let evalCount = metrics.first(where: { $0.name == "seat_eval_count" })?.value
         else {
-            return "不可评价"
+            return copy.unevaluable
         }
-        return String(format: "%.0f 个中 %.0f 个合适", evalCount, pass)
+        return copy.coverageText(evalCount: evalCount, pass: pass)
     }
 
     /// One actionable sentence by default: seat, direction, number.
@@ -167,15 +170,18 @@ public enum SeatFeasibility: Sendable {
     /// twice. The near-zero-speed metrology note never joins this line;
     /// it is a reading caveat, not a comfort failure, and lives in
     /// `worstSeatEvidenceText` behind the disclosure.
-    public static func worstSeatText(metrics: [ResultMetric]) -> String {
+    public static func worstSeatText(
+        metrics: [ResultMetric],
+        copy: UserFacingCopy = .english
+    ) -> String {
         guard let idMetric = metrics.first(where: { $0.name == "worst_seat_id" }),
               !idMetric.omitted,
               let id = idMetric.reason,
               !id.isEmpty
         else {
-            return "不可评价"
+            return copy.unevaluable
         }
-        let name = displaySeatID(id)
+        let name = copy.displaySeatID(id)
         let gates = worstGates(metrics)
         let tC = metricValue(metrics, "worst_seat_t_c")
         let uMag = metricValue(metrics, "worst_seat_u_mag")
@@ -184,34 +190,39 @@ public enum SeatFeasibility: Sendable {
             if let tC {
                 // The code knows which side of 24.5 °C the seat is on; the
                 // sentence must not hide behind "偏热或偏冷".
-                let direction = tC > bandCenterC ? "偏热" : "偏凉"
-                return "\(name) \(direction)，约 \(UserFacingCopy.displayNumber(tC)) °C"
+                if tC > bandCenterC {
+                    return copy.worstSeatTooWarm(name, temp: UserFacingCopy.displayNumber(tC))
+                }
+                return copy.worstSeatTooCool(name, temp: UserFacingCopy.displayNumber(tC))
             }
             // Runs stored before the number rows existed keep a readable name.
-            return "\(name)：偏热或偏冷"
+            return copy.worstSeatTempLegacy(name)
         }
         if gates.contains("风速门") {
             if let uMag {
-                return "\(name) 风偏大，约 \(UserFacingCopy.displayNumber(uMag)) m/s"
+                return copy.worstSeatTooFast(name, speed: UserFacingCopy.displayNumber(uMag))
             }
-            return "\(name)：风偏大"
+            return copy.worstSeatSpeedLegacy(name)
         }
         if gates.contains("PMV门") {
             if let pmv {
-                return pmv > 0 ? "\(name) 整体偏热" : "\(name) 整体偏凉"
+                return pmv > 0 ? copy.worstSeatSensationWarm(name) : copy.worstSeatSensationCool(name)
             }
-            return "\(name)：冷热不合适"
+            return copy.worstSeatSensationLegacy(name)
         }
         if gates.isEmpty, let tC {
-            return "\(name) 相对最偏离目标温度，约 \(UserFacingCopy.displayNumber(tC)) °C，但仍合适"
+            return copy.worstSeatStillOK(name, temp: UserFacingCopy.displayNumber(tC))
         }
-        return "\(name) 相对最偏离目标温度，但仍合适"
+        return copy.worstSeatStillOKNoNumber(name)
     }
 
     /// Full evidence for the disclosure: each failed gate becomes a concrete
     /// sentence with the same numbers the default line uses. Returns nil
     /// when no seat was evaluable, so the caller can skip the row entirely.
-    public static func worstSeatEvidenceText(metrics: [ResultMetric]) -> String? {
+    public static func worstSeatEvidenceText(
+        metrics: [ResultMetric],
+        copy: UserFacingCopy = .english
+    ) -> String? {
         guard let idMetric = metrics.first(where: { $0.name == "worst_seat_id" }),
               !idMetric.omitted,
               let id = idMetric.reason,
@@ -224,32 +235,24 @@ public enum SeatFeasibility: Sendable {
         let uMag = metricValue(metrics, "worst_seat_u_mag")
         var parts: [String] = []
         if gates.contains("温度门") {
-            if let tC {
-                parts.append("空气温度超出 23–26 °C（约 \(UserFacingCopy.displayNumber(tC)) °C）")
-            } else {
-                parts.append("空气温度超出 23–26 °C")
-            }
+            parts.append(copy.evidenceTempOut(tC.map(UserFacingCopy.displayNumber)))
         }
         if gates.contains("风速门") {
-            if let uMag {
-                parts.append("风速超过 0.25 m/s（约 \(UserFacingCopy.displayNumber(uMag)) m/s）")
-            } else {
-                parts.append("风速超过 0.25 m/s")
-            }
+            parts.append(copy.evidenceSpeedOut(uMag.map(UserFacingCopy.displayNumber)))
         }
         if gates.contains("PMV门") {
-            parts.append("按衣着、湿度和周围表面温度估算，整体冷热感觉超出合适范围")
+            parts.append(copy.evidencePMVOut)
         }
         // Near-zero speeds make percentage errors meaningless. That is a
         // reading note about the number, not a comfort failure, so it is
         // disclosed here instead of cluttering the default sentence.
         if (metrics.first(where: { $0.name == "worst_seat_reason" })?.reason ?? "").contains("低速绝对误差") {
-            parts.append("该座位附近风速很低，误差按绝对值看，不按百分比")
+            parts.append(copy.evidenceLowSpeedNote)
         }
         if parts.isEmpty {
-            parts.append("该座位在合适范围内，只是离目标温度 24.5 °C 最远")
+            parts.append(copy.evidenceFarthestStillOK)
         }
-        return parts.joined(separator: "；")
+        return parts.joined(separator: copy.language == .chinese ? "；" : "; ")
     }
 
     /// Gate names exactly as stored, in display priority order. The
@@ -272,18 +275,18 @@ public enum SeatFeasibility: Sendable {
         return metric.value
     }
 
-    /// S4 → 座位 4. Unknown prefixes stay as a generic 座位.
+    /// S4 → Seat 4. Unknown prefixes stay as a generic seat.
     private static func displaySeatID(_ id: String) -> String {
-        if id.count >= 2, id.first?.isLetter == true, let number = Int(id.dropFirst()) {
-            return "座位 \(number)"
-        }
-        return "座位"
+        UserFacingCopy.english.displaySeatID(id)
     }
 
-    public static func comparisonRows(metrics: [ResultMetric]) -> [FeasibilityDisplay] {
+    public static func comparisonRows(
+        metrics: [ResultMetric],
+        copy: UserFacingCopy = .english
+    ) -> [FeasibilityDisplay] {
         [
-            FeasibilityDisplay(label: coverageLabel, value: coverageText(metrics: metrics)),
-            FeasibilityDisplay(label: worstSeatLabel, value: worstSeatText(metrics: metrics)),
+            FeasibilityDisplay(label: copy.coverageLabel, value: coverageText(metrics: metrics, copy: copy)),
+            FeasibilityDisplay(label: copy.worstSeatLabel, value: worstSeatText(metrics: metrics, copy: copy)),
         ]
     }
 

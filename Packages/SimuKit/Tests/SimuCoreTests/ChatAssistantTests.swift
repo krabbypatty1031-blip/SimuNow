@@ -51,7 +51,7 @@ import SimuWorkspace
     #expect(system.contains(ChatWriterSkill.systemPrompt))
     #expect(system.contains(ChatWriterSkill.contextHeading))
     #expect(system.contains("当前草稿：房间"))
-    #expect(system.contains("已冻结的对比证据"))
+    #expect(system.contains("Frozen comparison evidence"))
     #expect(system.contains(pair_low_name_sentinel))
     let roles = messages.dropFirst().compactMap { $0["role"] as? String }
     #expect(roles == ["user", "assistant", "user"])
@@ -134,7 +134,7 @@ import SimuWorkspace
     // The context froze the pinned evidence, not the live draft.
     let context = try #require(contexts.withLock { $0.first })
     #expect(context.evidence?.pairDiff?.firstName == pair.low.name)
-    #expect(context.draftSummary?.contains("设定温度") == true)
+    #expect(context.draftSummary?.contains("Setpoint") == true)
 
     // A stubbed reply with a figure the project does not hold must not
     // bypass the guard — it ships with the caution line appended.

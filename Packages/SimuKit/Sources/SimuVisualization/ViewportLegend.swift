@@ -6,6 +6,7 @@ import SimuCore
 struct ViewportLegend: View {
     var palette: SlicePalette?
     var flow: FlowOverlay?
+    @Environment(\.userFacingCopy) private var copy
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -24,24 +25,16 @@ struct ViewportLegend: View {
                             )
                         )
                         .frame(width: 120, height: 10)
-                    Text(palette.legendText)
+                    Text(palette.legendText(copy))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             if let flow, let maxMag = flow.stats.maxMag {
                 let minMag = flow.stats.minMag ?? 0
-                // Range numbers stay; the not-cooling caveat stays visible
-                // (steady state must never read as start-up cooling).
-                Text("气流 \(UserFacingCopy.displayNumber(minMag))–\(UserFacingCopy.displayNumber(maxMag)) m/s · 箭头已放大；圆点是示意流向，不是开机降温")
+                Text(copy.legendFlow(min: UserFacingCopy.displayNumber(minMag), max: UserFacingCopy.displayNumber(maxMag)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                // The pointer to the (temporarily hidden, 2026-10-03) 计算过程
-                // disclosure is removed so no visible text references a hidden
-                // section. Restore it together with the WorkspaceView
-                // disclosures (showsDetailDisclosures). The per-window /
-                // full-wall-band modeling disclosure itself lives in 计算过程
-                // and the 计算准备 inspector page.
             }
         }
         .padding(.horizontal, 10)
@@ -53,15 +46,15 @@ struct ViewportLegend: View {
     private var accessibilityText: String {
         var parts: [String] = []
         if let palette {
-            parts.append("温度色标 \(palette.legendText)")
+            parts.append(copy.legendTemperatureAccessibility(palette.legendText(copy)))
         }
         if let flow, let maxMag = flow.stats.maxMag {
             let minMag = flow.stats.minMag ?? 0
-            // Keep the not-cooling caveat for VoiceOver; modeling disclosure
-            // lives in 计算过程 (hidden 2026-10-03), so the pointer line is
-            // removed and the legend audio stays short too.
-            parts.append("气流 \(UserFacingCopy.displayNumber(minMag)) 到 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，箭头已放大，圆点是示意流向，不是开机降温")
+            parts.append(copy.legendFlowAccessibility(
+                min: UserFacingCopy.displayNumber(minMag),
+                max: UserFacingCopy.displayNumber(maxMag)
+            ))
         }
-        return parts.joined(separator: "，")
+        return parts.joined(separator: copy.language == .chinese ? "，" : ", ")
     }
 }

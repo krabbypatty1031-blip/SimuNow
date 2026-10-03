@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import SimuCore
 import SimuWorkspace
@@ -14,35 +15,39 @@ import SimuWorkspace
         #expect(!title.contains("mrtC"))
         #expect(!UserFacingCopy.containsForbiddenDefaultToken(title))
     }
-    #expect(UserFacingCopy.fieldTitle("hvac.setpointC") == "空调设定温度")
-    #expect(UserFacingCopy.fieldTitle("occupancy.comfort.mrtC") == "周围表面温度")
+    #expect(UserFacingCopy.fieldTitle("hvac.setpointC") == "Setpoint temperature")
+    #expect(UserFacingCopy.fieldTitle("occupancy.comfort.mrtC") == "Surrounding surface temperature")
+    #expect(UserFacingCopy.chinese.fieldTitle("hvac.setpointC") == "空调设定温度")
 }
 
 @Test func wallsAndOpeningsUseRoomLanguage() {
-    #expect(UserFacingCopy.wallTitle(.xMin) == "左墙")
-    #expect(UserFacingCopy.wallTitle(.xMax) == "右墙")
-    #expect(UserFacingCopy.wallTitle(.yMin) == "近侧墙")
-    #expect(UserFacingCopy.wallTitle(.yMax) == "远侧墙")
-    #expect(UserFacingCopy.openingTitle(kind: .window, wall: .xMax, indexOnWall: 0, countOnWall: 1) == "右墙的窗")
-    #expect(UserFacingCopy.openingTitle(kind: .door, wall: .yMin, indexOnWall: 1, countOnWall: 2) == "近侧墙的门 2")
-    #expect(UserFacingCopy.seatTitle(index: 0, near: .nearWindow) == "靠窗座位 1")
-    #expect(UserFacingCopy.terminalTitle(isSupply: true) == "出风口")
-    #expect(UserFacingCopy.terminalTitle(isSupply: false) == "回风口")
+    #expect(UserFacingCopy.wallTitle(.xMin) == "Left wall")
+    #expect(UserFacingCopy.wallTitle(.xMax) == "Right wall")
+    #expect(UserFacingCopy.wallTitle(.yMin) == "Near wall")
+    #expect(UserFacingCopy.wallTitle(.yMax) == "Far wall")
+    #expect(UserFacingCopy.openingTitle(kind: .window, wall: .xMax, indexOnWall: 0, countOnWall: 1) == "Right wall window")
+    #expect(UserFacingCopy.openingTitle(kind: .door, wall: .yMin, indexOnWall: 1, countOnWall: 2) == "Near wall door 2")
+    #expect(UserFacingCopy.seatTitle(index: 0, near: .nearWindow) == "Window seat 1")
+    #expect(UserFacingCopy.terminalTitle(isSupply: true) == "Supply outlet")
+    #expect(UserFacingCopy.terminalTitle(isSupply: false) == "Return inlet")
+    #expect(UserFacingCopy.chinese.wallTitle(.xMin) == "左墙")
+    #expect(UserFacingCopy.chinese.openingTitle(kind: .window, wall: .xMax, indexOnWall: 0, countOnWall: 1) == "右墙的窗")
 }
 
 @Test func metricAndStateTitlesHideSolverNames() {
-    #expect(UserFacingCopy.metricTitle("q_cool_w") == "制冷需求")
-    #expect(UserFacingCopy.metricTitle("p_elec_w") == "空调用电功率")
-    #expect(UserFacingCopy.metricTitle("seat_t_c_min") == "座位最凉")
-    #expect(UserFacingCopy.metricTitle("seat_t_c_max") == "座位最热")
-    #expect(UserFacingCopy.metricTitle("seat_u_mag_max") == "座位最大风速")
-    #expect(UserFacingCopy.metricTitle("seat_pmv_min") == "冷热是否合适（偏低）")
-    #expect(UserFacingCopy.metricTitle("seat_ppd_max") == "可能觉得不舒服的比例")
-    #expect(UserFacingCopy.runStateTitle(.solving) == "正在估算")
-    #expect(UserFacingCopy.qualityTitle(.passed) == "已通过检查")
-    #expect(UserFacingCopy.qualityTitle(.failed) == "未通过检查")
-    #expect(UserFacingCopy.freshnessTitle(.stale) == "房间改过了，请重新估算")
-    #expect(UserFacingCopy.omittedAssumptionTitle("omitted: envelope_u_value") == "墙的保温尚未填写，不会按 0 计算")
+    #expect(UserFacingCopy.metricTitle("q_cool_w") == "Cooling demand")
+    #expect(UserFacingCopy.metricTitle("p_elec_w") == "AC electric power")
+    #expect(UserFacingCopy.metricTitle("seat_t_c_min") == "Coolest seat")
+    #expect(UserFacingCopy.metricTitle("seat_t_c_max") == "Warmest seat")
+    #expect(UserFacingCopy.metricTitle("seat_u_mag_max") == "Highest seat air speed")
+    #expect(UserFacingCopy.metricTitle("seat_pmv_min") == "Too cool (sensation)")
+    #expect(UserFacingCopy.metricTitle("seat_ppd_max") == "Share who may feel uncomfortable")
+    #expect(UserFacingCopy.runStateTitle(.solving) == "Estimating")
+    #expect(UserFacingCopy.qualityTitle(.passed) == "Passed checks")
+    #expect(UserFacingCopy.qualityTitle(.failed) == "Did not pass checks")
+    #expect(UserFacingCopy.freshnessTitle(.stale) == "The room changed. Estimate again.")
+    #expect(UserFacingCopy.omittedAssumptionTitle("omitted: envelope_u_value") == "Wall insulation is not filled in and will not be treated as 0")
+    #expect(UserFacingCopy.chinese.metricTitle("q_cool_w") == "制冷需求")
 }
 
 @Test func defaultCopyRejectsForbiddenTokens() {
@@ -67,7 +72,7 @@ import SimuWorkspace
         UserFacingCopy.seatTitle(index: index, near: SeatPlace.classify(seat: seat, geometry: geometry))
     }
     for title in named {
-        #expect(!title.hasPrefix("S"))
+        #expect(!title.hasPrefix("S") || title.hasPrefix("Seat") || title.hasPrefix("Window") || title.hasPrefix("Door"))
         #expect(!UserFacingCopy.containsForbiddenDefaultToken(title))
     }
 }
@@ -83,11 +88,37 @@ import SimuWorkspace
 }
 
 @Test func destinationTitlesAreUserGoals() {
-    #expect(WorkspaceDestination.workspace.title == "布置房间")
-    #expect(WorkspaceDestination.runs.title == "用电与舒适")
-    #expect(WorkspaceDestination.scenarios.title == "方案对比")
-    #expect(WorkspaceDestination.reports.title == "导出报告")
+    #expect(WorkspaceDestination.workspace.title == "Lay out the room")
+    #expect(WorkspaceDestination.runs.title == "Energy and comfort")
+    #expect(WorkspaceDestination.scenarios.title == "Compare schemes")
+    #expect(WorkspaceDestination.reports.title == "Export report")
     for destination in WorkspaceDestination.allCases {
         #expect(!UserFacingCopy.containsForbiddenDefaultToken(destination.title))
+        #expect(!UserFacingCopy.containsForbiddenDefaultToken(destination.title(.chinese)))
     }
+    #expect(WorkspaceDestination.workspace.title(.chinese) == "布置房间")
+}
+
+@Test func appLanguageDefaultsToEnglishAndPersistsInASuite() {
+    #expect(AppLanguage.default == .english)
+    let suiteName = "simunow.tests.appLanguage.\(UUID().uuidString)"
+    let suite = UserDefaults(suiteName: suiteName)!
+    defer { suite.removePersistentDomain(forName: suiteName) }
+    #expect(AppLanguage.load(defaults: suite) == .english)
+    AppLanguage.chinese.persist(defaults: suite)
+    #expect(AppLanguage.load(defaults: suite) == .chinese)
+    AppLanguage.english.persist(defaults: suite)
+    #expect(AppLanguage.load(defaults: suite) == .english)
+}
+
+@MainActor
+@Test func switchingWorkspaceLanguageUpdatesCopyWithoutWritingDefaults() {
+    let store = WorkspaceStore()
+    #expect(store.language == .english)
+    #expect(store.copy.destinationTitle("runs") == "Energy and comfort")
+    store.language = .chinese
+    #expect(store.copy.destinationTitle("runs") == "用电与舒适")
+    #expect(store.engineStatus.contains("计算准备") || store.engineStatus.contains("还不能估算"))
+    store.language = .english
+    #expect(store.copy.destinationTitle("runs") == "Energy and comfort")
 }

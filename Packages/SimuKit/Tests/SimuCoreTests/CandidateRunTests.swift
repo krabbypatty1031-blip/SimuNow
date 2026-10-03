@@ -29,16 +29,16 @@ private func basis(
 @Test func differentOccupantCountBlocksComparison() {
     let reason = CandidateRun.basisMismatch(basis(), basis(occupants: 10))
     #expect(reason != nil)
-    #expect(reason?.contains("人数") == true)
+    #expect(reason?.contains("occupants") == true)
 }
 
 @Test func differentHoursAndSetpointsBlockComparison() {
     let hours = CandidateRun.basisMismatch(basis(), basis(start: "08:00", end: "17:00"))
-    #expect(hours?.contains("占用时段") == true)
+    #expect(hours?.contains("occupied hours") == true)
     let setpoint = CandidateRun.basisMismatch(basis(), basis(setpoint: 24))
-    #expect(setpoint?.contains("设定温度") == true)
+    #expect(setpoint?.contains("setpoint") == true)
     let supply = CandidateRun.basisMismatch(basis(), basis(supply: 18))
-    #expect(supply?.contains("送风温度") == true)
+    #expect(supply?.contains("supply-air temperature") == true)
 }
 
 /// The pinned record is a frozen copy: metric values and slice survive as

@@ -13,13 +13,8 @@ public enum RecommendationKind: String, Codable, Sendable, Equatable {
     case retrofit
 
     /// Short label for the report page. The three recommendation kinds stay distinct.
-    public var label: String {
-        switch self {
-        case .explanation: "说明"
-        case .operation: "用电"
-        case .comfort: "座位舒适"
-        case .retrofit: "改造"
-        }
+    public func label(_ copy: UserFacingCopy = .english) -> String {
+        copy.recommendationKindLabel(self)
     }
 }
 
@@ -65,6 +60,9 @@ public struct RecommendationCard: Codable, Equatable, Sendable, Identifiable {
         if let end = detail.firstIndex(of: "。") {
             return String(detail[...end])
         }
+        if let range = detail.range(of: ". ") {
+            return String(detail[..<range.upperBound]).trimmingCharacters(in: .whitespaces)
+        }
         return detail
     }
 }
@@ -72,48 +70,51 @@ public struct RecommendationCard: Codable, Equatable, Sendable, Identifiable {
 /// Classifies pinned candidates into cards. Does not resimulate and does not
 /// blend objectives into one score.
 public enum RecommendationClassifier: Sendable {
-    public static func cards(from candidates: [CandidateRun]) -> [RecommendationCard] {
+    public static func cards(
+        from candidates: [CandidateRun],
+        copy: UserFacingCopy = .english
+    ) -> [RecommendationCard] {
         guard !candidates.isEmpty else { return [] }
         if !candidates.contains(where: isQualityPassedField) {
             return [explanation(
                 id: "no-quality-passed-field",
-                title: "还不能比较",
-                detail: "这些方案还没有通过检查的气流结果，不能比较座位冷热或这一天的费用。",
+                title: copy.recommendCannotCompareTitle,
+                detail: copy.recommendCannotCompareDetail,
                 candidates: candidates
             )]
         }
         if allEvaluatedSeatsFail(candidates) {
             return [explanation(
                 id: "no-feasible-seats",
-                title: "这些座位目前都不合适",
-                detail: "先看温度和吹风，再谈哪个方案更好。",
+                title: copy.recommendNoFeasibleTitle,
+                detail: copy.recommendNoFeasibleDetail,
                 candidates: candidates.filter(isQualityPassedField)
             )]
         }
 
         let fields = candidates.filter(isQualityPassedField)
         // A mixed basis is not a quieter comparison: it cannot become a recommendation PDF.
-        if let reason = mixedBasisReason(fields) {
+        if let reason = mixedBasisReason(fields, copy: copy) {
             return [explanation(
                 id: "basis-mismatch",
-                title: "使用条件不同",
-                detail: reason + "。不能作为有效结论。",
+                title: copy.recommendBasisMismatchTitle,
+                detail: copy.recommendBasisMismatchDetail(reason),
                 candidates: fields
             )]
         }
 
         let comparable = sameBasis(asLeadOf: fields)
         var cards: [RecommendationCard] = []
-        if let constraint = constraintCard(comparable) {
+        if let constraint = constraintCard(comparable, copy: copy) {
             cards.append(constraint)
         }
-        if let comfort = comfortCard(comparable) {
+        if let comfort = comfortCard(comparable, copy: copy) {
             cards.append(comfort)
         }
-        if let operation = operationCard(comparable) {
+        if let operation = operationCard(comparable, copy: copy) {
             cards.append(operation)
         }
-        if let retrofit = retrofitCard(comparable) {
+        if let retrofit = retrofitCard(comparable, copy: copy) {
             cards.append(retrofit)
         }
         return cards
@@ -149,10 +150,10 @@ public enum RecommendationClassifier: Sendable {
     }
 
     /// Any occupancy, hours, or temperature mismatch versus the lead field.
-    private static func mixedBasisReason(_ candidates: [CandidateRun]) -> String? {
+    private static func mixedBasisReason(_ candidates: [CandidateRun], copy: UserFacingCopy) -> String? {
         guard let lead = candidates.first else { return nil }
         for candidate in candidates.dropFirst() {
-            if let reason = CandidateRun.basisMismatch(lead.basis, candidate.basis) {
+            if let reason = CandidateRun.basisMismatch(lead.basis, candidate.basis, copy: copy) {
                 return reason
             }
         }
@@ -168,7 +169,7 @@ public enum RecommendationClassifier: Sendable {
 
     /// A partial miss is a constraint, shown before comfort and cost.
     /// Total failure is handled earlier and does not reach here.
-    private static func constraintCard(_ candidates: [CandidateRun]) -> RecommendationCard? {
+    private static func constraintCard(_ candidates: [CandidateRun], copy: UserFacingCopy) -> RecommendationCard? {
         let partial = candidates.filter { candidate in
             guard let evalCount = number(candidate, "seat_eval_count"),
                   let passCount = number(candidate, "seat_pass_count") else {
@@ -180,16 +181,16 @@ public enum RecommendationClassifier: Sendable {
         return RecommendationCard(
             id: "constraint",
             kind: .explanation,
-            title: "有的座位还不合适",
-            detail: "先看不合适的座位，再比较舒适和电费。",
+            title: copy.recommendPartialTitle,
+            detail: copy.recommendPartialDetail,
             citedRunIDs: partial.map(\.identity.runID),
             qualityPassed: true,
-            assumptions: assumptionLines(partial)
+            assumptions: assumptionLines(partial, copy: copy)
         )
     }
 
     /// Supply-height (or other supply-patch) change that moved seat temperature or coverage.
-    private static func comfortCard(_ candidates: [CandidateRun]) -> RecommendationCard? {
+    private static func comfortCard(_ candidates: [CandidateRun], copy: UserFacingCopy) -> RecommendationCard? {
         guard candidates.count >= 2 else { return nil }
         let changed = candidates.filter { candidate in
             candidates.contains { other in
@@ -202,16 +203,16 @@ public enum RecommendationClassifier: Sendable {
         return RecommendationCard(
             id: "comfort",
             kind: .comfort,
-            title: "出风口高度不同",
-            detail: "同样使用条件下，出风口高低改变了座位冷热。舒适和费用分开看，不合成一个分数。",
+            title: copy.recommendComfortTitle,
+            detail: copy.recommendComfortDetail,
             citedRunIDs: changed.map(\.identity.runID),
             qualityPassed: true,
-            assumptions: assumptionLines(changed)
+            assumptions: assumptionLines(changed, copy: copy)
         )
     }
 
     /// L1 day-cost delta, or an explicit tie, under one basis. Cites L1 run IDs.
-    private static func operationCard(_ candidates: [CandidateRun]) -> RecommendationCard? {
+    private static func operationCard(_ candidates: [CandidateRun], copy: UserFacingCopy) -> RecommendationCard? {
         let priced = candidates.filter {
             $0.l1Identity != nil && $0.dayCost.cost != nil && $0.dayCost.electricPowerW != nil
         }
@@ -223,37 +224,37 @@ public enum RecommendationClassifier: Sendable {
             return nil
         }
         let l1IDs = priced.compactMap(\.l1Identity?.runID)
-        let lever = "同样使用条件下，设定温度、风量和人数仍可调整。"
+        let lever = copy.recommendOperationLever + " "
         let detail: String
         if saved == 0 {
-            detail = lever + "费用相同。"
+            detail = lever + copy.recommendOperationTie
         } else {
-            detail = lever + "这一天预计费用相差 \(UserFacingCopy.displayNumber(saved)) \(currency)（按两次估算的用电功率相减，不是系数）。"
+            detail = lever + copy.recommendOperationSavings(UserFacingCopy.displayNumber(saved), currency: currency)
         }
         return RecommendationCard(
             id: "operation",
             kind: .operation,
-            title: "哪天更省电",
+            title: copy.recommendOperationTitle,
             detail: detail,
             citedRunIDs: l1IDs,
             qualityPassed: true,
-            assumptions: assumptionLines(priced)
+            assumptions: assumptionLines(priced, copy: copy)
         )
     }
 
     /// Installation stays unquoted. Assumptions travel with the card; payback does not.
-    private static func retrofitCard(_ candidates: [CandidateRun]) -> RecommendationCard? {
+    private static func retrofitCard(_ candidates: [CandidateRun], copy: UserFacingCopy) -> RecommendationCard? {
         guard !candidates.isEmpty else { return nil }
-        let assumptions = assumptionLines(candidates) + ["更换设备或安装尚无报价，不写回收期"]
+        let assumptions = assumptionLines(candidates, copy: copy) + [copy.recommendRetrofitAssumption]
         return RecommendationCard(
             id: "retrofit",
             kind: .retrofit,
-            title: "若要换设备",
-            detail: "更换设备需要报价，现在是待报价。",
+            title: copy.recommendRetrofitTitle,
+            detail: copy.recommendRetrofitDetail,
             citedRunIDs: candidates.map(\.identity.runID),
             qualityPassed: candidates.allSatisfy { $0.quality == .passed },
             assumptions: assumptions,
-            quoteStatus: "待报价",
+            quoteStatus: copy.awaitingQuote,
             payback: nil
         )
     }
@@ -301,7 +302,7 @@ public enum RecommendationClassifier: Sendable {
     }
 
     /// Comfort references and the tariff sentence already stored on the pinned draft.
-    private static func assumptionLines(_ candidates: [CandidateRun]) -> [String] {
+    private static func assumptionLines(_ candidates: [CandidateRun], copy: UserFacingCopy) -> [String] {
         var lines: [String] = []
         for candidate in candidates {
             if let comfort = candidate.draft.occupancy?.comfort {
@@ -313,7 +314,11 @@ public enum RecommendationClassifier: Sendable {
                 ]
                 for (key, quantity) in quantities {
                     guard let reference = quantity.reference else { continue }
-                    let line = "\(UserFacingCopy.comfortKeyTitle(key)) \(UserFacingCopy.displayQuantity(quantity.value, unit: quantity.unit))：\(reference)"
+                    let line = copy.comfortAssumptionLine(
+                        key: key,
+                        quantity: UserFacingCopy.displayQuantity(quantity.value, unit: quantity.unit),
+                        reference: reference
+                    )
                     if !lines.contains(line) {
                         lines.append(line)
                     }

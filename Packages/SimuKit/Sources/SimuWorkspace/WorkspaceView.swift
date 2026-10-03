@@ -29,45 +29,48 @@ public struct WorkspaceView: View {
             List(selection: $store.selection) {
                 Section {
                     ForEach(WorkspaceDestination.allCases) { destination in
-                        Label(destination.title, systemImage: destination.symbol)
+                        Label(destination.title(store.copy), systemImage: destination.symbol)
                             .tag(destination)
                     }
                 }
                 #if os(macOS)
                 RoomEditorForm(store: store, page: $inspectorPage, column: .sidebar)
+                #else
+                LanguagePickerSection(store: store)
                 #endif
             }
             .navigationTitle("SimuNow")
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 420)
         } detail: {
             detail
-                .navigationTitle(store.selection?.title ?? "SimuNow")
+                .navigationTitle(store.selection?.title(store.copy) ?? "SimuNow")
                 // Attach to the detail column so macOS actually shows items in the title bar.
                 .toolbar {
                     ToolbarItemGroup(placement: .primaryAction) {
-                        Button("打开") {
+                        Button(store.copy.open) {
                             openPackage()
                         }
-                        .accessibilityLabel("打开项目包")
-                        Button("保存") {
+                        .accessibilityLabel(store.copy.openPackage)
+                        Button(store.copy.save) {
                             savePackage()
                         }
                         .disabled(store.project == nil)
-                        .accessibilityLabel("保存项目包")
-                        Menu("模板") {
-                            Button("办公室") {
+                        .accessibilityLabel(store.copy.savePackage)
+                        Menu(store.copy.templates) {
+                            Button(store.copy.office) {
                                 store.loadOfficeTemplate()
                             }
-                            .accessibilityLabel("从办公室模板创建项目")
-                            Button("教室") {
+                            .accessibilityLabel(store.copy.createFromOfficeTemplate)
+                            Button(store.copy.classroom) {
                                 store.loadClassroomTemplate()
                             }
-                            .accessibilityLabel("从教室模板创建项目")
+                            .accessibilityLabel(store.copy.createFromClassroomTemplate)
                         }
-                        .accessibilityLabel("从模板创建项目")
+                        .accessibilityLabel(store.copy.createFromTemplate)
                     }
                 }
         }
+        .environment(\.userFacingCopy, store.copy)
         .fileImporter(
             isPresented: $isOpeningPackage,
             allowedContentTypes: [.folder, .json],
@@ -145,11 +148,11 @@ public struct WorkspaceView: View {
                         seatSamples: store.lastL2Result?.seatSamples
                     )
                 }
-                NavigationLink("编辑房间") {
+                NavigationLink(store.copy.editRoom) {
                     RoomEditorForm(store: store)
                 }
                 .padding()
-                .accessibilityLabel("编辑房间")
+                .accessibilityLabel(store.copy.editRoom)
             }
         }
         #endif
@@ -160,9 +163,9 @@ public struct WorkspaceView: View {
         if store.activeRun == nil && store.lastL1Result == nil && store.lastL2Result == nil {
             VStack(spacing: 16) {
                 EmptyStateView(
-                    "用电与舒适",
+                    store.copy.destinationTitle("runs"),
                     symbol: "waveform.path",
-                    message: "布置好房间后，在这里估算这一天用电，并查看座位冷热。"
+                    message: store.copy.emptyRunsMessage
                 )
                 VStack(spacing: 8) {
                     // Initial interface: the welcome panel keeps the actions
@@ -175,11 +178,11 @@ public struct WorkspaceView: View {
         } else {
             Form {
                 Section {
-                    LabeledContent("进度", value: store.activeRun.map { UserFacingCopy.runStateTitle($0.state) } ?? "已完成")
-                    LabeledContent("检查", value: UserFacingCopy.qualityTitle((store.lastL2Result ?? store.lastL1Result)?.quality ?? .notEvaluated))
-                    LabeledContent("是否按当前房间", value: UserFacingCopy.freshnessTitle(store.resultFreshness))
+                    LabeledContent(store.copy.progress, value: store.activeRun.map { store.copy.runStateTitle($0.state) } ?? store.copy.completed)
+                    LabeledContent(store.copy.check, value: store.copy.qualityTitle((store.lastL2Result ?? store.lastL1Result)?.quality ?? .notEvaluated))
+                    LabeledContent(store.copy.matchesThisRoom, value: store.copy.freshnessTitle(store.resultFreshness))
                     if store.isSubmitting {
-                        Text("正在估算…")
+                        Text(store.copy.estimating)
                             .font(.footnote)
                     }
                     if let message = store.runMessage {
@@ -189,79 +192,74 @@ public struct WorkspaceView: View {
                     // Detail page: Form rows read from the leading edge.
                     runActionButtons(alignment: .leading)
                     if store.candidateRuns.isEmpty {
-                        Text("房间改过之后需要重新估算，才能加入对比。")
+                        Text(store.copy.roomChangedNeedRepin)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("已有 \(store.candidateRuns.count) 个方案在对比页。")
+                        Text(store.copy.schemesOnComparisonPage(store.candidateRuns.count))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Section {
-                    LabeledContent("这一天预计用电", value: store.dayEnergyText())
-                    LabeledContent("这一天预计费用", value: store.dayCostText())
-                    LabeledContent(UserFacingCopy.metricTitle("seat_t_c_min"), value: store.metricText(named: "seat_t_c_min"))
-                    LabeledContent(UserFacingCopy.metricTitle("seat_t_c_max"), value: store.metricText(named: "seat_t_c_max"))
-                    ForEach(SeatFeasibility.comparisonRows(metrics: store.lastL2Result?.metrics ?? []), id: \.label) { row in
+                    LabeledContent(store.copy.dayEnergy, value: store.dayEnergyText())
+                    LabeledContent(store.copy.dayCost, value: store.dayCostText())
+                    LabeledContent(store.copy.metricTitle("seat_t_c_min"), value: store.metricText(named: "seat_t_c_min"))
+                    LabeledContent(store.copy.metricTitle("seat_t_c_max"), value: store.metricText(named: "seat_t_c_max"))
+                    ForEach(SeatFeasibility.comparisonRows(metrics: store.lastL2Result?.metrics ?? [], copy: store.copy), id: \.label) { row in
                         LabeledContent(row.label, value: row.value)
                     }
                 }
                 // Gated by showsDetailDisclosures (user request 2026-10-03):
                 // the two detail sections are hidden from the default card.
                 if Self.showsDetailDisclosures {
-                    DisclosureGroup("查看依据与限制") {
-                        LabeledContent(UserFacingCopy.metricTitle("q_cool_w"), value: store.metricText(named: "q_cool_w"))
-                        LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.metricText(named: "p_elec_w"))
-                        LabeledContent("改造报价", value: "待报价")
-                        // Worst-seat full evidence: the default line above only
-                        // carries one sentence, so gates and the low-speed
-                        // reading note are disclosed here.
-                        if let worstEvidence = SeatFeasibility.worstSeatEvidenceText(metrics: store.lastL2Result?.metrics ?? []) {
+                    DisclosureGroup(store.copy.evidenceAndLimits) {
+                        LabeledContent(store.copy.metricTitle("q_cool_w"), value: store.metricText(named: "q_cool_w"))
+                        LabeledContent(store.copy.metricTitle("p_elec_w"), value: store.metricText(named: "p_elec_w"))
+                        LabeledContent(store.copy.retrofitQuote, value: store.copy.awaitingQuote)
+                        if let worstEvidence = SeatFeasibility.worstSeatEvidenceText(metrics: store.lastL2Result?.metrics ?? [], copy: store.copy) {
                             Text(worstEvidence)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
-                        Text("制冷需求不是用电功率。这一天费用 = 用电功率 ÷ 1000 × 占用小时 × 电价，不是全年电费。改造待报价，不出回收期。座位是检查点不是发热源。这是稳态，不是开机降温时间。合适的座位不是问卷满意率。")
+                        Text(store.copy.evidenceLimitsBody)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    DisclosureGroup("计算过程") {
-                        LabeledContent("出风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
-                        LabeledContent("设定温度", value: temperatureText(store.lastBoundary?.setpointC, unit: "°C"))
-                        LabeledContent("室外新风", value: flowText(store.lastBoundary?.outdoorAirM3s))
-                        LabeledContent("循环风", value: flowText(store.lastBoundary?.recirculatedAirM3s))
+                    DisclosureGroup(store.copy.calculationProcess) {
+                        LabeledContent(store.copy.supplyTemperature, value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
+                        LabeledContent(store.copy.setpointTemperature, value: temperatureText(store.lastBoundary?.setpointC, unit: "°C"))
+                        LabeledContent(store.copy.outdoorAir, value: flowText(store.lastBoundary?.outdoorAirM3s))
+                        LabeledContent(store.copy.recirculatedAir, value: flowText(store.lastBoundary?.recirculatedAirM3s))
                         if let slice = store.lastFieldSlice {
-                            LabeledContent("坐姿高度", value: UserFacingCopy.displayQuantity(slice.zM, unit: "m"))
-                            LabeledContent("温度范围", value: sliceRangeText(slice))
+                            LabeledContent(store.copy.seatHeight, value: UserFacingCopy.displayQuantity(slice.zM, unit: "m"))
+                            LabeledContent(store.copy.temperatureRange, value: sliceRangeText(slice))
                         } else {
-                            Text("还没有通过检查的温度图。未通过的数据不当有效结果。")
+                            Text(store.copy.noPassedTemperatureMap)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                         if let flow = store.lastFlowOverlay, let maxMag = flow.stats.maxMag {
-                            LabeledContent("气流范围", value: flowRangeText(flow, maxMag: maxMag))
-                            Text("箭头和流线来自通过检查的稳态速度场。圆点沿流线循环是示意流向，箭头已放大，不是真实位移，也不是开机降温。")
+                            LabeledContent(store.copy.airflowRange, value: flowRangeText(flow, maxMag: maxMag))
+                            Text(store.copy.flowOverlayCaption)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
-                            // The solver's simplifications, disclosed next to the flow they produced:
-                            // windows are per-rectangle (P4-07), supply/return stay full-wall bands.
-                            Text("窗按实际墙面与宽度进入计算（每扇单独进网格）；送回风仍按整墙高度带进入计算，速度按风量缩放，「送风」「回风」标注指该带，墙上空调外形只标位置。")
+                            Text(store.copy.modelingDisclosure)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         } else if store.lastFieldSlice != nil {
-                            Text("这次结果还没有气流图。重新估算后才会画箭头和流线。")
+                            Text(store.copy.noFlowOverlayYet)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                         if store.runEvents.isEmpty {
-                            Text("还没有进度。")
+                            Text(store.copy.noProgressYet)
                                 .foregroundStyle(.secondary)
                         } else {
                             ForEach(Array(store.runEvents.enumerated()), id: \.offset) { _, event in
-                                let monitor = UserFacingCopy.monitorTitle(event.payload?.monitor)
-                                Text("\(UserFacingCopy.eventTitle(event.eventType.rawValue)) \(monitor)")
-                                    .accessibilityLabel("进度 \(UserFacingCopy.eventTitle(event.eventType.rawValue))")
+                                let monitor = store.copy.monitorTitle(event.payload?.monitor)
+                                Text("\(store.copy.eventTitle(event.eventType.rawValue)) \(monitor)")
+                                    .accessibilityLabel(store.copy.progressAccessibility(store.copy.eventTitle(event.eventType.rawValue)))
                             }
                         }
                     }
@@ -278,30 +276,30 @@ public struct WorkspaceView: View {
     @ViewBuilder
     private func runActionButtons(alignment: Alignment) -> some View {
         HStack {
-            Button("估算这一天用电") {
+            Button(store.copy.estimateDayEnergy) {
                 Task { await store.submitL1() }
             }
             .disabled(!store.canSubmitL1)
-            .accessibilityLabel("估算这一天用电")
+            .accessibilityLabel(store.copy.estimateDayEnergy)
             #if os(macOS)
-            Button("查看座位冷热分布") {
+            Button(store.copy.viewSeatTemperatures) {
                 Task { await store.submitL2() }
             }
             .disabled(!store.canSubmitL2)
-            .accessibilityLabel("查看座位冷热分布")
+            .accessibilityLabel(store.copy.viewSeatTemperatures)
             #endif
-            Button("加入对比") {
+            Button(store.copy.addToComparison) {
                 store.pinCurrentAsCandidate()
             }
             .disabled(!store.canPinCandidate)
-            .accessibilityLabel("把当前结果加入对比")
+            .accessibilityLabel(store.copy.addToComparisonAccessibility)
         }
         .frame(maxWidth: .infinity, alignment: alignment)
-        Button("取消") {
+        Button(store.copy.cancel) {
             Task { await store.cancelActiveRun() }
         }
         .disabled(store.activeRun == nil || !store.isSubmitting)
-        .accessibilityLabel("取消当前估算")
+        .accessibilityLabel(store.copy.cancelEstimate)
     }
 
     /// P4-06 comparison page: pinned candidates share one camera (yaw), one
@@ -311,9 +309,9 @@ public struct WorkspaceView: View {
     private var scenariosDetail: some View {
         if store.candidateRuns.isEmpty {
             EmptyStateView(
-                "方案对比",
+                store.copy.destinationTitle("scenarios"),
                 symbol: "square.stack.3d.up",
-                message: "先完成估算，再把结果加入对比。"
+                message: store.copy.emptyComparisonMessage
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -325,7 +323,7 @@ public struct WorkspaceView: View {
                             .foregroundStyle(.orange)
                             .accessibilityLabel(mismatch)
                     } else {
-                        Label("人数、使用时间和设定温度相同，可以并排比较。", systemImage: "checkmark.circle")
+                        Label(store.copy.sameBasisOK, systemImage: "checkmark.circle")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         if let savings = store.comparisonSavingsText {
@@ -335,11 +333,11 @@ public struct WorkspaceView: View {
                         }
                     }
                     if let range = store.comparisonPaletteRange {
-                        Text("共用色标 \(UserFacingCopy.displayRange(range.minC, range.maxC, unit: "°C"))（同一把尺，不各自拉伸）")
+                        Text(store.copy.sharedPaletteCaption(UserFacingCopy.displayRange(range.minC, range.maxC, unit: "°C")))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("还没有通过检查的温度图，暂无共用色标。")
+                        Text(store.copy.noSharedPalette)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -362,7 +360,7 @@ public struct WorkspaceView: View {
                 Spacer()
                 if store.highlightedRunID == record.identity.runID
                     || store.highlightedRunID == record.l1Identity?.runID {
-                    Text("结论引用此方案")
+                    Text(store.copy.citedByConclusion)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -371,25 +369,25 @@ public struct WorkspaceView: View {
                 } label: {
                     Image(systemName: "trash")
                 }
-                .accessibilityLabel("移除方案 \(record.name)")
+                .accessibilityLabel(store.copy.removeSchemeAccessibility(record.name))
             }
             HStack(spacing: 12) {
-                LabeledContent("检查", value: UserFacingCopy.qualityTitle(record.quality))
-                LabeledContent("是否按当前房间", value: UserFacingCopy.freshnessTitle(store.candidateFreshness(record)))
-            }
-            .font(.footnote)
-            HStack(spacing: 12) {
-                LabeledContent("这一天预计用电", value: store.candidateL1EnergyText(record))
-                LabeledContent("这一天预计费用", value: store.candidateL1CostText(record))
+                LabeledContent(store.copy.check, value: store.copy.qualityTitle(record.quality))
+                LabeledContent(store.copy.matchesThisRoom, value: store.copy.freshnessTitle(store.candidateFreshness(record)))
             }
             .font(.footnote)
             HStack(spacing: 12) {
-                LabeledContent(UserFacingCopy.metricTitle("seat_t_c_min"), value: candidateMetric(record, "seat_t_c_min"))
-                LabeledContent(UserFacingCopy.metricTitle("seat_t_c_max"), value: candidateMetric(record, "seat_t_c_max"))
+                LabeledContent(store.copy.dayEnergy, value: store.candidateL1EnergyText(record))
+                LabeledContent(store.copy.dayCost, value: store.candidateL1CostText(record))
             }
             .font(.footnote)
             HStack(spacing: 12) {
-                ForEach(SeatFeasibility.comparisonRows(metrics: record.metrics), id: \.label) { row in
+                LabeledContent(store.copy.metricTitle("seat_t_c_min"), value: candidateMetric(record, "seat_t_c_min"))
+                LabeledContent(store.copy.metricTitle("seat_t_c_max"), value: candidateMetric(record, "seat_t_c_max"))
+            }
+            .font(.footnote)
+            HStack(spacing: 12) {
+                ForEach(SeatFeasibility.comparisonRows(metrics: record.metrics, copy: store.copy), id: \.label) { row in
                     LabeledContent(row.label, value: row.value)
                 }
             }
@@ -406,12 +404,12 @@ public struct WorkspaceView: View {
             // Gated by showsDetailDisclosures (user request 2026-10-03):
             // hidden together with the results-card detail sections.
             if Self.showsDetailDisclosures {
-                DisclosureGroup("查看依据与限制") {
-                    LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.candidateL1PowerText(record))
-                    LabeledContent(UserFacingCopy.metricTitle("seat_u_mag_max"), value: candidateMetric(record, "seat_u_mag_max"))
-                    LabeledContent(UserFacingCopy.metricTitle("seat_ppd_max"), value: candidateMetric(record, "seat_ppd_max"))
+                DisclosureGroup(store.copy.evidenceAndLimits) {
+                    LabeledContent(store.copy.metricTitle("p_elec_w"), value: store.candidateL1PowerText(record))
+                    LabeledContent(store.copy.metricTitle("seat_u_mag_max"), value: candidateMetric(record, "seat_u_mag_max"))
+                    LabeledContent(store.copy.metricTitle("seat_ppd_max"), value: candidateMetric(record, "seat_ppd_max"))
                     if store.candidateL1Freshness(record) == .stale {
-                        Text(UserFacingCopy.freshnessTitle(.stale))
+                        Text(store.copy.freshnessTitle(.stale))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -420,9 +418,7 @@ public struct WorkspaceView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    // Worst-seat full evidence behind the one-sentence default
-                    // line above (gates, numbers, low-speed reading note).
-                    if let worstEvidence = SeatFeasibility.worstSeatEvidenceText(metrics: record.metrics) {
+                    if let worstEvidence = SeatFeasibility.worstSeatEvidenceText(metrics: record.metrics, copy: store.copy) {
                         Text(worstEvidence)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -430,26 +426,26 @@ public struct WorkspaceView: View {
                     if let infeasible = record.metrics.first(where: { $0.name == "infeasibleReason" }),
                        !infeasible.omitted,
                        let text = infeasible.reason {
-                        Text(UserFacingCopy.gateTitle(text))
+                        Text(store.copy.gateTitle(text))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    LabeledContent("计算编号", value: String(record.identity.runID.uuidString.prefix(8)))
+                    LabeledContent(store.copy.calculationID, value: String(record.identity.runID.uuidString.prefix(8)))
                 }
             }
         }
         .padding(12)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("对比方案 \(record.name)")
+        .accessibilityLabel(store.copy.comparisonSchemeAccessibility(record.name))
     }
 
     private func candidateMetric(_ record: CandidateRun, _ name: String) -> String {
         guard let metric = record.metrics.first(where: { $0.name == name }) else {
-            return "无此指标"
+            return store.copy.noSuchMetric
         }
         if metric.omitted || metric.value == nil {
-            return "未知"
+            return store.copy.unknown
         }
         return UserFacingCopy.displayQuantity(metric.value!, unit: metric.unit)
     }
@@ -463,7 +459,7 @@ public struct WorkspaceView: View {
     /// Same physical range text as the viewport legend; nil stats stay unknown.
     private func sliceRangeText(_ slice: FieldSlice) -> String {
         guard let minC = slice.stats.minC, let maxC = slice.stats.maxC else {
-            return "未知"
+            return store.copy.unknown
         }
         return UserFacingCopy.displayRange(minC, maxC, unit: "°C")
     }
@@ -473,12 +469,12 @@ public struct WorkspaceView: View {
     }
 
     private func temperatureText(_ value: Double?, unit: String) -> String {
-        guard let value else { return "无" }
+        guard let value else { return store.copy.none }
         return UserFacingCopy.displayQuantity(value, unit: unit)
     }
 
     private func flowText(_ value: Double?) -> String {
-        guard let value else { return "无" }
+        guard let value else { return store.copy.none }
         return UserFacingCopy.displayQuantity(value, unit: "m³/s")
     }
 
@@ -492,7 +488,7 @@ public struct WorkspaceView: View {
                     Text(evidence.tariffReference)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("电价说明 \(evidence.tariffReference)")
+                        .accessibilityLabel(store.copy.tariffReferenceAccessibility(evidence.tariffReference))
                     ForEach(evidence.cards) { card in
                         reportCard(card)
                     }
@@ -504,14 +500,14 @@ public struct WorkspaceView: View {
                     }
                     #if os(macOS)
                     if store.canExportEvidencePDF {
-                        Button(WorkspaceStore.evidenceExportLabel) {
+                        Button(store.copy.evidenceExportLabel) {
                             Task { await exportEvidencePDF() }
                         }
-                        .accessibilityLabel(WorkspaceStore.evidenceExportLabel)
+                        .accessibilityLabel(store.copy.evidenceExportLabel)
                     }
                     #else
                     if store.canExportEvidencePDF {
-                        Text("对比说明在 Mac 上导出。")
+                        Text(store.copy.pdfMacOnly)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -520,14 +516,14 @@ public struct WorkspaceView: View {
                 .padding()
             }
         } else {
-            EmptyStateView("导出报告", symbol: "doc.text", message: "加入通过检查的方案后，这里给出结论。没有方案时不能导出。")
+            EmptyStateView(store.copy.destinationTitle("reports"), symbol: "doc.text", message: store.copy.emptyReportMessage)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private func reportCard(_ card: RecommendationCard) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(card.kind.label)
+            Text(card.kind.label(store.copy))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(card.title)
@@ -542,12 +538,12 @@ public struct WorkspaceView: View {
                 Button(citedSchemeName(runID)) {
                     store.focusCitedRun(runID)
                 }
-                .accessibilityLabel("打开方案 \(citedSchemeName(runID))")
+                .accessibilityLabel(store.copy.openSchemeAccessibility(citedSchemeName(runID)))
             }
             // Gated by showsDetailDisclosures (user request 2026-10-03):
             // hidden together with the other detail sections.
             if Self.showsDetailDisclosures {
-                DisclosureGroup("查看依据与限制") {
+                DisclosureGroup(store.copy.evidenceAndLimits) {
                     Text(card.detail)
                         .font(.footnote)
                     if !card.assumptions.isEmpty {
@@ -562,7 +558,7 @@ public struct WorkspaceView: View {
         .padding(12)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(card.kind.label) \(card.title)")
+        .accessibilityLabel(store.copy.reportCardAccessibility(kind: card.kind.label(store.copy), title: card.title))
     }
 
     /// Cite a pinned scheme by its name. The UUID stays on the evidence object.
@@ -572,23 +568,23 @@ public struct WorkspaceView: View {
         }) {
             return match.name
         }
-        return "方案"
+        return store.copy.scheme
     }
 
     private func exportEvidencePDF() async {
-        guard let url = ProjectLocationPicker.requestEvidencePDFURL() else { return }
+        guard let url = ProjectLocationPicker.requestEvidencePDFURL(copy: store.copy) else { return }
         do {
             try await store.writeEvidencePDF(to: url)
         } catch EvidencePDFError.notExportable {
-            store.reportMessage = WorkspaceStore.blockedExportStatus
+            store.reportMessage = store.copy.blockedExportStatus
         } catch EvidencePDFError.generatorUnavailable {
             if store.reportMessage == nil {
-                store.reportMessage = WorkspaceStore.missingDeepSeekStatus
+                store.reportMessage = store.copy.missingDeepSeekStatus
             }
         } catch EvidencePDFError.unsupportedPlatform {
-            store.packageError = "对比说明仅在 Mac 上导出"
+            store.packageError = store.copy.pdfMacOnlyError
         } catch {
-            store.packageError = "对比说明导出失败"
+            store.packageError = store.copy.pdfExportFailed
         }
     }
 
@@ -596,23 +592,23 @@ public struct WorkspaceView: View {
     private var emptyProjectPane: some View {
         VStack(spacing: 16) {
             EmptyStateView(
-                "布置房间",
+                store.copy.destinationTitle("workspace"),
                 symbol: "cube.transparent",
-                message: "从一个办公室或教室模板开始，或打开已有房间。"
+                message: store.copy.emptyRoomMessage
             )
             HStack(spacing: 12) {
-                Button("办公室模板") {
+                Button(store.copy.officeTemplate) {
                     store.loadOfficeTemplate()
                 }
-                .accessibilityLabel("从办公室模板创建项目")
-                Button("教室模板") {
+                .accessibilityLabel(store.copy.createFromOfficeTemplate)
+                Button(store.copy.classroomTemplate) {
                     store.loadClassroomTemplate()
                 }
-                .accessibilityLabel("从教室模板创建项目")
-                Button("打开项目包") {
+                .accessibilityLabel(store.copy.createFromClassroomTemplate)
+                Button(store.copy.openPackage) {
                     openPackage()
                 }
-                .accessibilityLabel("打开项目包")
+                .accessibilityLabel(store.copy.openPackage)
             }
             .buttonStyle(.bordered)
         }
@@ -621,7 +617,7 @@ public struct WorkspaceView: View {
 
     private func openPackage() {
         #if os(macOS)
-        if let url = ProjectLocationPicker.requestOpenURL() {
+        if let url = ProjectLocationPicker.requestOpenURL(copy: store.copy) {
             store.openPackage(at: url)
         }
         #else
@@ -635,7 +631,7 @@ public struct WorkspaceView: View {
             return
         }
         #if os(macOS)
-        if let url = ProjectLocationPicker.requestSaveURL() {
+        if let url = ProjectLocationPicker.requestSaveURL(copy: store.copy) {
             store.savePackage(to: url)
         }
         #else

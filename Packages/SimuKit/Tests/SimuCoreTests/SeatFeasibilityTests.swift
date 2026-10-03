@@ -38,7 +38,7 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     // The worst seat's own numbers let the default line name a direction.
     #expect(metric(metrics, "worst_seat_t_c")?.value == 27.0)
     #expect(metric(metrics, "worst_seat_u_mag")?.value == 0.05)
-    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "座位 4 偏热，约 27.00 °C")
+    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "Seat 4 is too warm, about 27.00 °C")
 }
 
 @Test func omittedSeatLeavesTheDenominator() {
@@ -63,7 +63,7 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     #expect(ratio?.value != 0)
     #expect(ratio?.reason?.isEmpty == false)
     let text = SeatFeasibility.coverageText(metrics: metrics)
-    #expect(text == "不可评价")
+    #expect(text == "Not evaluable")
     #expect(text != "0%")
     #expect(!text.contains("0%"))
 }
@@ -72,7 +72,7 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     let metrics = SeatFeasibility.metrics(seats: nil, qualityPassed: true)
     #expect(metric(metrics, "seat_pass_ratio")?.omitted == true)
     #expect(metric(metrics, "seat_pass_ratio")?.value == nil)
-    #expect(SeatFeasibility.coverageText(metrics: metrics) == "不可评价")
+    #expect(SeatFeasibility.coverageText(metrics: metrics) == "Not evaluable")
 }
 
 @Test func everyEvaluatedSeatFailingIsZeroWithGatesAndNoRecommendation() {
@@ -93,7 +93,7 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     let blob = metrics.map { ($0.reason ?? "") + $0.name }.joined(separator: " ")
     #expect(!blob.contains("推荐方案"))
     #expect(!blob.contains("满意率"))
-    #expect(SeatFeasibility.coverageText(metrics: metrics) == "3 个中 0 个合适")
+    #expect(SeatFeasibility.coverageText(metrics: metrics) == "0 of 3 seats within range")
 }
 
 @Test func comparisonLabelsAreModelCoverageNotSatisfactionRate() {
@@ -109,12 +109,12 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
         #expect(!row.value.contains("温度门"))
         #expect(!row.value.contains("PMV门"))
     }
-    #expect(rows[0].value == "4 个中 4 个合适")
+    #expect(rows[0].value == "4 of 4 seats within range")
     let worst = rows.first { $0.label == SeatFeasibility.worstSeatLabel }
-    #expect(worst?.value.contains("座位 4") == true)
+    #expect(worst?.value.contains("Seat 4") == true)
     #expect(worst?.value.contains("S4") != true)
     // All seats passed: the line must say the seat is still suitable.
-    #expect(worst?.value == "座位 4 相对最偏离目标温度，约 23.10 °C，但仍合适")
+    #expect(worst?.value == "Seat 4 is farthest from the target temperature, about 23.10 °C, but still within range")
 }
 
 @Test func bandEdgesPassAndSpeedBreaksATemperatureTie() {
@@ -135,11 +135,11 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     seats[3] = FeasibilitySeat(id: "S4", tC: 27.0, uMag: 0.05, pmv: 0.9)
     let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
     let text = SeatFeasibility.worstSeatText(metrics: metrics)
-    #expect(text == "座位 4 偏热，约 27.00 °C")
-    #expect(!text.contains("整体"))
+    #expect(text == "Seat 4 is too warm, about 27.00 °C")
+    #expect(!text.contains("overall"))
     let evidence = SeatFeasibility.worstSeatEvidenceText(metrics: metrics) ?? ""
-    #expect(evidence.contains("空气温度超出"))
-    #expect(evidence.contains("整体冷热感觉超出合适范围"))
+    #expect(evidence.contains("Air temperature outside 23–26 °C"))
+    #expect(evidence.contains("overall sensation"))
 }
 
 @Test func speedGateAloneShowsAWindSentenceWithTheNumber() {
@@ -147,9 +147,9 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     // 23.0 °C passes (inclusive edge); only the speed gate fails.
     seats[3] = FeasibilitySeat(id: "S4", tC: 23.0, uMag: 0.40, pmv: 0.1)
     let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
-    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "座位 4 风偏大，约 0.40 m/s")
+    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "Seat 4 has strong air movement, about 0.40 m/s")
     let evidence = SeatFeasibility.worstSeatEvidenceText(metrics: metrics) ?? ""
-    #expect(evidence.contains("风速超过 0.25 m/s"))
+    #expect(evidence.contains("Air speed above 0.25 m/s"))
 }
 
 @Test func pmvGateAloneShowsTheOverallSensationDirection() {
@@ -157,11 +157,11 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     // Air temperature and speed pass; only the overall sensation fails.
     seats[3] = FeasibilitySeat(id: "S4", tC: 23.1, uMag: 0.20, pmv: 0.8)
     let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
-    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "座位 4 整体偏热")
+    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "Seat 4 feels warm overall")
     // A cold PMV reads the other way.
     seats[3].pmv = -0.8
     let coldMetrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
-    #expect(SeatFeasibility.worstSeatText(metrics: coldMetrics) == "座位 4 整体偏凉")
+    #expect(SeatFeasibility.worstSeatText(metrics: coldMetrics) == "Seat 4 feels cool overall")
 }
 
 @Test func lowSpeedMetrologyNoteStaysOutOfTheDefaultLine() {
@@ -169,28 +169,28 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     seats[3] = FeasibilitySeat(id: "S4", tC: 27.0, uMag: 0.02, pmv: 0.2, lowSpeedAbsoluteError: true)
     let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
     let text = SeatFeasibility.worstSeatText(metrics: metrics)
-    #expect(text == "座位 4 偏热，约 27.00 °C")
+    #expect(text == "Seat 4 is too warm, about 27.00 °C")
     #expect(!text.contains("低速绝对误差"))
     // The reading note is disclosed, not dropped.
     let evidence = SeatFeasibility.worstSeatEvidenceText(metrics: metrics) ?? ""
-    #expect(evidence.contains("误差按绝对值看"))
+    #expect(evidence.contains("absolute value"))
 }
 
 @Test func legacyRowsWithoutWorstNumbersKeepAReadableSentence() {
     // Runs persisted before the number rows existed must still name a seat.
     let legacy = SeatFeasibility.metrics(seats: inBand, qualityPassed: true)
         .filter { !["worst_seat_t_c", "worst_seat_u_mag", "worst_seat_pmv"].contains($0.name) }
-    #expect(SeatFeasibility.worstSeatText(metrics: legacy) == "座位 4 相对最偏离目标温度，但仍合适")
+    #expect(SeatFeasibility.worstSeatText(metrics: legacy) == "Seat 4 is farthest from the target temperature, but still within range")
     // A failing gate without its number keeps the direction-free fallback.
     var seats = inBand
     seats[3] = FeasibilitySeat(id: "S4", tC: 27.0, uMag: 0.05, pmv: 0.2)
     let legacyHot = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
         .filter { !["worst_seat_t_c", "worst_seat_u_mag", "worst_seat_pmv"].contains($0.name) }
-    #expect(SeatFeasibility.worstSeatText(metrics: legacyHot) == "座位 4：偏热或偏冷")
+    #expect(SeatFeasibility.worstSeatText(metrics: legacyHot) == "Seat 4: too warm or too cool")
 }
 
 @Test func omittedFieldHasNoWorstSeatEvidence() {
     let metrics = SeatFeasibility.metrics(seats: inBand, qualityPassed: false)
-    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "不可评价")
+    #expect(SeatFeasibility.worstSeatText(metrics: metrics) == "Not evaluable")
     #expect(SeatFeasibility.worstSeatEvidenceText(metrics: metrics) == nil)
 }

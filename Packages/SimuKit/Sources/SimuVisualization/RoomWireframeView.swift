@@ -23,6 +23,7 @@ public struct RoomWireframeView: View {
     @State private var internalYaw: Double = -0.6
     @State private var dragStartYaw: Double?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.userFacingCopy) private var copy
 
     public init(
         scene: RoomScene,
@@ -75,7 +76,7 @@ public struct RoomWireframeView: View {
                 .onEnded { _ in dragStartYaw = nil }
         )
         .accessibilityLabel(Text(accessibilityText))
-        .accessibilityHint(Text("水平拖动旋转房间视图"))
+        .accessibilityHint(Text(copy.rotateRoomHint))
         .accessibilityIdentifier("roomWireframe")
     }
 
@@ -84,21 +85,22 @@ public struct RoomWireframeView: View {
     }
 
     private var accessibilityText: String {
-        var text = scene.accessibilitySummary
+        var text = scene.accessibilitySummary(copy: copy)
         if let field, let minC = field.stats.minC, let maxC = field.stats.maxC {
-            text += "，坐姿高度温度切片 \(UserFacingCopy.displayNumber(minC)) 到 \(UserFacingCopy.displayNumber(maxC)) 摄氏度（质量通过）"
+            text += copy.sliceAccessibility(
+                min: UserFacingCopy.displayNumber(minC),
+                max: UserFacingCopy.displayNumber(maxC)
+            )
         }
         if let flow, let maxMag = flow.stats.maxMag {
-            text += "，稳态气流箭头、流线和循环圆点，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点是示意流向，不是开机降温"
+            text += copy.flowAccessibility(max: UserFacingCopy.displayNumber(maxMag))
         }
-        // Per-seat L2 temperatures reach VoiceOver users too; the drawn
-        // labels are graphics they cannot read.
         let seatTemps = scene.seats.compactMap { seat -> String? in
             guard let sample = seatSample(for: seat) else { return nil }
-            return "\(seat.displayName) \(UserFacingCopy.displayNumber(sample.tC)) 摄氏度"
+            return copy.seatTemperatureLabel(name: seat.displayName, value: UserFacingCopy.displayNumber(sample.tC))
         }
         if !seatTemps.isEmpty {
-            text += "，座位气温 " + seatTemps.joined(separator: "、")
+            text += copy.seatTemperaturesAccessibility(seatTemps.joined(separator: copy.listSeparator))
         }
         return text
     }
@@ -230,10 +232,10 @@ public struct RoomWireframeView: View {
         // 「送风」/「回风」 name where the mesh actually injects and
         // extracts air: the full-span band at the terminal height.
         if let supply = scene.supply {
-            drawTerminalLabel(supply, text: "送风", color: .blue, projection: projection, fit: fit, in: &context)
+            drawTerminalLabel(supply, text: copy.supplyLabel, color: .blue, projection: projection, fit: fit, in: &context)
         }
         if let returnAir = scene.returnAir {
-            drawTerminalLabel(returnAir, text: "回风", color: .orange, projection: projection, fit: fit, in: &context)
+            drawTerminalLabel(returnAir, text: copy.returnLabel, color: .orange, projection: projection, fit: fit, in: &context)
         }
         for line in flow.lines {
             guard line.points.count >= 2 else { continue }

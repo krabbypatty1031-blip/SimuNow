@@ -170,7 +170,7 @@ import PDFKit
     let text = try #require(PDFDocument(url: url)?.string)
     #expect(text.contains("办公室送风对比"))
     #expect(text.contains("DeepSeek"))
-    #expect(text.contains("计算依据"))
+    #expect(text.contains("Calculation basis"))
     #endif
 }
 

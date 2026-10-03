@@ -97,8 +97,8 @@ import SimuCore
 
     let cards = RecommendationClassifier.cards(from: [low, high])
     let retrofit = try #require(cards.first { $0.kind == .retrofit })
-    #expect(retrofit.quoteStatus == "待报价")
-    #expect(retrofit.detail.contains("待报价"))
+    #expect(retrofit.quoteStatus == "Awaiting quote")
+    #expect(retrofit.detail.contains("awaiting quote"))
     #expect(retrofit.payback == nil)
     #expect(!retrofit.assumptions.isEmpty)
     let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(retrofit)) as? [String: Any]
@@ -160,9 +160,9 @@ import SimuCore
     let cards = RecommendationClassifier.cards(from: [low, crowded])
     #expect(cards.count == 1)
     #expect(cards[0].kind == .explanation)
-    #expect(cards[0].title == "使用条件不同")
-    #expect(cards[0].detail.contains("不能直接比"))
-    #expect(cards[0].detail.contains("不能作为有效结论"))
+    #expect(cards[0].title == "Use conditions differ")
+    #expect(cards[0].detail.contains("cannot be compared directly"))
+    #expect(cards[0].detail.contains("cannot be a valid conclusion"))
     #expect(!RecommendationClassifier.canExportRecommendation(from: [low, crowded]))
 }
 
@@ -188,7 +188,7 @@ import SimuCore
         watts: 1033.112
     )
     let operation = try #require(RecommendationClassifier.cards(from: [left, right]).first { $0.kind == .operation })
-    #expect(operation.detail.contains("费用相同"))
+    #expect(operation.detail.contains("Cost is the same"))
     #expect(operation.citedRunIDs.contains(left.l1Identity!.runID))
     #expect(operation.citedRunIDs.contains(right.l1Identity!.runID))
 }

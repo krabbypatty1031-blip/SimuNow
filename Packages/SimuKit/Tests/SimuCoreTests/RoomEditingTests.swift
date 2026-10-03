@@ -81,7 +81,7 @@ import Testing
     #expect(listed.contains { $0.note == "omitted: furniture_boxes" })
     let yaw = listed.first { $0.path == "geometry.northYawDegrees" }
     #expect(yaw?.source == .assumed)
-    #expect(yaw?.provenanceText == "未知 / 无出处")
+    #expect(yaw?.provenanceText == "Unknown / no source")
     #expect(listed.allSatisfy { $0.provenanceText != "0" })
 }
 
@@ -137,7 +137,7 @@ import Testing
     #expect(yaw?.unit == "deg")
     #expect(yaw?.provenanceText.contains("5") == true)
     #expect(yaw?.provenanceText.contains("deg") == true)
-    #expect(yaw?.provenanceText.contains("未知 / 无出处") == true)
+    #expect(yaw?.provenanceText.contains("Unknown / no source") == true)
 }
 
 @Test func applyOccupantCountRejectsNonPositiveAndKeepsHeadcount() throws {

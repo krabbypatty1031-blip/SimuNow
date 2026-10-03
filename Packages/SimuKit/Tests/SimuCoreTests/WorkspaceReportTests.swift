@@ -18,7 +18,7 @@ import PDFKit
     #expect(store.reportStatusLine == nil)
     #expect(!store.canSubmitL1)
     #expect(!store.canSubmitL2)
-    #expect(WorkspaceStore.evidenceExportLabel == "导出对比说明")
+    #expect(WorkspaceStore.evidenceExportLabel == "Export comparison notes")
     #expect(WorkspaceStore.evidenceExportLabel != "生成报告")
     #expect(WorkspaceStore.evidenceExportLabel != "导出证据 PDF")
 }

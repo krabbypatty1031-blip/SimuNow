@@ -36,8 +36,8 @@ import SimuCore
 
     let review = DecisionVariables.review([matching, geometry, basisShift])
     #expect(review.candidates.count == 3)
-    #expect(review.basisWarning?.contains("设定温度") == true)
-    #expect(review.basisWarning?.contains("不能直接比") == true)
+    #expect(review.basisWarning?.contains("setpoint") == true)
+    #expect(review.basisWarning?.contains("cannot be compared directly") == true)
 }
 
 @Test func reviewOfMatchingCandidatesHasNoWarning() throws {

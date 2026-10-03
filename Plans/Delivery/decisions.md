@@ -217,6 +217,14 @@
 影响：用户可见报告将代表日外推为全年费用；这是报告层口径，不是新的 EnergyPlus 年模拟。
 验证：`annualTotalsScaleTheRepresentativeDay`（3770.8588 kWh / 4524.905）；证据包拷贝窗/均温/气流/年值；DeepSeek 请求 system 消息等于 `ReportWriterSkill.systemPrompt`；守卫放行证据内全年电费。
 
+## ADR-021：应用内英/中文案，默认英语（已接受）
+
+日期：2026-10-03。
+背景：界面需要英语与中文，且切换后立即生效；默认英语。
+备选：(a) Apple String Catalog + 随系统语言，改语言需重启；(b) 应用内 `UserFacingCopy` 目录 + UserDefaults，默认英语。
+选择：(b)。存储层仍用中文物理 token（温度门、演示电价出处等），显示层翻译。DeepSeek 提示词本阶段仍为中文。
+影响：Mac 左侧栏滚到底、iOS 目的地列表底部提供语言选项。测试默认英语，避免 UserDefaults 串扰。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

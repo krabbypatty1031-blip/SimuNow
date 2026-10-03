@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from simunow_worker.models.comfort import comfort_metrics, omitted_comfort_metrics
+from simunow_worker.models.feasibility import feasibility_metrics
 
 SEAT_METRIC_NAMES = ("seat_t_c_min", "seat_t_c_max", "seat_u_mag_max")
 SEAT_METRIC_UNITS = {"seat_t_c_min": "C", "seat_t_c_max": "C", "seat_u_mag_max": "m/s"}
@@ -102,7 +103,11 @@ def evaluate_l2(identity: dict, draft: dict, context: dict) -> dict:
             "not evaluable: no quality-passed seat samples"
         )
     else:
+        # Annotate PMV first so the seat gates can see it. A missing PMV
+        # does not fail a seat; an out-of-domain seat stays out of the ratio.
         seat_rows, comfort_rows = comfort_metrics(seat_rows, context.get("comfortInputs"))
+    # Append only. Quality gates above are unchanged. No passed field → omit, never 0.
+    feasibility_rows = feasibility_metrics(seat_rows, quality_passed=passed)
     if not pipeline_completed or detail is None:
         quality_state = "notEvaluated"
     elif passed:
@@ -118,5 +123,5 @@ def evaluate_l2(identity: dict, draft: dict, context: dict) -> dict:
         "supplyTemperatureC": hvac["supplyTemperatureC"]["value"],
         "setpointC": hvac["setpointC"]["value"],
         "seatSamples": seat_rows,
-        "metrics": _seat_metrics(seat_rows) + comfort_rows,
+        "metrics": _seat_metrics(seat_rows) + comfort_rows + feasibility_rows,
     }

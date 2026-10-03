@@ -306,6 +306,25 @@ public struct WorkspaceView: View {
                 LabeledContent("PPD 最高", value: candidateMetric(record, "seat_ppd_max"))
             }
             .font(.footnote)
+            // Model-gate coverage. Omitted fields read 不可评价, never 0%.
+            HStack(spacing: 12) {
+                ForEach(SeatFeasibility.comparisonRows(metrics: record.metrics), id: \.label) { row in
+                    LabeledContent(row.label, value: row.value)
+                }
+            }
+            .font(.footnote)
+            if let coverageNote = record.metrics.first(where: { $0.name == "seat_pass_ratio" })?.reason {
+                Text(coverageNote)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if let infeasible = record.metrics.first(where: { $0.name == "infeasibleReason" }),
+               !infeasible.omitted,
+               let text = infeasible.reason {
+                Text(text)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
             if let reason = record.metrics.first(where: { $0.name == "seat_pmv_min" })?.reason {
                 Text(reason)
                     .font(.caption2)

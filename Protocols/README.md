@@ -22,7 +22,7 @@ JSON 使用 Swift Codable camelCase，任务消息的 CodingKeys 显式写出。
 
 修改接口需同步 Swift、Python、schema 与 fixture；破坏兼容改版本并提供迁移。包测试验证 draft round-trip、v1 不可求解、v2 设定温度与送风温度分字段、旧结果新鲜度和未配置引擎不可产生成功计算。
 L2 结果的 `qualityDetail` 七个门禁字段全部可选（缺日志不等于过门禁）；`seatSamples` 仅质量通过时出现，失败场省略而不是填 0；低风速座位带 `lowSpeedAbsoluteError` 标记。
-指标行可带 `reason`：omitted 时说明缺什么或超范围，部分聚合时说明排除口径；P4-04 起 `seat_pmv_min` / `seat_pmv_max` / `seat_ppd_max` 由 ISO 7730 附录 D 算法产生，舒适输入（MRT/RH/clo/met）缺一项即 omitted + `reason`，不填 PMV=0；座位行可带 `pmv` / `ppd`（仅输入齐全且在适用域内时出现）。
+指标行可带 `reason`：omitted 时说明缺什么或超范围，部分聚合时说明排除口径；P4-04 起 `seat_pmv_min` / `seat_pmv_max` / `seat_ppd_max` 由 ISO 7730 附录 D 算法产生，舒适输入（MRT/RH/clo/met）缺一项即 omitted + `reason`，不填 PMV=0；座位行可带 `pmv` / `ppd`（仅输入齐全且在适用域内时出现）。P5-02 在同一 `metrics` 数组追加 `seat_pass_ratio` / `seat_pass_count` / `seat_eval_count`（数值）以及 `worst_seat_id` / `worst_seat_reason` / `infeasibleReason`（标识与门文案在 `reason`，因为指标值是数字）。无质量通过场时这些行 omitted，不填比例 0。比例是模型门覆盖，不是实测满意率。域外或 omitted 座位不进分母，并在 `reason` 披露。
 P5 将增加 `Schemas/report-evidence.schema.json`：报告数字只来自冻结 run，叙述器不得改指标。未落地前不要把空报告页当成已导出 PDF。
 
 Python：`PYTHONPATH=Backend/src python3 -m unittest Backend.tests.test_project_model`。

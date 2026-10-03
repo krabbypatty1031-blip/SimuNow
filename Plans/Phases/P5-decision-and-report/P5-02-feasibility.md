@@ -38,20 +38,20 @@
 
 ### P5-02a 逐座位核算
 
-- [ ] 测试：4 座全在带内、风速 <0.25、有 PMV → ratio=1，worst 仍指出偏离最大座
-- [ ] 测试：1 座 27 °C → 该座失败，ratio=0.75，worst 为该座，reason 含温度门
-- [ ] 测试：1 座域外 omitted → eval_count=3，不把 omitted 当失败
+- [x] 测试：4 座全在带内、风速 <0.25、有 PMV → ratio=1，worst 仍指出偏离最大座
+- [x] 测试：1 座 27 °C → 该座失败，ratio=0.75，worst 为该座，reason 含温度门
+- [x] 测试：1 座域外 omitted → eval_count=3，不把 omitted 当失败
 
 通过：分母不含 omitted。失败：4 座里 1 个域外却按 4 算。
 
 ### P5-02b 无场 / 无可行
 
-- [ ] 质量失败或无 seatSamples → 比例 omitted + reason，不是 0%
-- [ ] 已评座位全部失败 → ratio=0 且 `infeasibleReason` 列出门，不生成「推荐方案」
+- [x] 质量失败或无 seatSamples → 比例 omitted + reason，不是 0%
+- [x] 已评座位全部失败 → ratio=0 且 `infeasibleReason` 列出门，不生成「推荐方案」
 
 通过：失败场无 0% 伪装。失败：把质量失败写成 0% 达标。
 
 ### P5-02c 文案
 
-- [ ] UI/报告标签用「模型判据座位覆盖」或「达标座位比例（模型）」
-- [ ] 测试或快照断言不含「满意率」
+- [x] UI/报告标签用「模型判据座位覆盖」或「达标座位比例（模型）」
+- [x] 测试或快照断言不含「满意率」

@@ -1,0 +1,115 @@
+import Foundation
+import Testing
+import SimuCore
+
+/// Four in-band seats. S4 is farthest from the 24.5 °C band center.
+private let inBand: [FeasibilitySeat] = [
+    FeasibilitySeat(id: "S1", tC: 24.5, uMag: 0.05, pmv: 0.0),
+    FeasibilitySeat(id: "S2", tC: 24.0, uMag: 0.10, pmv: 0.1),
+    FeasibilitySeat(id: "S3", tC: 25.2, uMag: 0.15, pmv: -0.2),
+    FeasibilitySeat(id: "S4", tC: 23.1, uMag: 0.20, pmv: 0.3),
+]
+
+private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? {
+    metrics.first { $0.name == name }
+}
+
+@Test func inBandSeatsWithPmvCoverEverySeatAndNameTheFarthest() {
+    let metrics = SeatFeasibility.metrics(seats: inBand, qualityPassed: true)
+    let ratio = metric(metrics, "seat_pass_ratio")
+    #expect(ratio?.omitted == false)
+    #expect(ratio?.value == 1)
+    #expect(ratio?.fidelity == .l2)
+    #expect(metric(metrics, "seat_pass_count")?.value == 4)
+    #expect(metric(metrics, "seat_eval_count")?.value == 4)
+    #expect(metric(metrics, "worst_seat_id")?.reason == "S4")
+    #expect(metric(metrics, "worst_seat_id")?.omitted == false)
+}
+
+@Test func oneHotSeatFailsTheTemperatureGate() {
+    var seats = inBand
+    seats[3] = FeasibilitySeat(id: "S4", tC: 27.0, uMag: 0.05, pmv: 0.2)
+    let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
+    #expect(metric(metrics, "seat_pass_ratio")?.value == 0.75)
+    #expect(metric(metrics, "seat_pass_count")?.value == 3)
+    #expect(metric(metrics, "seat_eval_count")?.value == 4)
+    #expect(metric(metrics, "worst_seat_id")?.reason == "S4")
+    #expect(metric(metrics, "worst_seat_reason")?.reason?.contains("温度门") == true)
+}
+
+@Test func omittedSeatLeavesTheDenominator() {
+    // 40 °C would win "farthest from 24.5" if a bug counted it.
+    var seats = Array(inBand.prefix(3))
+    seats.append(FeasibilitySeat(id: "S9", tC: 40.0, uMag: 0.9, omitted: true))
+    let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
+    #expect(metric(metrics, "seat_eval_count")?.value == 3)
+    #expect(metric(metrics, "seat_pass_count")?.value == 3)
+    #expect(metric(metrics, "seat_pass_ratio")?.value == 1)
+    #expect(metric(metrics, "worst_seat_id")?.reason != "S9")
+    let reason = metric(metrics, "seat_pass_ratio")?.reason ?? ""
+    #expect(reason.contains("S9"))
+    #expect(reason.contains("不计入分母"))
+}
+
+@Test func failedQualityOmitsTheRatioInsteadOfZero() {
+    let metrics = SeatFeasibility.metrics(seats: inBand, qualityPassed: false)
+    let ratio = metric(metrics, "seat_pass_ratio")
+    #expect(ratio?.omitted == true)
+    #expect(ratio?.value == nil)
+    #expect(ratio?.value != 0)
+    #expect(ratio?.reason?.isEmpty == false)
+    let text = SeatFeasibility.coverageText(metrics: metrics)
+    #expect(text == "不可评价")
+    #expect(text != "0%")
+    #expect(!text.contains("0%"))
+}
+
+@Test func noSeatSamplesOmitsTheRatio() {
+    let metrics = SeatFeasibility.metrics(seats: nil, qualityPassed: true)
+    #expect(metric(metrics, "seat_pass_ratio")?.omitted == true)
+    #expect(metric(metrics, "seat_pass_ratio")?.value == nil)
+    #expect(SeatFeasibility.coverageText(metrics: metrics) == "不可评价")
+}
+
+@Test func everyEvaluatedSeatFailingIsZeroWithGatesAndNoRecommendation() {
+    let seats = [
+        FeasibilitySeat(id: "S1", tC: 28.0, uMag: 0.10, pmv: 0.0),
+        FeasibilitySeat(id: "S2", tC: 24.5, uMag: 0.40, pmv: 0.0),
+        FeasibilitySeat(id: "S3", tC: 24.5, uMag: 0.10, pmv: 0.9),
+    ]
+    let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
+    #expect(metric(metrics, "seat_pass_ratio")?.omitted == false)
+    #expect(metric(metrics, "seat_pass_ratio")?.value == 0)
+    #expect(metric(metrics, "seat_eval_count")?.value == 3)
+    let reason = metric(metrics, "infeasibleReason")?.reason ?? ""
+    #expect(metric(metrics, "infeasibleReason")?.omitted == false)
+    #expect(reason.contains("温度门"))
+    #expect(reason.contains("风速门"))
+    #expect(reason.contains("PMV门"))
+    let blob = metrics.map { ($0.reason ?? "") + $0.name }.joined(separator: " ")
+    #expect(!blob.contains("推荐方案"))
+    #expect(!blob.contains("满意率"))
+    #expect(SeatFeasibility.coverageText(metrics: metrics) == "0%（0/3）")
+}
+
+@Test func comparisonLabelsAreModelCoverageNotSatisfactionRate() {
+    let rows = SeatFeasibility.comparisonRows(metrics: SeatFeasibility.metrics(seats: inBand, qualityPassed: true))
+    #expect(rows.contains { $0.label == "达标座位比例（模型）" || $0.label == "模型判据座位覆盖" })
+    for row in rows {
+        #expect(!row.label.contains("满意率"))
+        #expect(!row.value.contains("满意率"))
+    }
+    #expect(rows[0].value == "100%（4/4）")
+    let worst = rows.first { $0.label == SeatFeasibility.worstSeatLabel }
+    #expect(worst?.value.contains("S4") == true)
+}
+
+@Test func bandEdgesPassAndSpeedBreaksATemperatureTie() {
+    let seats = [
+        FeasibilitySeat(id: "S1", tC: 23.0, uMag: 0.10, pmv: 0.0),
+        FeasibilitySeat(id: "S2", tC: 26.0, uMag: 0.25, pmv: 0.0),
+    ]
+    let metrics = SeatFeasibility.metrics(seats: seats, qualityPassed: true)
+    #expect(metric(metrics, "seat_pass_ratio")?.value == 1)
+    #expect(metric(metrics, "worst_seat_id")?.reason == "S2")
+}

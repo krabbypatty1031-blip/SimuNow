@@ -100,11 +100,52 @@ def internal_gain_w(room: dict[str, Any]) -> float:
     return qty(gains["n_people"]) * qty(gains["people_w"]) + qty(gains["lighting_w"]) + qty(gains["equipment_w"])
 
 
+def window_rects(room: dict[str, Any]) -> list[dict[str, Any]]:
+    """Per-window rectangles: windows[] (L2 room, P4-07) or legacy single window.
+
+    Why two shapes coexist: the L1 room JSON (l1_room.py) keeps ONE merged
+    window without s0/s1 — EnergyPlus only consumes the summed area, so its
+    contract is unchanged. The L2 room JSON carries every window separately
+    because the case writer meshes each rectangle as its own patch.
+    """
+    windows = room.get("windows")
+    if isinstance(windows, list) and windows:
+        return windows
+    return []
+
+
 def window_area_m2(room: dict[str, Any]) -> float:
-    """Glazed band on the x=max wall, full span."""
+    """Glazed area actually entering the case.
+
+    windows[]: the SUM of per-window rectangle areas (P4-07 geometry
+    fidelity — each patch injects only over its own rectangle).
+    Legacy single window (L1 room, no s0/s1): the full-span band, so the
+    write_idf diagnostic column keeps its pre-P4-07 value bit for bit.
+    """
+    windows = window_rects(room)
+    if windows:
+        return sum(
+            abs(qty(item["s1_m"]) - qty(item["s0_m"])) * abs(qty(item["z1_m"]) - qty(item["z0_m"]))
+            for item in windows
+        )
     span = qty(room["size"]["y_m"])
     height = qty(room["window"]["z1_m"]) - qty(room["window"]["z0_m"])
     return abs(span * height)
+
+
+def window_total_w(room: dict[str, Any]) -> float:
+    """Total window heat input, Σ per-window q × area (P4-07).
+
+    Only defined for windows[] rooms: the energy gate accounts the watts the
+    per-window fixedGradient patches actually inject. A window with no
+    declared flux carries a declared 0 W, never an invented one.
+    """
+    total = 0.0
+    for item in window_rects(room):
+        area = abs(qty(item["s1_m"]) - qty(item["s0_m"])) * abs(qty(item["z1_m"]) - qty(item["z0_m"]))
+        total += qty(item["q_w_m2"]) * area
+    return total
+
 
 
 def inlet_area_m2(room: dict[str, Any]) -> float:

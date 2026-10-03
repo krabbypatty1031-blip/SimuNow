@@ -28,6 +28,11 @@ def _assumed(value: float, unit: str) -> dict:
     return {"value": value, "unit": unit, "source": "assumed"}
 
 
+def _ladder(value: float, unit: str) -> dict:
+    """A P4-07B ladder pick, adopted only after all five gates passed (ADR-020)."""
+    return {"value": value, "unit": unit, "source": "p4_07b_ladder"}
+
+
 def _wall_span(wall: str, size: tuple[float, float, float]) -> float:
     """Length of the wall a patch sits on. xMin/xMax run along y; yMin/yMax along x."""
     return size[1] if wall in ("xMin", "xMax") else size[0]
@@ -36,10 +41,11 @@ def _wall_span(wall: str, size: tuple[float, float, float]) -> float:
 def _band_scale(patch: dict, wall: str, size: tuple[float, float, float]) -> float:
     """Patch width / full wall span.
 
-    The P1 case writer can only make full-wall bands. Scaling velocity and
-    flux by this ratio preserves the project's supply m3/s and window W;
-    the geometry simplification is recorded in assumptions instead of
-    silently changing the physics.
+    The P1 case writer still makes the SUPPLY band full-wall. Scaling the
+    velocity by this ratio preserves the project's supply m3/s; the geometry
+    simplification is recorded in assumptions instead of silently changing
+    the physics. Windows no longer use this: each window patch keeps its own
+    span since P4-07.
     """
     span = _wall_span(wall, size)
     width = patch["s1"]["value"] - patch["s0"]["value"]
@@ -51,24 +57,107 @@ def _windows(geometry: dict) -> list[dict]:
     return [item for item in geometry.get("openings", []) if item.get("kind") == "window"]
 
 
-def _window_total_w(windows: list[dict]) -> float:
-    """Total window heat input, sum of flux x patch area over all windows.
-
-    A window without a declared heatFluxWm2 contributes 0 W; no flux is
-    invented for it. Adding or widening any declared window must move the
-    L2 field (and with it every seat temperature).
-    """
-    total = 0.0
-    for item in windows:
-        flux = item.get("heatFluxWm2")
-        if flux:
-            total += float(flux["value"]) * patch_area_m2(item)
-    return total
-
-
 def _window_area_m2(windows: list[dict]) -> float:
     """Total glazed area over all windows."""
     return sum(patch_area_m2(item) for item in windows)
+
+
+# Walls a window may sit on. xMin/xMax run along y; yMin/yMax along x.
+_WINDOW_WALLS = ("xMin", "xMax", "yMin", "yMax")
+# Rectangles closer than this are treated as intersecting / out of bounds.
+_RECT_EPS = 1e-9
+
+
+def _rects_overlap(a: dict, b: dict) -> bool:
+    """Two same-wall rectangles claim the same mesh faces only if both intervals overlap."""
+    return (
+        a["s0"] < b["s1"] - _RECT_EPS
+        and b["s0"] < a["s1"] - _RECT_EPS
+        and a["z0"] < b["z1"] - _RECT_EPS
+        and b["z0"] < a["z1"] - _RECT_EPS
+    )
+
+
+def _merge_window_rects(rects: list[dict]) -> list[dict]:
+    """Merge same-wall intersecting rectangles until pairwise disjoint.
+
+    Why merge instead of reject: the editor allows any placement, and a
+    failed task over overlapping windows would turn a legal draft into an
+    error. One patch region can carry one gradient, so the merged bounding
+    box carries the SUMMED watts (q = ΣW / bbox area): total W is conserved
+    exactly, never silently lost or double-counted. The merge is disclosed
+    in assumptions.
+    """
+    rects = list(rects)
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(rects)):
+            for j in range(i + 1, len(rects)):
+                if rects[i]["wall"] != rects[j]["wall"] or not _rects_overlap(rects[i], rects[j]):
+                    continue
+                a, b = rects[i], rects[j]
+                watts = a["w"] + b["w"]
+                s0, s1 = min(a["s0"], b["s0"]), max(a["s1"], b["s1"])
+                z0, z1 = min(a["z0"], b["z0"]), max(a["z1"], b["z1"])
+                rects[i : j + 1] = [
+                    {
+                        "wall": a["wall"],
+                        "s0": s0,
+                        "s1": s1,
+                        "z0": z0,
+                        "z1": z1,
+                        # Area-weighted conservation: q x bbox area == ΣW.
+                        "q": watts / ((s1 - s0) * (z1 - z0)),
+                        "w": watts,
+                        "merged": True,
+                    }
+                ]
+                changed = True
+                break
+            if changed:
+                break
+    return rects
+
+
+def _window_rects(windows: list[dict], size: tuple[float, float, float], hvac: dict) -> list[dict]:
+    """Validated per-window rectangles for the case writer.
+
+    Raises ValueError (surfaced as a failed task with the reason) when a
+    window leaves its wall / the room, or claims inlet/outlet faces on xMin.
+    """
+    rects = []
+    for item in windows:
+        wall = item.get("wall")
+        if wall not in _WINDOW_WALLS:
+            raise ValueError(f"window {item.get('id', '?')} wall {wall!r} is not one of xMin/xMax/yMin/yMax")
+        s0, s1 = float(item["s0"]["value"]), float(item["s1"]["value"])
+        z0, z1 = float(item["z0"]["value"]), float(item["z1"]["value"])
+        if s0 >= s1 - _RECT_EPS or z0 >= z1 - _RECT_EPS:
+            raise ValueError(f"window {item.get('id', '?')} has an empty rectangle")
+        # No declared flux is a declared 0 W, never an invented one.
+        flux = item.get("heatFluxWm2")
+        q = float(flux["value"]) if flux else 0.0
+        area = (s1 - s0) * (z1 - z0)
+        rects.append({"wall": wall, "s0": s0, "s1": s1, "z0": z0, "z1": z1, "q": q, "w": q * area})
+    rects = _merge_window_rects(rects)
+    for rect in rects:
+        span = _wall_span(rect["wall"], size)
+        if rect["s0"] < -_RECT_EPS or rect["s1"] > span + _RECT_EPS:
+            raise ValueError(f"window on {rect['wall']} exceeds the wall span 0..{span:g} m")
+        if rect["z0"] < -_RECT_EPS or rect["z1"] > size[2] + _RECT_EPS:
+            raise ValueError(f"window on {rect['wall']} exceeds the room height 0..{size[2]:g} m")
+        if rect["wall"] == "xMin":
+            # The supply/return bands own the full xMin span at their heights;
+            # a window there would lose its watts to the inlet/outlet faces.
+            for band, terminal in (("supply", hvac["supply"]), ("return", hvac["returnTerminal"])):
+                bz0, bz1 = float(terminal["z0"]["value"]), float(terminal["z1"]["value"])
+                if rect["z0"] < bz1 - _RECT_EPS and bz0 < rect["z1"] - _RECT_EPS:
+                    raise ValueError(
+                        f"window on xMin overlaps the {band} band z {bz0:g}..{bz1:g} m; move the window off the grille"
+                    )
+    return rects
+
 
 
 def project_to_l2_room(draft: dict) -> dict:
@@ -81,30 +170,26 @@ def project_to_l2_room(draft: dict) -> dict:
     windows = _windows(geometry)
     if not windows:
         raise ValueError("project has no window opening")
-    # All windows merge into the single full-span band. The band height keeps
-    # the first window's z0/z1; the flux is set so the band injects the SUM of
-    # every window's declared watts (conservation, not the first window only).
-    window = windows[0]
-    window_area = _window_area_m2(windows)
-    window_w = _window_total_w(windows)
     size = (
         geometry["sizeX"]["value"],
         geometry["sizeY"]["value"],
         geometry["sizeZ"]["value"],
     )
+    # Every window keeps its own wall, span and height since P4-07; the
+    # case writer meshes each rectangle as its own patch. Draft-level sums
+    # stay the L1-comparable totals (area Σ before any merge). The emitted
+    # per-window watts sum to the same total W through any merge.
+    window_rects = _window_rects(windows, size, hvac)
+    window_area = _window_area_m2(windows)
     seats = occupancy.get("seats", [])
     seat_z = seats[0]["position"]["z"] if seats else 1.1
     outdoor = hvac["outdoorAirM3s"]["value"]
     supply_flow = hvac["supplyAirflowM3s"]["value"]
     supply_wall = hvac["supply"]["wall"]
-    window_wall = window["wall"]
+    # Supply stays the one full-wall band: the writer still places it on the
+    # x=0 wall as a full-span height band, so velocity is scaled to preserve
+    # the project's declared supply m3/s.
     supply_scale = _band_scale(hvac["supply"], supply_wall, size)
-    # Band flux = total window W / band area, so the single full-span band
-    # injects the sum of every window's declared watts. Single-window rooms
-    # keep the previous flux bit for bit (width/span cancels the height).
-    window_span = _wall_span(window_wall, size)
-    window_band_area_m2 = window_span * max(1e-9, window["z1"]["value"] - window["z0"]["value"])
-    window_flux = window_w / window_band_area_m2
     return {
         "name": draft.get("name", "room"),
         "kind": "room",
@@ -120,8 +205,10 @@ def project_to_l2_room(draft: dict) -> dict:
             "P1 first-version L2 case has no furniture boxes",
             "wall temperatures are not invented from UA",
             "supply band spans the full wall; velocity scaled to preserve project supply m3/s",
-            "window band spans the full wall; flux scaled to preserve total window W",
-            "all windows merge into one band; total window W is the sum over windows",
+            "each window enters at its own wall, span and height; total window W is the sum over windows",
+            "same-wall overlapping windows are merged into one rectangle; total window W is conserved",
+            "mesh 24x20x18 and nu 0.003 m2/s are P4-07B ladder picks; all five gates passed (ADR-020)",
+            "nu is a turbulence-equivalent effective viscosity, ~200x molecular air viscosity; the laminar solver is unchanged",
         ],
         "size": {
             "x_m": _qty(geometry["sizeX"]),
@@ -129,14 +216,21 @@ def project_to_l2_room(draft: dict) -> dict:
             "z_m": _qty(geometry["sizeZ"]),
         },
         "mesh": {
-            "nx": _assumed(16, "1"),
-            "n_span": _assumed(12, "1"),
-            "n_height": _assumed(14, "1"),
+            # P4-07B ladder: 24x20x18 passed all five gates (checkMesh, solver
+            # end, monitors, mass, energy) and put the slice max 0.12 m from
+            # the window plane; 61 s solve stays inside the App 900 s budget.
+            "nx": _ladder(24, "1"),
+            "n_span": _ladder(20, "1"),
+            "n_height": _ladder(18, "1"),
         },
         "air": {
             "rho": _assumed(1.2, "kg/m3"),
             "cp": _assumed(1006.0, "J/(kg.K)"),
-            "nu": _assumed(0.006, "m2/s"),
+            # P4-07B ladder stop at 0.003: all gates passed on both meshes;
+            # 0.0015 also passed but flipped the near/far window seat delta
+            # between meshes (-0.12 K vs +0.00 K), so seat numbers there are
+            # mesh-sensitive and stay unpinned.
+            "nu": _ladder(0.003, "m2/s"),
             "pr": _assumed(0.71, "1"),
             "beta": _assumed(0.0033, "1/K"),
             "t_ref_c": _qty(hvac["setpointC"]),
@@ -158,20 +252,27 @@ def project_to_l2_room(draft: dict) -> dict:
             "z0_m": _qty(hvac["returnTerminal"]["z0"]),
             "z1_m": _qty(hvac["returnTerminal"]["z1"]),
         },
-        "window": {
-            "x_m": {"value": _WALL_X[window_wall](size), "unit": "m", "source": "project"},
-            "z0_m": _qty(window["z0"]),
-            "z1_m": _qty(window["z1"]),
-            # Band flux preserves the SUM of every window's declared watts.
-            # Written unconditionally: a room whose windows declare no flux
-            # injects a declared 0 W, which is a real statement, not an
-            # invented one.
-            "q_w_m2": {
-                "value": window_flux,
-                "unit": "W/m2",
-                "source": "project",
-            },
-        },
+        # One entry per (merged) window rectangle: the writer meshes each as
+        # its own patch with its own fixedGradient. No-flux windows carry a
+        # declared 0 W — a real statement, not an invented one.
+        "windows": [
+            {
+                "wall": rect["wall"],
+                "s0_m": {"value": rect["s0"], "unit": "m", "source": "project"},
+                "s1_m": {"value": rect["s1"], "unit": "m", "source": "project"},
+                "z0_m": {"value": rect["z0"], "unit": "m", "source": "project"},
+                "z1_m": {"value": rect["z1"], "unit": "m", "source": "project"},
+                # Per-rectangle flux: this patch injects q x its own area.
+                # A merged rectangle carries ΣW / bbox area so W is conserved.
+                "q_w_m2": {"value": rect["q"], "unit": "W/m2", "source": "project"},
+                "area_m2": {
+                    "value": (rect["s1"] - rect["s0"]) * (rect["z1"] - rect["z0"]),
+                    "unit": "m2",
+                    "source": "project",
+                },
+            }
+            for rect in window_rects
+        ],
         "gains": {
             "n_people": _qty(occupancy["occupantCount"]),
             "people_w": _qty(occupancy["occupantSensibleW"]),

@@ -3,7 +3,7 @@
   "identity": {
     "runID": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     "scenarioID": "cccccccc-cccc-cccc-cccc-cccccccccccc",
-    "inputHash": "aa0e6da1cbe9d71c6bef7413f4942a4a5090335ca21c7755b35a4746014969e1"
+    "inputHash": "c406e7b8ecbfcb44eb22e15fc7f37eadf494a25ece41a2bca4576855b79d4f75"
   },
   "state": "succeeded",
   "quality": "passed",
@@ -11,9 +11,9 @@
     "checkMesh": "ok",
     "solverEnded": true,
     "monitorsStable": true,
-    "massRelativeError": 1.1296296296775327e-06,
+    "massRelativeError": 1.0185185179824154e-07,
     "massGate": 0.01,
-    "energyRelativeError": 0.003910470709654258,
+    "energyRelativeError": 0.0018168024655387895,
     "energyGate": 0.05
   },
   "supplyTemperatureC": 16.0,
@@ -24,42 +24,94 @@
       "x": 1.5,
       "y": 1.5,
       "z": 1.1,
-      "tC": 24.42899,
-      "uMag": 0.026422291828611288,
-      "lowSpeedAbsoluteError": true
+      "tC": 25.157010000000014,
+      "uMag": 0.016490254689209522,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.28962556346836305,
+      "ppd": 6.742651081109031
     },
     {
       "id": "S2",
       "x": 1.5,
       "y": 4.5,
       "z": 1.1,
-      "tC": 24.439700000000016,
-      "uMag": 0.02593268603005269,
-      "lowSpeedAbsoluteError": true
+      "tC": 25.157010000000014,
+      "uMag": 0.016489231478966387,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.28962556346836305,
+      "ppd": 6.742651081109031
     },
     {
       "id": "S3",
       "x": 4.5,
       "y": 1.5,
       "z": 1.1,
-      "tC": 24.727720000000033,
-      "uMag": 0.03017474825220459,
-      "lowSpeedAbsoluteError": true
+      "tC": 25.314300000000003,
+      "uMag": 0.022255580457812847,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.3170335301665206,
+      "ppd": 7.089471068532845
     },
     {
       "id": "S4",
       "x": 4.5,
       "y": 4.5,
       "z": 1.1,
-      "tC": 24.717520000000036,
-      "uMag": 0.033269469388210064,
-      "lowSpeedAbsoluteError": true
+      "tC": 25.31433000000004,
+      "uMag": 0.022256155136651825,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.3170387499419847,
+      "ppd": 7.089540147062749
+    },
+    {
+      "id": "S5",
+      "x": 3.0,
+      "y": 1.5,
+      "z": 1.1,
+      "tC": 25.16795000000002,
+      "uMag": 0.034989333821934115,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.29153448277484256,
+      "ppd": 6.765777653644236
+    },
+    {
+      "id": "S6",
+      "x": 3.0,
+      "y": 4.5,
+      "z": 1.1,
+      "tC": 25.167940000000044,
+      "uMag": 0.0349885842300003,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.2915327380529056,
+      "ppd": 6.765756446060905
+    },
+    {
+      "id": "S7",
+      "x": 1.5,
+      "y": 3.0,
+      "z": 1.1,
+      "tC": 25.182360000000017,
+      "uMag": 0.01438201864088464,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.2940482903955041,
+      "ppd": 6.7964672410326585
+    },
+    {
+      "id": "S8",
+      "x": 4.5,
+      "y": 3.0,
+      "z": 1.1,
+      "tC": 25.29078000000004,
+      "uMag": 0.03241867144274533,
+      "lowSpeedAbsoluteError": true,
+      "pmv": 0.31294030887627966,
+      "ppd": 7.035656639132171
     }
   ],
   "metrics": [
     {
       "name": "seat_t_c_min",
-      "value": 24.42899,
+      "value": 25.157010000000014,
       "unit": "C",
       "method": "openfoam_cell_sample",
       "fidelity": "l2",
@@ -67,7 +119,7 @@
     },
     {
       "name": "seat_t_c_max",
-      "value": 24.727720000000033,
+      "value": 25.31433000000004,
       "unit": "C",
       "method": "openfoam_cell_sample",
       "fidelity": "l2",
@@ -75,7 +127,7 @@
     },
     {
       "name": "seat_u_mag_max",
-      "value": 0.033269469388210064,
+      "value": 0.034989333821934115,
       "unit": "m/s",
       "method": "openfoam_cell_sample",
       "fidelity": "l2",
@@ -83,30 +135,81 @@
     },
     {
       "name": "seat_pmv_min",
-      "value": null,
+      "value": 0.28962556346836305,
       "unit": "index",
-      "method": "not_modeled",
+      "method": "iso7730_pmv",
       "fidelity": "l2",
-      "omitted": true,
-      "reason": "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+      "omitted": false
     },
     {
       "name": "seat_pmv_max",
-      "value": null,
+      "value": 0.3170387499419847,
       "unit": "index",
-      "method": "not_modeled",
+      "method": "iso7730_pmv",
       "fidelity": "l2",
-      "omitted": true,
-      "reason": "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+      "omitted": false
     },
     {
       "name": "seat_ppd_max",
-      "value": null,
+      "value": 7.089540147062749,
       "unit": "%",
+      "method": "iso7730_pmv",
+      "fidelity": "l2",
+      "omitted": false
+    },
+    {
+      "name": "seat_pass_ratio",
+      "value": 1.0,
+      "unit": "1",
+      "method": "l2_seat_gate",
+      "fidelity": "l2",
+      "omitted": false,
+      "reason": "低速绝对误差座位仍用风速门：S1, S2, S3, S4, S5, S6, S7, S8"
+    },
+    {
+      "name": "seat_pass_count",
+      "value": 8.0,
+      "unit": "count",
+      "method": "l2_seat_gate",
+      "fidelity": "l2",
+      "omitted": false,
+      "reason": "低速绝对误差座位仍用风速门：S1, S2, S3, S4, S5, S6, S7, S8"
+    },
+    {
+      "name": "seat_eval_count",
+      "value": 8.0,
+      "unit": "count",
+      "method": "l2_seat_gate",
+      "fidelity": "l2",
+      "omitted": false,
+      "reason": "低速绝对误差座位仍用风速门：S1, S2, S3, S4, S5, S6, S7, S8"
+    },
+    {
+      "name": "worst_seat_id",
+      "value": null,
+      "unit": "id",
+      "method": "l2_seat_gate",
+      "fidelity": "l2",
+      "omitted": false,
+      "reason": "S4"
+    },
+    {
+      "name": "worst_seat_reason",
+      "value": null,
+      "unit": "text",
+      "method": "l2_seat_gate",
+      "fidelity": "l2",
+      "omitted": false,
+      "reason": "偏离温度带中心 24.5 °C 最大；低速绝对误差"
+    },
+    {
+      "name": "infeasibleReason",
+      "value": null,
+      "unit": "text",
       "method": "not_modeled",
       "fidelity": "l2",
       "omitted": true,
-      "reason": "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+      "reason": "未触发：已有座位通过模型门"
     }
   ]
 }

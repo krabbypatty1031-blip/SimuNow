@@ -34,8 +34,9 @@ struct ViewportLegend: View {
                 Text("气流 \(UserFacingCopy.displayNumber(minMag))–\(UserFacingCopy.displayNumber(maxMag)) m/s。圆点沿流线循环是示意，箭头已放大，不是开机降温。")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                // The solver's inlet simplification, stated where the flow is shown.
-                Text("送风按整墙高度带进入计算（速度已按风量缩放）；「送风」「回风」标注指该带，墙上空调只标位置。")
+                // The solver's simplifications, stated where the flow is shown:
+                // windows are per-rectangle (P4-07), supply/return stay full-wall bands.
+                Text("窗按实际墙面与宽度进入计算（每扇单独进网格）；送回风仍按整墙高度带进入计算（速度已按风量缩放），「送风」「回风」标注指该带，墙上空调只标位置。")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

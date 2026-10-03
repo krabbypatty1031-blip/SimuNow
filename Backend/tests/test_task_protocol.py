@@ -112,16 +112,32 @@ class TaskProtocolTests(unittest.TestCase):
         self.assertEqual(result["quality"], "passed")
         self.assertEqual(result["qualityDetail"]["checkMesh"], "ok")
         self.assertTrue(result["qualityDetail"]["solverEnded"])
-        self.assertEqual(len(result["seatSamples"]), 4)
+        # P4-07 re-pin follows the current office template (8 seats, comfort
+        # defaults present), so the fixture carries 8 evaluated seats.
+        self.assertEqual(len(result["seatSamples"]), 8)
         first = result["seatSamples"][0]
         self.assertEqual(first["id"], "S1")
         self.assertGreater(first["tC"], 15)
         self.assertIn("lowSpeedAbsoluteError", first)
 
     def test_l2_result_passes_omission_reasons_through(self):
-        # Comfort metrics stay omitted with their reason; the wire copy must
-        # not drop the reason and must not invent a PMV value.
+        # Comfort metrics must keep their omission reason on the wire; the
+        # value is never filled with a neutral 0 vote. The re-pinned office
+        # fixture HAS comfort inputs, so the omission path is exercised by
+        # stripping them from a copy of the payload, not by re-pinning a
+        # comfort-less run (P5-01 keeps a separate comfort fixture).
         payload = json.loads((FIXTURES / "result-l2.json").read_text(encoding="utf-8"))
+        reason = "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+        payload["metrics"] = [
+            {"name": item["name"], "value": None, "unit": item.get("unit"), "method": "not_modeled", "fidelity": "l2", "omitted": True, "reason": reason}
+            if item["name"].startswith("seat_pmv") or item["name"] == "seat_ppd_max"
+            else item
+            for item in payload["metrics"]
+        ]
+        payload["seatSamples"] = [
+            {key: value for key, value in seat.items() if key not in ("pmv", "ppd")}
+            for seat in payload["seatSamples"]
+        ]
         result = parse_result(payload)
         pmv_min = next(item for item in result["metrics"] if item["name"] == "seat_pmv_min")
         self.assertTrue(pmv_min["omitted"])

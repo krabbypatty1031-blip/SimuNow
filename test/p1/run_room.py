@@ -27,7 +27,8 @@ from room_input import (
     load_room,
     point_in_fluid,
     qty,
-    window_area_m2,
+    window_rects,
+    window_total_w,
 )
 from sample_seats import seat_sample
 from write_openfoam_room import write_openfoam_room
@@ -179,6 +180,10 @@ def sample_seats(
 def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dict[str, Any]:
     """Mesh, gate, solve, sample. quality.pass is false unless every gate holds."""
     run_dir.mkdir(parents=True, exist_ok=True)
+    if not window_rects(room):
+        # Legacy single-window (L1-shaped) rooms must not run as L2 cases:
+        # the energy gate would silently count 0 W of window heat.
+        raise RoomError("L2 room must carry windows[] rectangles (P4-07 contract)")
     digest = input_hash(room)
     (run_dir / "input.json").write_text(json.dumps(room, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (run_dir / "input_hash.txt").write_text(digest + "\n", encoding="utf-8")
@@ -302,7 +307,11 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
         q_people_w=qty(room["gains"]["n_people"]) * qty(room["gains"]["people_w"]),
         q_lights_w=qty(room["gains"]["lighting_w"]),
         q_equip_w=qty(room["gains"]["equipment_w"]),
-        q_window_w=qty(room["window"]["q_w_m2"]) * window_area_m2(room),
+        # P4-07: Σ per-window q × area — the watts the windowN patches
+        # actually inject. The gate accounts what the BCs do, not a band
+        # approximation. A room without windows[] rectangles is an honest
+        # error, never a silent 0 W glazed wall.
+        q_window_w=window_total_w(room),
         q_inlet_cond_w=q_inlet_cond_w,
         mass_gate=qty(room["quality_gates"]["mass_rel"]),
         energy_gate=qty(room["quality_gates"]["energy_rel"]),

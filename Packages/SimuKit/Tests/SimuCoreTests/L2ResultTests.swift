@@ -56,8 +56,9 @@ private func fixturesDirectory() -> URL {
     #expect(detail.checkMesh == "ok")
 
     let seats = try #require(result.seatSamples)
-    #expect(seats.count == 4)
-    #expect(seats.map(\.id) == ["S1", "S2", "S3", "S4"])
+    // P4-07 re-pin follows the current office template: 8 seats.
+    #expect(seats.count == 8)
+    #expect(seats.map(\.id) == ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"])
     #expect(seats.allSatisfy { $0.tC > 15 })
     #expect(seats.contains { $0.lowSpeedAbsoluteError == true })
 
@@ -74,10 +75,40 @@ private func fixturesDirectory() -> URL {
 }
 
 @Test func l2ResultCarriesOmittedComfortMetricsWithReason() throws {
-    // The pinned run has no comfort inputs, so PMV stays omitted with a
-    // reason; it is never filled with a neutral 0 vote.
-    let data = try Data(contentsOf: fixturesDirectory().appendingPathComponent("result-l2.json"))
-    let result = try JSONDecoder().decode(SimulationResult.self, from: data)
+    // Comfort metrics must keep their omission reason on the wire; the value
+    // is never filled with a neutral 0 vote. The re-pinned office fixture
+    // HAS comfort inputs, so the omission path is exercised by stripping
+    // them from a mutated copy, not by pinning a comfort-less run.
+    let url = fixturesDirectory().appendingPathComponent("result-l2.json")
+    let payload = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+
+    let reason = "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+    var mutant = payload
+    mutant["metrics"] = (payload["metrics"] as? [[String: Any]] ?? []).map { item in
+        guard let name = item["name"] as? String,
+              name.hasPrefix("seat_pmv") || name == "seat_ppd_max" else { return item }
+        return [
+            "name": name,
+            "value": NSNull(),
+            // The wire contract keeps the unit even while omitted.
+            "unit": name == "seat_ppd_max" ? "%" : "index",
+            "omitted": true,
+            "method": "not_modeled",
+            "fidelity": "l2",
+            "reason": reason,
+        ]
+    }
+    mutant["seatSamples"] = (payload["seatSamples"] as? [[String: Any]] ?? []).map { seat in
+        var row = seat
+        row.removeValue(forKey: "pmv")
+        row.removeValue(forKey: "ppd")
+        return row
+    }
+
+    let result = try JSONDecoder().decode(
+        SimulationResult.self,
+        from: JSONSerialization.data(withJSONObject: mutant)
+    )
 
     let pmvMin = try #require(result.metric(named: "seat_pmv_min"))
     #expect(pmvMin.omitted)
@@ -85,10 +116,10 @@ private func fixturesDirectory() -> URL {
     #expect(pmvMin.unit == "index")
     #expect(pmvMin.method == "not_modeled")
     #expect(pmvMin.fidelity == .l2)
-    let reason = try #require(pmvMin.reason)
-    #expect(reason.contains("missing"))
-    #expect(reason.contains("mrtC"))
-    #expect(reason.contains("rhPct"))
+    let strippedReason = try #require(pmvMin.reason)
+    #expect(strippedReason.contains("missing"))
+    #expect(strippedReason.contains("mrtC"))
+    #expect(strippedReason.contains("rhPct"))
 
     let ppdMax = try #require(result.metric(named: "seat_ppd_max"))
     #expect(ppdMax.omitted)

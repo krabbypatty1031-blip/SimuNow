@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from room_input import input_hash, qty, window_area_m2
+from room_input import input_hash, qty, window_area_m2, window_rects, window_total_w
 
 LOGGER = logging.getLogger("simunow.p1.write_idf")
 
@@ -92,7 +92,18 @@ def l1_window_w(room: dict[str, Any]) -> float:
 
 
 def l2_window_w(room: dict[str, Any]) -> float:
-    return qty(room["window"]["q_w_m2"]) * window_area_m2(room)
+    """The L2 window watts, for the gains comparison table only.
+
+    windows[] rooms (P1 fixture, P4-07): the watts the per-window patches
+    actually inject (Σ q × area over rectangles). Legacy single-window
+    rooms (from l1_room.py): the pre-P4-07 full-span band value stays bit
+    for bit so the L1 pinned numbers do not drift.
+    """
+    if window_rects(room):
+        return window_total_w(room)
+    # Legacy L1 room: q may be absent when the draft declared no flux; that
+    # is a declared 0 W, not a KeyError.
+    return qty(room["window"].get("q_w_m2", {"value": 0.0})) * window_area_m2(room)
 
 
 def l1_opaque_w(room: dict[str, Any]) -> float:
@@ -115,7 +126,7 @@ def gains_table(room: dict[str, Any]) -> dict[str, Any]:
 
     window_note = (
         "L1 uses UA_window*ΔT + SHGC*solar*l1.window_area; "
-        "L2 uses fixture q_w_m2 on the full-span glazed band. "
+        "L2 uses the per-window rectangles' summed q×A (P4-07 patches). "
         "Opaque UA and infiltration exist only in L1."
     )
     return {
@@ -134,10 +145,21 @@ def gains_table(room: dict[str, Any]) -> dict[str, Any]:
 
 
 def _window_xy(room: dict[str, Any]) -> tuple[float, float, float, float]:
-    """East-wall window sized to l1.window_area_m2, height from the L2 band."""
+    """East-wall window sized to l1.window_area_m2, height from the first window.
+
+    The IDF keeps ONE window of the summed area (ADR-018 L1 side). Its height
+    follows the first window rectangle: windows[] rooms (P1 fixture) read
+    windows[0].z, legacy single-window rooms (l1_room.py) read window.z —
+    the same value the pre-P4-07 IDF used.
+    """
     ly = qty(room["size"]["y_m"])
-    z0 = qty(room["window"]["z0_m"])
-    z1 = qty(room["window"]["z1_m"])
+    rects = window_rects(room)
+    if rects:
+        z0 = qty(rects[0]["z0_m"])
+        z1 = qty(rects[0]["z1_m"])
+    else:
+        z0 = qty(room["window"]["z0_m"])
+        z1 = qty(room["window"]["z1_m"])
     area = qty(room["l1"]["window_area_m2"])
     height = max(z1 - z0, 1e-6)
     width = min(ly - 0.2, area / height)

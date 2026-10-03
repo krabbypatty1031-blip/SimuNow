@@ -1,6 +1,6 @@
 # 工程验证记录
 
-日期：2026-10-03（3D 视口方案 A / UX 用户向界面第一轮 / P5-05 失败路径与离线 PDF / P4 App 手测 C–E / ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（3D 视口方案 A / UX 用户向界面第一轮 / P5-05 失败路径与离线 PDF / P4 App 手测 C–F / ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。手测 App 为 **SimuNowMac Debug**（`SimuNowMacDebug.entitlements` 不含 `app-sandbox`）；Release 仍沙盒，不能把本次 exec 当作沙盒产品闭环。
 
 ## 3D 视口方案 A（2026-10-03）
@@ -50,6 +50,7 @@
 | E 再提交 L2 | `succeeded` / quality `passed` | 座位 **24.21–24.50 °C**（相对基准约 −0.22 K），最大风速 0.030 m/s，切片 23.05–24.96 °C。App 与同口径 CLI `run-l2`（`Artifacts/p4-e-step/run-lowered-supply`，约 20 s）逐位一致 |
 | E 方案对比 | 两列并排 | 降低口：24.21–24.50 °C，新鲜度「输入已改」，质量 passed；恢复默认口：24.43–24.73 °C，新鲜度「当前输入」，质量 passed。共用色标 **23.0–25.2 °C**（联合范围，不各自归一化；单列时降低口图例曾是 23.0–25.0）。两列 PMV 均不可评价带同一原因。无「口径不同」警示 |
 | 任务页 L1 指标 | 提交 L2 后显示「未知」 | `lastResult` 单槽被 L2 覆盖，L2 无 `q_cool_w`/`p_elec_w`；磁盘 L1 run `FD8C00D1-…` 仍在，未把旧瓦数写成 0 |
+| F P4-07B 红斑 L2（默认 nu 0.003 / 24×20×18） | `succeeded` / quality `passed` | 座位 25.16–25.31 °C，PMV 0.29–0.32、PPD ≤7.1%，切片 23.83–26.12 °C（自动色标）。**红斑贴窗**：红色条带紧贴 xMax 墙窗框（窗带 y 2.25–3.75），远窗侧偏蓝；速度箭头/流线正常。App 数字与钉版 `result-l2.json` / `field-slice-l2.json` 及 App 通道重钉 run（`Artifacts/sensitivity/p4-07b/repin/`）一致。等待约 90 s（solve 61 s），900 s 预算内 |
 
 不得当作产品功能：Release 沙盒 App 内 exec EnergyPlus/docker（本次 Debug 关 sandbox，生产路径仍是签名 helper，ADR-011）；「基准 + 两候选」三列（手测固定两列，足以证明并排与共用色标）；沿墙平移风口会改场；任务页同时保留 L1 瓦数与 L2 座位；PMV 有值或实测满意率；稳态切片表示降温时间。
 

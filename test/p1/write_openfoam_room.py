@@ -1,4 +1,11 @@
-"""Write an OpenFOAM v2512 room case from Z-up room_p1.json."""
+"""Write an OpenFOAM v2512 room case from Z-up room_p1.json.
+
+P4-07: the mesh is cut in all three directions so every window rectangle
+becomes its own boundary patch (window0, window1, ...) with its own
+fixedGradient. Supply/return stay full-span height bands on the x=0 wall.
+The supply/return bands own the full xMin span at their heights, so a
+window on xMin that would share those faces is rejected up front.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from room_input import (
+    RoomError,
     foam_xyz,
     inlet_area_m2,
     input_hash,
@@ -15,6 +23,8 @@ from room_input import (
     qty,
     room_box,
     window_area_m2,
+    window_rects,
+    window_total_w,
 )
 
 LOGGER = logging.getLogger("simunow.p1.write_of")
@@ -40,15 +50,53 @@ def _unique_heights(*values: float) -> list[float]:
 
 
 def _allocate_cells(lengths: list[float], target: int, min_each: int = 2) -> list[int]:
-    """Keep thin inlet/outlet bands at least two cells so checkMesh stays usable."""
+    """Keep thin bands at least two cells so checkMesh stays usable."""
     safe = [max(length, 1e-9) for length in lengths]
     total = sum(safe)
     counts = [max(min_each, int(round(target * length / total))) for length in safe]
     return counts
 
 
-def _band_name(mid: float, z0: float, z1: float) -> bool:
-    return z0 - 1e-9 <= mid <= z1 + 1e-9
+def _mid(lo: float, hi: float) -> float:
+    return 0.5 * (lo + hi)
+
+
+def _in_band(m: float, lo: float, hi: float) -> bool:
+    return lo - 1e-9 <= m <= hi + 1e-9
+
+
+def _validated_windows(room: dict[str, Any]) -> list[dict[str, Any]]:
+    """Per-window rectangles with bounds and xMin band-conflict guards.
+
+    The CLI fixture path bypasses l2_room's checks, so the writer re-asserts
+    them: a window off its wall or off the room, or one that would share
+    inlet/outlet faces on xMin, is an honest error, never a silent watt loss.
+    """
+    lx, span, height = room_box(room)
+    supply_z0, supply_z1 = qty(room["supply"]["z0_m"]), qty(room["supply"]["z1_m"])
+    return_z0, return_z1 = qty(room["return"]["z0_m"]), qty(room["return"]["z1_m"])
+    windows = window_rects(room)
+    if not windows:
+        raise RoomError("room has no windows[] rectangle; the case needs a glazed patch")
+    for index, item in enumerate(windows):
+        wall = item.get("wall")
+        if wall not in ("xMin", "xMax", "yMin", "yMax"):
+            raise RoomError(f"window {index} wall {wall!r} is not one of xMin/xMax/yMin/yMax")
+        # xMin/xMax windows run along contract y; yMin/yMax along contract x.
+        wall_len = span if wall in ("xMin", "xMax") else lx
+        s0, s1 = qty(item["s0_m"]), qty(item["s1_m"])
+        z0, z1 = qty(item["z0_m"]), qty(item["z1_m"])
+        if not 0 <= s0 < s1 <= wall_len + 1e-9:
+            raise RoomError(f"window {index} on {wall} leaves the wall span 0..{wall_len:g} m")
+        if not 0 <= z0 < z1 <= height + 1e-9:
+            raise RoomError(f"window {index} on {wall} leaves the room height 0..{height:g} m")
+        if wall == "xMin":
+            for band, (bz0, bz1) in (("supply", (supply_z0, supply_z1)), ("return", (return_z0, return_z1))):
+                if z0 < bz1 - 1e-9 and bz0 < z1 - 1e-9:
+                    raise RoomError(
+                        f"window {index} on xMin overlaps the {band} band z {bz0:g}..{bz1:g} m; move the window off the grille"
+                    )
+    return windows
 
 
 def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
@@ -57,16 +105,42 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
     for sub in ("0", "constant", "system"):
         (dest / sub).mkdir(parents=True, exist_ok=True)
 
+    # Contract (x, y, z) -> foam (x, y_up=contract z, z_span=contract y).
     lx, span, height = room_box(room)
     nx = int(qty(room["mesh"]["nx"]))
     n_span = int(qty(room["mesh"]["n_span"]))
     n_height = int(qty(room["mesh"]["n_height"]))
     supply_z0, supply_z1 = qty(room["supply"]["z0_m"]), qty(room["supply"]["z1_m"])
     return_z0, return_z1 = qty(room["return"]["z0_m"]), qty(room["return"]["z1_m"])
-    win_z0, win_z1 = qty(room["window"]["z0_m"]), qty(room["window"]["z1_m"])
-    cuts = _unique_heights(0.0, win_z0, return_z0, return_z1, win_z1, supply_z0, supply_z1, height)
-    lengths = [cuts[i + 1] - cuts[i] for i in range(len(cuts) - 1)]
-    nys = _allocate_cells(lengths, n_height)
+    windows = _validated_windows(room)
+    windows_along_x = [item for item in windows if item["wall"] in ("yMin", "yMax")]
+    windows_along_span = [item for item in windows if item["wall"] in ("xMin", "xMax")]
+
+    # Three-direction cuts. Every window edge becomes a mesh line so each
+    # rectangle is exactly a set of block faces (P4-07 geometry fidelity).
+    cuts_x = _unique_heights(
+        0.0,
+        lx,
+        *(value for item in windows_along_x for value in (qty(item["s0_m"]), qty(item["s1_m"]))),
+    )
+    cuts_h = _unique_heights(
+        0.0,
+        height,
+        supply_z0,
+        supply_z1,
+        return_z0,
+        return_z1,
+        *(value for item in windows for value in (qty(item["z0_m"]), qty(item["z1_m"]))),
+    )
+    cuts_s = _unique_heights(
+        0.0,
+        span,
+        *(value for item in windows_along_span for value in (qty(item["s0_m"]), qty(item["s1_m"]))),
+    )
+    nxs = _allocate_cells([cuts_x[i + 1] - cuts_x[i] for i in range(len(cuts_x) - 1)], nx)
+    nhs = _allocate_cells([cuts_h[j + 1] - cuts_h[j] for j in range(len(cuts_h) - 1)], n_height)
+    nss = _allocate_cells([cuts_s[k + 1] - cuts_s[k] for k in range(len(cuts_s) - 1)], n_span)
+
     u_in = qty(room["supply"]["u_m_s"])
     t_supply = qty(room["supply"]["t_c"]) + 273.15
     t_init = qty(room["t_init_c"]) + 273.15
@@ -75,12 +149,12 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
     pr = qty(room["air"]["pr"])
     rho = qty(room["air"]["rho"])
     cp = qty(room["air"]["cp"])
-    q_w = qty(room["window"]["q_w_m2"])
-    # Fourier: q_into = -k * dT/dn_out. On this mesh a negative fixedGradient
-    # produced min(T)=14.8°C (colder than 16°C supply) and Q_extracted≈Q_people-Q_window,
-    # i.e. the patch acted as a sink. Positive gradient puts heat into the fluid.
+    # Fourier: q_into = -k * dT/dn_out. A negative fixedGradient turned the
+    # patch into a sink (min T below supply); positive puts heat into the fluid.
     kappa = rho * cp * (nu / pr)
-    window_gradient = q_w / kappa
+    # Per-window gradients: each patch injects q_i over its own rectangle.
+    window_gradients = [qty(item["q_w_m2"]) / kappa for item in windows]
+    window_patches = [f"window{index}" for index in range(len(windows))]
     volume = lx * span * height
     su_t = internal_gain_w(room) / (rho * cp * volume)
     end_time = int(qty(room["solver"]["end_time"]))
@@ -90,60 +164,106 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
     outlet_pt = foam_xyz(0.05, span * 0.5, 0.5 * (return_z0 + return_z1))
     far_pt = foam_xyz(float(far["x_m"]), float(far["y_m"]), float(far["z_m"]))
 
-    LOGGER.info("write OF room case dest=%s nx=%s n_span=%s bands=%s", dest.name, nx, n_span, nys)
+    LOGGER.info(
+        "write OF room case dest=%s nx=%s n_span=%s n_height=%s blocks=%s windows=%s",
+        dest.name,
+        nxs,
+        nss,
+        nhs,
+        (len(cuts_x) - 1) * (len(cuts_h) - 1) * (len(cuts_s) - 1),
+        window_patches,
+    )
+
+    # Full 3-D point lattice; block corners reference points by index.
+    # One cut value per direction IS one point plane (no +1 anywhere).
+    nx_pts, nh_pts, ns_pts = len(cuts_x), len(cuts_h), len(cuts_s)
+
+    def vid(i: int, j: int, k: int) -> int:
+        # i along foam x (contract x), j along foam y (height), k along foam z (span).
+        return i + nx_pts * (j + nh_pts * k)
 
     vertices: list[str] = []
-    for y in cuts:
-        vertices.extend(
-            [
-                f"    (0 {y:.6f} 0)",
-                f"    ({lx:.6f} {y:.6f} 0)",
-                f"    ({lx:.6f} {y:.6f} {span:.6f})",
-                f"    (0 {y:.6f} {span:.6f})",
-            ]
-        )
-    blocks: list[str] = []
-    faces: dict[str, list[str]] = {
-        "inlet": [],
-        "outlet": [],
-        "window": [],
-        "walls": [],
-        "frontAndBack": [],
-    }
-    xmin_of: list[str] = []
-    for block, ny in enumerate(nys):
-        bot = 4 * block
-        top = 4 * (block + 1)
-        ids = [bot + 0, bot + 1, top + 1, top + 0, bot + 3, bot + 2, top + 2, top + 3]
-        blocks.append(f"    hex ({' '.join(str(i) for i in ids)}) ({nx} {ny} {n_span}) simpleGrading (1 1 1)")
-        xmin = f"({ids[0]} {ids[4]} {ids[7]} {ids[3]})"
-        xmax = f"({ids[1]} {ids[2]} {ids[6]} {ids[5]})"
-        ymin = f"({ids[0]} {ids[1]} {ids[5]} {ids[4]})"
-        ymax = f"({ids[3]} {ids[7]} {ids[6]} {ids[2]})"
-        zmin = f"({ids[0]} {ids[3]} {ids[2]} {ids[1]})"
-        zmax = f"({ids[4]} {ids[5]} {ids[6]} {ids[7]})"
-        mid = 0.5 * (cuts[block] + cuts[block + 1])
-        if _band_name(mid, supply_z0, supply_z1):
-            faces["inlet"].append(xmin)
-            xmin_of.append("inlet")
-        elif _band_name(mid, return_z0, return_z1):
-            faces["outlet"].append(xmin)
-            xmin_of.append("outlet")
-        else:
-            faces["walls"].append(xmin)
-            xmin_of.append("walls")
-        if _band_name(mid, win_z0, win_z1):
-            faces["window"].append(xmax)
-        else:
-            faces["walls"].append(xmax)
-        if block == 0:
-            faces["walls"].append(ymin)
-        if block == len(nys) - 1:
-            faces["walls"].append(ymax)
-        faces["frontAndBack"].extend([zmin, zmax])
+    for k in range(ns_pts):
+        for j in range(nh_pts):
+            for i in range(nx_pts):
+                vertices.append(f"    ({cuts_x[i]:.6f} {cuts_h[j]:.6f} {cuts_s[k]:.6f})")
 
-    if not faces["inlet"] or not faces["outlet"] or not faces["window"]:
-        raise RuntimeError(f"missing patches xmin_of={xmin_of}")
+    def face_window(wall: str, s_mid: float, h_mid: float) -> int | None:
+        """Index of the single window rectangle containing this block face, else None.
+
+        Cuts sit on every window edge, so a boundary block face lies either
+        fully inside one rectangle or fully outside all of them.
+        """
+        for index, item in enumerate(windows):
+            if item["wall"] != wall:
+                continue
+            if _in_band(s_mid, qty(item["s0_m"]), qty(item["s1_m"])) and _in_band(
+                h_mid, qty(item["z0_m"]), qty(item["z1_m"])
+            ):
+                return index
+        return None
+
+    blocks: list[str] = []
+    faces: dict[str, list[str]] = {"inlet": [], "outlet": [], "walls": []}
+    for name in window_patches:
+        faces[name] = []
+
+    for k in range(len(cuts_s) - 1):
+        m_s = _mid(cuts_s[k], cuts_s[k + 1])
+        for j in range(len(cuts_h) - 1):
+            m_h = _mid(cuts_h[j], cuts_h[j + 1])
+            for i in range(len(cuts_x) - 1):
+                m_x = _mid(cuts_x[i], cuts_x[i + 1])
+                ids = [
+                    vid(i, j, k),
+                    vid(i + 1, j, k),
+                    vid(i + 1, j + 1, k),
+                    vid(i, j + 1, k),
+                    vid(i, j, k + 1),
+                    vid(i + 1, j, k + 1),
+                    vid(i + 1, j + 1, k + 1),
+                    vid(i, j + 1, k + 1),
+                ]
+                blocks.append(
+                    f"    hex ({' '.join(str(v) for v in ids)}) ({nxs[i]} {nhs[j]} {nss[k]}) simpleGrading (1 1 1)"
+                )
+                # Same face corner sets as the pre-P4-07 slab writer, so a
+                # single full-span xMax window reproduces the old topology.
+                xlo = f"({ids[0]} {ids[4]} {ids[7]} {ids[3]})"
+                xhi = f"({ids[1]} {ids[2]} {ids[6]} {ids[5]})"
+                hlo = f"({ids[0]} {ids[1]} {ids[5]} {ids[4]})"
+                hhi = f"({ids[3]} {ids[7]} {ids[6]} {ids[2]})"
+                slo = f"({ids[0]} {ids[3]} {ids[2]} {ids[1]})"
+                shi = f"({ids[4]} {ids[5]} {ids[6]} {ids[7]})"
+                if i == 0:
+                    # Supply/return own the full span at their heights.
+                    if _in_band(m_h, supply_z0, supply_z1):
+                        faces["inlet"].append(xlo)
+                    elif _in_band(m_h, return_z0, return_z1):
+                        faces["outlet"].append(xlo)
+                    else:
+                        found = face_window("xMin", m_s, m_h)
+                        (faces[window_patches[found]] if found is not None else faces["walls"]).append(xlo)
+                if i == len(cuts_x) - 2:
+                    # Last x interval owns the x=max plane faces.
+                    found = face_window("xMax", m_s, m_h)
+                    (faces[window_patches[found]] if found is not None else faces["walls"]).append(xhi)
+                if j == 0:
+                    faces["walls"].append(hlo)  # floor
+                if j == len(cuts_h) - 2:
+                    faces["walls"].append(hhi)  # ceiling
+                if k == 0:
+                    found = face_window("yMin", m_x, m_h)
+                    (faces[window_patches[found]] if found is not None else faces["walls"]).append(slo)
+                if k == len(cuts_s) - 2:
+                    found = face_window("yMax", m_x, m_h)
+                    (faces[window_patches[found]] if found is not None else faces["walls"]).append(shi)
+
+    if not faces["inlet"] or not faces["outlet"]:
+        raise RuntimeError("case is missing the inlet or outlet band")
+    for name in window_patches:
+        if not faces[name]:
+            raise RuntimeError(f"window patch {name} has no faces; the rectangle missed the mesh")
 
     def patch(name: str, kind: str) -> str:
         return f"    {name} {{ type {kind}; faces ( {' '.join(faces[name])} ); }}"
@@ -157,13 +277,9 @@ def write_openfoam_room(room: dict[str, Any], dest: Path) -> Path:
         + "\n".join(blocks)
         + "\n);\nedges ();\nboundary\n(\n"
         + "\n".join(
-            [
-                patch("inlet", "patch"),
-                patch("outlet", "patch"),
-                patch("window", "wall"),
-                patch("walls", "wall"),
-                patch("frontAndBack", "wall"),
-            ]
+            [patch("inlet", "patch"), patch("outlet", "patch")]
+            + [patch(name, "wall") for name in window_patches]
+            + [patch("walls", "wall")]
         )
         + "\n);\nmergePatchPairs ();\n",
     )
@@ -357,6 +473,13 @@ Prt             [0 0 0 0 0 0 0] 0.85;
 }}
 """,
     )
+    window_u = "\n".join(f"    {name} {{ type noSlip; }}" for name in window_patches)
+    window_t = "\n".join(
+        f"    {name} {{ type fixedGradient; gradient uniform {window_gradients[index]:.8g}; }}"
+        for index, name in enumerate(window_patches)
+    )
+    window_p_rgh = "\n".join(f"    {name} {{ type fixedFluxPressure; value uniform 0; }}" for name in window_patches)
+    window_calculated = "\n".join(f"    {name} {{ type calculated; value uniform 0; }}" for name in window_patches)
     _write(
         dest / "0" / "U",
         _header("volVectorField", "U")
@@ -366,9 +489,8 @@ boundaryField
 {{
     inlet {{ type fixedValue; value uniform ({u_in} 0 0); }}
     outlet {{ type inletOutlet; inletValue uniform (0 0 0); value uniform (0 0 0); }}
-    window {{ type noSlip; }}
+{window_u}
     walls {{ type noSlip; }}
-    frontAndBack {{ type noSlip; }}
 }}
 """,
     )
@@ -381,52 +503,48 @@ boundaryField
 {{
     inlet {{ type fixedValue; value uniform {t_supply}; }}
     outlet {{ type zeroGradient; }}
-    window {{ type fixedGradient; gradient uniform {window_gradient:.8g}; }}
+{window_t}
     walls {{ type zeroGradient; }}
-    frontAndBack {{ type zeroGradient; }}
 }}
 """,
     )
     _write(
         dest / "0" / "p_rgh",
         _header("volScalarField", "p_rgh")
-        + """dimensions [0 2 -2 0 0 0 0];
+        + f"""dimensions [0 2 -2 0 0 0 0];
 internalField uniform 0;
 boundaryField
-{
-    inlet { type fixedFluxPressure; value uniform 0; }
-    outlet { type fixedValue; value uniform 0; }
-    window { type fixedFluxPressure; value uniform 0; }
-    walls { type fixedFluxPressure; value uniform 0; }
-    frontAndBack { type fixedFluxPressure; value uniform 0; }
-}
+{{
+    inlet {{ type fixedFluxPressure; value uniform 0; }}
+    outlet {{ type fixedValue; value uniform 0; }}
+{window_p_rgh}
+    walls {{ type fixedFluxPressure; value uniform 0; }}
+}}
 """,
     )
-    calculated = """dimensions [0 2 -2 0 0 0 0];
+    calculated = f"""dimensions [0 2 -2 0 0 0 0];
 internalField uniform 0;
 boundaryField
-{
-    inlet { type calculated; value uniform 0; }
-    outlet { type calculated; value uniform 0; }
-    window { type calculated; value uniform 0; }
-    walls { type calculated; value uniform 0; }
-    frontAndBack { type calculated; value uniform 0; }
-}
+{{
+    inlet {{ type calculated; value uniform 0; }}
+    outlet {{ type calculated; value uniform 0; }}
+{window_calculated}
+    walls {{ type calculated; value uniform 0; }}
+}}
 """
     _write(dest / "0" / "p", _header("volScalarField", "p") + calculated)
     _write(
         dest / "0" / "alphat",
         _header("volScalarField", "alphat")
-        + """dimensions [0 2 -1 0 0 0 0];
+        + f"""dimensions [0 2 -1 0 0 0 0];
 internalField uniform 0;
 boundaryField
-{
-    inlet { type calculated; value uniform 0; }
-    outlet { type calculated; value uniform 0; }
-    window { type calculated; value uniform 0; }
-    walls { type calculated; value uniform 0; }
-    frontAndBack { type calculated; value uniform 0; }
-}
+{{
+    inlet {{ type calculated; value uniform 0; }}
+    outlet {{ type calculated; value uniform 0; }}
+{window_calculated}
+    walls {{ type calculated; value uniform 0; }}
+}}
 """,
     )
     meta = {
@@ -434,13 +552,29 @@ boundaryField
         "gravity_foam_m_s2": [0, -9.81, 0],
         "gravity_contract_m_s2": [0, 0, -9.81],
         "input_hash": input_hash(room),
-        "nx": nx,
-        "n_span": n_span,
-        "n_height_bands": nys,
+        "nx": nxs,
+        "n_span": nss,
+        "n_height_bands": nhs,
         "inlet_area_m2": inlet_area_m2(room),
+        # One entry per (merged) window rectangle; the patch name is the
+        # contract between this case and the quality/accounting readers.
+        "windows": [
+            {
+                "patch": window_patches[index],
+                "wall": item["wall"],
+                "s0_m": qty(item["s0_m"]),
+                "s1_m": qty(item["s1_m"]),
+                "z0_m": qty(item["z0_m"]),
+                "z1_m": qty(item["z1_m"]),
+                "q_w_m2": qty(item["q_w_m2"]),
+                "area_m2": (qty(item["s1_m"]) - qty(item["s0_m"]))
+                * (qty(item["z1_m"]) - qty(item["z0_m"])),
+                "gradient_k_m": window_gradients[index],
+            }
+            for index, item in enumerate(windows)
+        ],
         "window_area_m2": window_area_m2(room),
-        "window_q_w_m2": q_w,
-        "window_gradient_k_m": window_gradient,
+        "window_total_w_m2": window_total_w(room),
         "internal_gain_w": internal_gain_w(room),
         "t_source_k_s": su_t,
         "solver": "buoyantBoussinesqSimpleFoam",

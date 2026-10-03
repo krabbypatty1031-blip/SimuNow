@@ -32,9 +32,9 @@ def map_project_to_p1(draft: dict) -> dict:
     windows = [item for item in geometry["openings"] if item.get("kind") == "window"]
     if not windows:
         raise ValueError("project has no window opening")
-    # First window describes the band; the total glazed area is the SUM over
-    # all windows so adding a window moves this mapping like it moves L1.
-    window = windows[0]
+    # Every window maps to its own rectangle (P4-07): the totals below stay
+    # the L1-comparable sums, but the geometry no longer collapses to the
+    # first window's span.
     window_area = sum(patch_area_m2(item) for item in windows)
     return {
         "name": draft["name"],
@@ -49,16 +49,19 @@ def map_project_to_p1(draft: dict) -> dict:
             "u_m_s": hvac["supplySpeedMs"]["value"],
         },
         "return": _patch(hvac["returnTerminal"]),
-        "window": {
-            "wall": window["wall"],
-            "s0_m": window["s0"]["value"],
-            "s1_m": window["s1"]["value"],
-            "z0_m": window["z0"]["value"],
-            "z1_m": window["z1"]["value"],
-            "q_w_m2": (window.get("heatFluxWm2") or {}).get("value", 0),
-            # First window's own patch area. The TOTAL is window_area_m2 below.
-            "area_m2": patch_area_m2(window),
-        },
+        "windows": [
+            {
+                "wall": item["wall"],
+                "s0_m": item["s0"]["value"],
+                "s1_m": item["s1"]["value"],
+                "z0_m": item["z0"]["value"],
+                "z1_m": item["z1"]["value"],
+                # No declared flux is a declared 0 W, never an invented one.
+                "q_w_m2": (item.get("heatFluxWm2") or {}).get("value", 0),
+                "area_m2": patch_area_m2(item),
+            }
+            for item in windows
+        ],
         "gains": {
             "n_people": occupancy["occupantCount"]["value"],
             "people_w": occupancy["occupantSensibleW"]["value"],

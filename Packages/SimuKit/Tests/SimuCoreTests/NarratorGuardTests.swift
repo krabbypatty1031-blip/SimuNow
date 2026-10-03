@@ -34,7 +34,7 @@ import PDFKit
         title: "送风高度不同",
         summary: "座位带下限 \(listed) °C，见计算依据。",
         sections: [
-            ReportSection(heading: ReportWriterSkill.comparisonHeading, body: "座位带下限 \(listed) °C，见计算依据。"),
+            ReportSection(heading: ReportWriterSkill.planSummaryHeading, body: "座位带下限 \(listed) °C，见计算依据。"),
             ReportSection(heading: "run", body: "引用 \(prefix)。"),
             ReportSection(heading: "bad", body: "相对基准节电 37%。"),
         ],
@@ -87,11 +87,11 @@ import PDFKit
         summary: "方案一全年电费 \(shown) HKD。",
         sections: [
             ReportSection(
-                heading: ReportWriterSkill.energyPlusHeading,
+                heading: ReportWriterSkill.energyHeading,
                 body: "EnergyPlus 全年电费 \(shown) HKD。"
             ),
             ReportSection(
-                heading: ReportWriterSkill.openFOAMHeading,
+                heading: ReportWriterSkill.comfortHeading,
                 body: "OpenFOAM 座位温度 \(UserFacingCopy.displayNumber(try #require(evidence.candidates[0].seatTMinC))) °C。"
             ),
         ],
@@ -145,9 +145,9 @@ import PDFKit
     let messages = try #require(body?["messages"] as? [[String: Any]])
     #expect(messages.first?["content"] as? String == ReportWriterSkill.systemPrompt)
     let prompt = try #require(messages.first?["content"] as? String)
-    #expect(prompt.contains(ReportWriterSkill.energyPlusHeading))
-    #expect(prompt.contains(ReportWriterSkill.openFOAMHeading))
-    #expect(prompt.contains(ReportWriterSkill.comparisonHeading))
+    #expect(prompt.contains(ReportWriterSkill.planSummaryHeading))
+    #expect(prompt.contains(ReportWriterSkill.energyHeading))
+    #expect(prompt.contains(ReportWriterSkill.comfortHeading))
     #expect(prompt.contains(ReportWriterSkill.adviceHeading))
     #expect(prompt.contains("全年电费"))
     #expect(!prompt.contains("不得推算全年电费"))

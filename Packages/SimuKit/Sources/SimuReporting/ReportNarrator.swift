@@ -89,7 +89,7 @@ public enum NarrationGuard: Sendable {
     /// JSON numbers, plus the two-decimal display form the rest of the UI uses.
     private static func numericValues(in evidence: ReportEvidence) -> Set<Decimal> {
         guard let data = try? JSONEncoder().encode(evidence),
-              let json = try? JSONSerialization.jsonObject(with: data) else {
+            let json = try? JSONSerialization.jsonObject(with: data) else {
             return []
         }
         let base = Set(decimals(in: json))
@@ -111,7 +111,29 @@ public enum NarrationGuard: Sendable {
                 displayed.insert(decimal)
             }
         }
+        // Pair-diff sentences are code-generated from the pinned drafts; the
+        // clock strings inside (08:00-18:00) carry numbers that no JSON field
+        // holds, so they count as listed evidence, not invented figures.
+        if let pairDiff = evidence.pairDiff {
+            for change in pairDiff.inputChanges {
+                for token in numberTokens(in: change.sentence) {
+                    allowed.insert(token)
+                }
+            }
+        }
         return allowed.union(displayed)
+    }
+
+    /// Digits inside a sentence, as Decimals. Only used on code-generated text.
+    private static func numberTokens(in sentence: String) -> [Decimal] {
+        guard let expression = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#) else {
+            return []
+        }
+        let range = NSRange(sentence.startIndex..<sentence.endIndex, in: sentence)
+        return expression.matches(in: sentence, range: range).compactMap { match -> Decimal? in
+            guard let slice = Range(match.range, in: sentence) else { return nil }
+            return Decimal(string: String(sentence[slice]), locale: Locale(identifier: "en_US_POSIX"))
+        }
     }
 
     private static func decimals(in json: Any) -> [Decimal] {
@@ -136,8 +158,9 @@ public enum NarrationGuard: Sendable {
     /// Blank out dashed and compact run-ID prefixes (4+ characters) before the number scan.
     private static func maskRunIDPrefixes(_ paragraph: String, evidence: ReportEvidence) -> String {
         var masked = paragraph
-        var identities = evidence.candidates.map(\.runID) + evidence.candidates.compactMap(\.l1RunID)
-        identities.append(contentsOf: evidence.cards.flatMap(\.citedRunIDs))
+        // Candidate L2 run IDs plus their cited L1 IDs. The old card
+        // citation list is gone with the classifier (ADR-021).
+        let identities = evidence.candidates.map(\.runID) + evidence.candidates.compactMap(\.l1RunID)
         var tokens: [String] = []
         for id in Set(identities) {
             let dashed = id.uuidString

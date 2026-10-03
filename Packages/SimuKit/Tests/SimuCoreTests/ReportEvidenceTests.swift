@@ -67,7 +67,8 @@ import PDFKit
     let built = try #require(store.reportEvidence)
     let runIDs = built.candidates.map(\.runID)
     let hashes = built.candidates.map(\.inputHash)
-    let cardIDs = built.cards.flatMap(\.citedRunIDs)
+    // ADR-021: cited IDs come from candidates plus L1 identities, no classifier cards.
+    let citedIDs = built.citedRunIDs
 
     store.project?.name = "正在编辑的草稿"
     store.project?.hvac?.setpointC.value = 21
@@ -75,7 +76,7 @@ import PDFKit
 
     #expect(built.candidates.map(\.runID) == runIDs)
     #expect(built.candidates.map(\.inputHash) == hashes)
-    #expect(built.cards.flatMap(\.citedRunIDs) == cardIDs)
+    #expect(built.citedRunIDs == citedIDs)
     let again = try #require(store.reportEvidence)
     #expect(again.candidates.map(\.runID) == runIDs)
     #expect(again.candidates.map(\.inputHash) == hashes)
@@ -92,7 +93,7 @@ import PDFKit
         summary: "这次对比了\(pair.low.name)和\(pair.high.name)。",
         sections: [
             ReportSection(
-                heading: ReportWriterSkill.comparisonHeading,
+                heading: ReportWriterSkill.comfortHeading,
                 body: "方案一合适的座位 \(UserFacingCopy.displayNumber(1))。"
             ),
         ],

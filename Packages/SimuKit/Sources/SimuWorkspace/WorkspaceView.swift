@@ -493,8 +493,11 @@ public struct WorkspaceView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("电价说明 \(evidence.tariffReference)")
-                    ForEach(evidence.cards) { card in
-                        reportCard(card)
+                    // ADR-021: the AI narrates the comparison in the PDF; the
+                    // page shows the code-computed diff so the numbers stay
+                    // readable even without a configured DeepSeek key.
+                    if let diff = evidence.pairDiff {
+                        pairDiffSection(diff)
                     }
                     if let status = store.reportStatusLine {
                         Text(status)
@@ -525,36 +528,39 @@ public struct WorkspaceView: View {
         }
     }
 
-    private func reportCard(_ card: RecommendationCard) -> some View {
+    /// ADR-021: the code-computed pair diff on the report page. Input
+    /// sentences tell the user what they changed; grouped deltas keep the
+    /// energy / comfort / flow dimensions the report has always used.
+    private func pairDiffSection(_ diff: CandidatePairDiff) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(card.kind.label)
+            Text("你做了什么")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(card.title)
-                .font(.headline)
-            Text(card.summary)
-                .font(.body)
-            if let quote = card.quoteStatus {
-                Text(quote)
-                    .font(.subheadline)
-            }
-            ForEach(card.citedRunIDs, id: \.self) { runID in
-                Button(citedSchemeName(runID)) {
-                    store.focusCitedRun(runID)
+            if diff.inputChanges.isEmpty {
+                Text("两个方案输入相同。")
+                    .font(.body)
+                    .accessibilityLabel("两个方案输入相同")
+            } else {
+                ForEach(diff.inputChanges, id: \.field) { change in
+                    Text(change.sentence)
+                        .font(.body)
+                        .accessibilityLabel(change.sentence)
                 }
-                .accessibilityLabel("打开方案 \(citedSchemeName(runID))")
             }
-            // Gated by showsDetailDisclosures (user request 2026-10-03):
-            // hidden together with the other detail sections.
-            if Self.showsDetailDisclosures {
-                DisclosureGroup("查看依据与限制") {
-                    Text(card.detail)
-                        .font(.footnote)
-                    if !card.assumptions.isEmpty {
-                        Text(card.assumptions.joined(separator: "\n"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+            if let reason = diff.basisMismatchReason {
+                Label(reason, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel(reason)
+            }
+            if !diff.resultDeltas.isEmpty {
+                Text("结果差值（方案一 → 方案二）")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(diff.resultDeltas, id: \.field) { delta in
+                    Text(pairDeltaText(delta))
+                        .font(.body)
+                        .accessibilityLabel(pairDeltaText(delta))
                 }
             }
         }
@@ -562,17 +568,21 @@ public struct WorkspaceView: View {
         .padding(12)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(card.kind.label) \(card.title)")
+        .accessibilityLabel("方案对比差值")
     }
 
-    /// Cite a pinned scheme by its name. The UUID stays on the evidence object.
-    private func citedSchemeName(_ runID: UUID) -> String {
-        if let match = store.candidateRuns.first(where: {
-            $0.identity.runID == runID || $0.l1Identity?.runID == runID
-        }) {
-            return match.name
+    /// e.g. 座位最凉 24.21 → 24.43 °C（差 +0.22）。Numbers are evidence fields,
+    /// formatted exactly as stored so nothing is recomputed here.
+    private func pairDeltaText(_ delta: CandidatePairDiff.ResultDelta) -> String {
+        let first = delta.first.map(UserFacingCopy.displayNumber) ?? "—"
+        let second = delta.second.map(UserFacingCopy.displayNumber) ?? "—"
+        let unit = delta.unit.isEmpty ? "" : " \(delta.unit)"
+        guard let value = delta.delta else {
+            return "\(delta.label) \(first) → \(second)\(unit)"
         }
-        return "方案"
+        let sign = value >= 0 ? "+" : ""
+        // Bracket delta mirrors the row body's "value unit" spacing.
+        return "\(delta.label) \(first) → \(second)\(unit)（差 \(sign)\(UserFacingCopy.displayNumber(value))\(unit)）"
     }
 
     private func exportEvidencePDF() async {

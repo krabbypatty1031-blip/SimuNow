@@ -9,19 +9,20 @@ description: >-
 
 # LLM 对比报告
 
-用户可见的对比说明由 DeepSeek 根据冻结证据 JSON 写成中文报告。运行时提示词只放在 `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`，不要另写一份会漂移的副本。
+用户可见的对比说明由 DeepSeek 根据冻结证据 JSON 写成中文报告（ADR-021：不再有代码分类的「说明卡」，方案整理交给 AI）。运行时提示词只放在 `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`，不要另写一份会漂移的副本。
 
 ## 必须达成的效果
 
-1. 展示 EnergyPlus / OpenFOAM 的计算结果，例如窗户大小、室内平均温度、气流分布对整体的影响。
-2. 展示方案一和方案二的优劣、各自能耗、以及全年电费。
-3. 向用户提出建议。
+1. 先讲清楚用户做了什么：照抄 `pairDiff.inputChanges` 的 sentence；`basisMismatchReason` 非空时如实写。
+2. 用电对比：各方案能耗与全年电费，差值照抄 `pairDiff` 里 dimension 为 energy 的 delta。
+3. 座位舒适对比：座位温度、合适比例、风速的差值（comfort 与 flow 的 delta）。
+4. 建议下一步：只给可调项方向（窗户、出风口、设定温度、出风温度、出风速度风量、人数座位），不编预测数字。
 
 把证据 JSON 里的数字当作真实结果直接陈述。不要另加「演示 / 非真实 / 不是全年 / 不是问卷 / 仅供参考」之类说明。
 
 ## 数字从哪来
 
-`NarrationGuard` 只放行证据 JSON 里已有的数字。全年用电、全年电费、窗面积、室内平均温度、气流范围必须在 Swift 里算好，写进 `EvidenceRun`，再送给模型。
+`NarrationGuard` 只放行证据 JSON 里已有的数字。全年用电、全年电费、窗面积、室内平均温度、气流范围必须在 Swift 里算好，写进 `EvidenceRun`，再送给模型；方案差值由 `CandidateDiff` 在 Swift 里减好（half-up 两位）写进 `pairDiff`，AI 只照抄。
 
 - EnergyPlus：`coolingW`、`electricPowerW`、`dayEnergyKWh`、`annualEnergyKWh`、`annualCost`、`windowCount`、`windowAreaM2`、设定/送风温度
 - OpenFOAM：`indoorMeanC`、`indoorMinC`/`indoorMaxC`、`flowMinMps`/`flowMaxMps`、座位温度与风速
@@ -30,10 +31,10 @@ description: >-
 
 ## 四节标题（原文）
 
-1. `EnergyPlus 能耗结果`
-2. `OpenFOAM 气流与温度`
-3. `方案对比`（`candidates[0]` 是方案一，`candidates[1]` 是方案二）
-4. `建议`
+1. `你的两个方案`（`candidates[0]` 是方案一，`candidates[1]` 是方案二）
+2. `用电对比`
+3. `座位舒适对比`
+4. `建议下一步`
 
 必须写出 EnergyPlus 和 OpenFOAM 这两个名称。不要写 UUID、`inputHash`、L1、L2、z0、PMV。
 

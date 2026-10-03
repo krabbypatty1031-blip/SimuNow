@@ -150,35 +150,40 @@ public struct EvidenceRun: Codable, Equatable, Sendable, Identifiable {
 public struct ReportEvidence: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var candidates: [EvidenceRun]
-    public var cards: [RecommendationCard]
+    /// Code-computed diff between the first two pins. Every delta in here is
+    /// evidence, so the AI narration may quote it under the number guard.
+    public var pairDiff: CandidatePairDiff?
     public var tariffReference: String
     public var comfortAssumptions: [EvidenceAssumption]
 
     public init(
         schemaVersion: Int = 1,
         candidates: [EvidenceRun],
-        cards: [RecommendationCard],
+        pairDiff: CandidatePairDiff? = nil,
         tariffReference: String,
         comfortAssumptions: [EvidenceAssumption]
     ) {
         self.schemaVersion = schemaVersion
         self.candidates = candidates
-        self.cards = cards
+        self.pairDiff = pairDiff
         self.tariffReference = tariffReference
         self.comfortAssumptions = comfortAssumptions
     }
 
-    /// Explanation-only packs stay on the report page; they are not a recommendation PDF.
-    public var containsExportableRecommendation: Bool {
-        cards.contains { $0.kind != .explanation && $0.qualityPassed }
+    /// Quality gate ahead of the AI: at least one pinned run passed. A pack
+    /// with no quality-passed run stays on the page; it never becomes an AI
+    /// report. All-seats-fail and basis mismatch are stated by the AI
+    /// instead of blocking - the old explanation cards are gone.
+    public var isComparisonReportable: Bool {
+        candidates.contains { $0.quality == .passed }
     }
 
-    /// L2 identities plus any L1 identities the cards cite. Built from this object, not the live draft.
+    /// L2 identities plus any L1 identities the candidates cite. Built from this object, not the live draft.
     public var citedRunIDs: [UUID] {
         var ids = candidates.map(\.runID)
-        for card in cards {
-            for id in card.citedRunIDs where !ids.contains(id) {
-                ids.append(id)
+        for run in candidates {
+            if let l1 = run.l1RunID, !ids.contains(l1) {
+                ids.append(l1)
             }
         }
         return ids
@@ -191,7 +196,7 @@ public struct ReportEvidence: Codable, Equatable, Sendable {
             ?? "无电价来源"
         return ReportEvidence(
             candidates: runs,
-            cards: RecommendationClassifier.cards(from: candidates),
+            pairDiff: CandidatePairDiff.build(from: candidates),
             tariffReference: reference,
             comfortAssumptions: comfortAssumptions(from: candidates)
         )

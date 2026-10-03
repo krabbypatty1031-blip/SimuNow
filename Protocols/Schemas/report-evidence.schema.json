@@ -5,7 +5,7 @@
   "description": "Frozen L1/L2 numbers for a report, including report-layer yearly totals copied from the representative day. Narration must not add figures that are absent here.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "candidates", "cards", "tariffReference", "comfortAssumptions"],
+  "required": ["schemaVersion", "candidates", "pairDiff", "tariffReference", "comfortAssumptions"],
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },
     "tariffReference": { "type": "string", "minLength": 1 },
@@ -73,28 +73,46 @@
         }
       }
     },
-    "cards": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "kind", "title", "detail", "citedRunIDs", "qualityPassed", "assumptions"],
-        "properties": {
-          "id": { "type": "string" },
-          "kind": { "enum": ["explanation", "operation", "comfort", "retrofit"] },
-          "title": { "type": "string" },
-          "detail": { "type": "string" },
-          "citedRunIDs": {
-            "type": "array",
-            "items": { "type": "string", "format": "uuid" }
-          },
-          "qualityPassed": { "type": "boolean" },
-          "assumptions": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "quoteStatus": { "type": "string" },
-          "payback": { "type": "string" }
+    "pairDiff": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["firstName", "secondName", "inputChanges", "resultDeltas"],
+      "properties": {
+        "firstName": { "type": "string" },
+        "secondName": { "type": "string" },
+        "basisMismatchReason": { "type": ["string", "null"] },
+        "inputChanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "label", "unit", "sentence"],
+            "properties": {
+              "field": { "type": "string" },
+              "label": { "type": "string" },
+              "fromValue": { "type": ["number", "null"] },
+              "toValue": { "type": ["number", "null"] },
+              "unit": { "type": "string" },
+              "sentence": { "type": "string" }
+            }
+          }
+        },
+        "resultDeltas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dimension", "field", "label", "unit"],
+            "properties": {
+              "dimension": { "enum": ["energy", "comfort", "flow"] },
+              "field": { "type": "string" },
+              "label": { "type": "string" },
+              "first": { "type": ["number", "null"] },
+              "second": { "type": ["number", "null"] },
+              "delta": { "type": ["number", "null"] },
+              "unit": { "type": "string" }
+            }
+          }
         }
       }
     }

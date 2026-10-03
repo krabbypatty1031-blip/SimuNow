@@ -44,9 +44,10 @@ import PDFKit
     store.reportGenerator = StubReportGenerator()
 
     let evidence = try #require(store.reportEvidence)
-    #expect(evidence.cards.count == 1)
-    #expect(evidence.cards[0].kind == .explanation)
-    #expect(!evidence.containsExportableRecommendation)
+    // ADR-021: no classifier cards any more. A single quality-failed pin
+    // has no pair diff and stays on the page; export is refused.
+    #expect(evidence.pairDiff == nil)
+    #expect(!evidence.isComparisonReportable)
     #expect(!store.canExportEvidencePDF)
     #expect(store.reportStatusLine == WorkspaceStore.blockedExportStatus)
 
@@ -74,10 +75,15 @@ import PDFKit
     #expect(pair.high.draft.costAssumptions?.reference == "比赛演示假设，非真实电价")
 
     let evidence = try #require(store.reportEvidence)
-    #expect(evidence.containsExportableRecommendation)
-    #expect(evidence.cards.contains { $0.kind == .comfort })
-    #expect(evidence.cards.contains { $0.kind == .operation })
-    #expect(evidence.cards.contains { $0.kind == .retrofit })
+    #expect(evidence.isComparisonReportable)
+    // The diff the AI narrates: the user lowered the supply patch and the
+    // seat temperature followed. Same basis, so no mismatch sentence.
+    let diff = try #require(evidence.pairDiff)
+    #expect(diff.inputChanges.contains { $0.field == "supplyZ0M" })
+    #expect(diff.inputChanges.contains { $0.sentence.contains("出风口下沿从 2.10 m 改为 2.48 m") })
+    #expect(diff.basisMismatchReason == nil)
+    #expect(diff.resultDeltas.contains { $0.dimension == "energy" && $0.field == "dayCost" })
+    #expect(diff.resultDeltas.contains { $0.dimension == "comfort" && $0.field == "seatTMinC" && $0.delta == 0.22 })
     #expect(!store.canExportEvidencePDF)
     #expect(store.reportStatusLine == WorkspaceStore.missingDeepSeekStatus)
 
@@ -103,7 +109,7 @@ import PDFKit
 
     let evidence = try #require(store.reportEvidence)
     #expect(store.canExportEvidencePDF)
-    #expect(evidence.containsExportableRecommendation)
+    #expect(evidence.isComparisonReportable)
     #expect(store.reportStatusLine == nil)
 
     #if os(macOS)
@@ -119,6 +125,8 @@ import PDFKit
     #expect(text.contains("全年电费"))
     #expect(text.contains("EnergyPlus"))
     #expect(text.contains("OpenFOAM"))
+    // ADR-021 appendix: the pair diff section replaces classifier cards.
+    #expect(text.contains("两个方案的差异"))
     #expect(!text.contains("比赛演示假设，非真实电价"))
     let ratio = try #require(evidence.candidates.first { $0.runID == pair.high.identity.runID }?.seatPassRatio)
     #expect(text.contains(UserFacingCopy.displayNumber(ratio)))
@@ -157,16 +165,16 @@ private struct StubReportGenerator: ReportGenerator {
             summary: "这次对比了\(names)。方案一全年电费 \(annualText)。",
             sections: [
                 ReportSection(
-                    heading: ReportWriterSkill.energyPlusHeading,
+                    heading: ReportWriterSkill.planSummaryHeading,
+                    body: "这次对比了\(names)。你把出风口下沿从 2.10 m 改为 2.48 m。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.energyHeading,
                     body: "EnergyPlus 制冷量 \(cooling) W，全年电费 \(annualText)。"
                 ),
                 ReportSection(
-                    heading: ReportWriterSkill.openFOAMHeading,
-                    body: "OpenFOAM 室内温度 \(mean) °C。"
-                ),
-                ReportSection(
-                    heading: ReportWriterSkill.comparisonHeading,
-                    body: "方案一合适的座位 \(ratio)，代表日电费 \(dayCostText)。"
+                    heading: ReportWriterSkill.comfortHeading,
+                    body: "OpenFOAM 室内温度 \(mean) °C，方案一合适的座位 \(ratio)。"
                 ),
                 ReportSection(
                     heading: ReportWriterSkill.adviceHeading,

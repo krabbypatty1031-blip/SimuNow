@@ -217,6 +217,20 @@
 影响：用户可见报告将代表日外推为全年费用；这是报告层口径，不是新的 EnergyPlus 年模拟。
 验证：`annualTotalsScaleTheRepresentativeDay`（3770.8588 kWh / 4524.905）；证据包拷贝窗/均温/气流/年值；DeepSeek 请求 system 消息等于 `ReportWriterSkill.systemPrompt`；守卫放行证据内全年电费。
 
+## ADR-021：对比报告改由 AI 整理——pairDiff 证据包 + 用户四节，删分类卡（已接受）
+
+日期：2026-10-03。
+背景：原对比报告靠代码分类的「说明卡」（RecommendationKind：explanation/operation/comfort/retrofit）拼装，用户改为让 AI 做报告整理：AI 输入是两个方案的 diff 及 diff 导致的结果，输出是用户中心的报告（方案总结 + 建议下一步），保持用电/舒适维度。
+备选：(a) 只改提示词、让模型自己找 diff 数字——守卫会拒掉证据外数字；(b) diff 证据包 + 固定维度小节（代码减好 delta 进证据，AI 照抄叙事）；(c) 保留分类卡只换文案。
+选择：(b)。裁决依据：
+1. **门禁前置拦截**：无任何候选通过质量门时不调 AI（`isComparisonReportable`），不出报告；
+2. **基准门转 AI 输入**：使用条件不同不再拦截导出，`basisMismatchReason` 如实写进证据，AI 必须向用户如实说明；
+3. **建议只给方向**：第四节限可调项（窗户数量与位置、出风口位置与高度、设定温度、出风温度、出风速度与风量、人数与座位），不编预测数字；
+4. **delta 先减后述**：`CandidateDiff`（Swift）/ `pair_diff`（Python）在代码里减好（second−first，half-up 两位，防 −0），AI 只照抄，`NarrationGuard` 放行 delta 与 inputChanges sentence 里的数字。
+
+影响：删 `Recommendation.swift` 与分类器；`ReportEvidence.cards` → `pairDiff: CandidatePairDiff?`（firstName/secondName/inputChanges/resultDeltas/basisMismatchReason）；`citedRunIDs` 改 candidates+l1RunID；四节标题换为「你的两个方案 / 用电对比 / 座位舒适对比 / 建议下一步」；PDF 附录 cards 循环改「两个方案的差异」段；`WorkspaceView` 报告详情改 pairDiffSection；Python `recommend.py` 同步 pair_diff（覆盖面为该通道扁平字段子集，schema optional 允许）；schema required 里 "cards" → "pairDiff"；App 内数字表格保留，无密钥不写 PDF 维持 ADR-019。
+验证（2026-10-03）：`Scripts/check.sh test` 187 全绿（含 pairDiff 断言：出风高度句、energy/comfort delta、basisMismatchReason nil、单方案 pairDiff nil、PDF「两个方案的差异」）；`mac` / `ios` BUILD SUCCEEDED；Python 测试见运行记录。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

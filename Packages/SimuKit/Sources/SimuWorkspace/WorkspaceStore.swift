@@ -458,12 +458,12 @@ public final class WorkspaceStore {
     public static let missingDeepSeekStatus = "未配置 DeepSeek，不能生成对比说明"
     public static let generateFailedStatus = "DeepSeek 未能生成说明，对照表未导出。"
     public static let exportedStatus = "已导出对比说明"
-    public static let blockedExportStatus = "有方案未通过检查、座位都不可评价，或使用条件不同，不能导出有效结论。"
+    public static let blockedExportStatus = "还没有通过检查的方案，不能导出对比报告。"
 
     /// DeepSeek writes the readable body from the frozen evidence pack.
     /// Missing key or a failed request does not invent a stand-in PDF.
     public func writeEvidencePDF(to url: URL) async throws {
-        guard let evidence = reportEvidence, evidence.containsExportableRecommendation else {
+        guard let evidence = reportEvidence, evidence.isComparisonReportable else {
             reportMessage = Self.blockedExportStatus
             throw EvidencePDFError.notExportable
         }
@@ -486,7 +486,7 @@ public final class WorkspaceStore {
 
     /// Quality-failed packs can be read. Export also needs DeepSeek.
     public var canExportEvidencePDF: Bool {
-        reportEvidence?.containsExportableRecommendation == true && isReportGeneratorConfigured
+        reportEvidence?.isComparisonReportable == true && isReportGeneratorConfigured
     }
 
     public var isReportGeneratorConfigured: Bool {
@@ -498,7 +498,7 @@ public final class WorkspaceStore {
     /// Empty pin list stays an empty state. Failed-only packs explain why export is hidden.
     public var reportStatusLine: String? {
         guard let evidence = reportEvidence else { return nil }
-        if !evidence.containsExportableRecommendation {
+        if !evidence.isComparisonReportable {
             return reportMessage ?? Self.blockedExportStatus
         }
         if !isReportGeneratorConfigured {

@@ -97,16 +97,31 @@ public enum EvidencePDFAssembler {
                 lines.append("\(UserFacingCopy.comfortKeyTitle(item.name)) \(value) \(item.unit) \(reference)")
             }
         }
-        for card in evidence.cards {
-            lines.append(card.kind.label)
-            lines.append(card.title)
-            lines.append(card.detail)
-            if let quote = card.quoteStatus, !isReportDisclaimer(quote) {
-                lines.append(quote)
+        lines.append("两个方案的差异")
+        if let diff = evidence.pairDiff {
+            if diff.inputChanges.isEmpty {
+                lines.append("两个方案输入相同")
+            } else {
+                for change in diff.inputChanges {
+                    lines.append(change.sentence)
+                }
             }
-            for assumption in card.assumptions where !isReportDisclaimer(assumption) {
-                lines.append(assumption)
+            if let reason = diff.basisMismatchReason {
+                lines.append(reason)
             }
+            for delta in diff.resultDeltas {
+                // e.g. 座位最凉 24.21 → 24.43 °C（差 +0.22）
+                let first = delta.first.map { format($0) } ?? "—"
+                let second = delta.second.map { format($0) } ?? "—"
+                if let deltaValue = delta.delta {
+                    let sign = deltaValue >= 0 ? "+" : ""
+                    lines.append("\(delta.label) \(first) → \(second) \(delta.unit)（差 \(sign)\(format(deltaValue))）")
+                } else {
+                    lines.append("\(delta.label) \(first) → \(second) \(delta.unit)")
+                }
+            }
+        } else {
+            lines.append("只有一个方案，没有差值")
         }
         lines.append("详细编号")
         for run in evidence.candidates {
@@ -116,13 +131,6 @@ public enum EvidencePDFAssembler {
             lines.append(UserFacingCopy.qualityTitle(run.quality))
         }
         return lines.joined(separator: "\n")
-    }
-
-    /// User-facing report copy treats figures as given. These phrases stay off the PDF.
-    private static func isReportDisclaimer(_ text: String) -> Bool {
-        text.contains("非真实电价")
-            || text.contains("比赛演示假设")
-            || text.contains("不写回收期")
     }
 
     /// Same two-decimal display as the rest of the UI. Stored run values stay full precision.
@@ -209,7 +217,7 @@ public enum EvidencePDFAssembler {
         }
         for line in appendix(evidence: evidence).components(separatedBy: "\n") {
             let isHeading = line == "计算依据" || line == "方案" || line == "查看依据与限制" || line == "详细编号"
-                || line == "用电" || line == "座位舒适" || line == "改造" || line == "说明" || line == "行动建议"
+                || line == "两个方案的差异" || line == "行动建议"
             drawWrapped(line, font: isHeading ? headingFont : captionFont, lineHeight: isHeading ? 18 : 13)
         }
         context.endPDFPage()

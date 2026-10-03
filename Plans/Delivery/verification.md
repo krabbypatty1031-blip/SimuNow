@@ -1,7 +1,22 @@
 # 工程验证记录
 
-日期：2026-10-02；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（P3 全量）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
+
+## P3 全量验证（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` | 通过，85 项 | 协议、stub、真实 L1、Workspace 提交、WorkerTree 暂存 |
+| Python `unittest discover -s Backend/tests` | 通过，37 项 | 含 `test_task_protocol` / `test_l1_runner` / `test_l1_schedule` / `test_python39_worker` |
+| `python3 -m simunow_worker doctor` | 通过探测 | 系统 Python 3.9 可启动；无引擎时不编造瓦特 |
+| `Scripts/check.sh mac` | BUILD SUCCEEDED | sandbox 仍为 true；Mac 有 Stage WorkerTree |
+| `Scripts/check.sh ios` | BUILD SUCCEEDED | 无 `LocalProcessClient` / `Process` |
+| 计算按钮 | 无 | 文案是「提交代表日 L1」；未配置时不可点 |
+| App 手测 | 办公室 L1 `succeeded` | 冷量 3099.335 W，电功率 1033.112 W，全年未知 |
+| P3 清单 | 01–11 已勾选 | 闭环只覆盖代表日 L1，不是 CFD |
+
+不得当作产品功能：缓存仅进程内存；取消是 `terminate()` 不是进程树；一天不能推全年；围护是引擎默认；不是逐点 CFD。
 
 ## 最终目录验证结果
 

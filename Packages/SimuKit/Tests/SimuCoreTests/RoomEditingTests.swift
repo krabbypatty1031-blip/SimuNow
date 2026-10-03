@@ -139,3 +139,28 @@ import Testing
     #expect(yaw?.provenanceText.contains("deg") == true)
     #expect(yaw?.provenanceText.contains("未知 / 无出处") == true)
 }
+
+@Test func applyOccupantCountRejectsNonPositiveAndKeepsHeadcount() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    let issues = draft.applyOccupantCount(0, source: .user)
+    #expect(issues.contains { $0.path == "occupancy.occupantCount" })
+    #expect(draft.occupancy?.occupantCount.value == 8)
+}
+
+@Test func applyOccupiedHoursWritesPeopleAndHVACWindows() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    let issues = draft.applyOccupiedHours(start: "09:00", end: "17:00", source: .user)
+    #expect(issues.isEmpty)
+    #expect(draft.occupancy?.schedule?.start == "09:00")
+    #expect(draft.occupancy?.schedule?.end == "17:00")
+    #expect(draft.hvac?.schedule?.start == "09:00")
+    #expect(draft.hvac?.schedule?.end == "17:00")
+}
+
+@Test func applyOccupiedHoursRejectsInvertedWindow() throws {
+    var draft = try ProjectTemplates.bundled(named: "office").project
+    let issues = draft.applyOccupiedHours(start: "18:00", end: "08:00", source: .user)
+    #expect(issues.contains { $0.path == "occupancy.schedule" })
+    #expect(draft.occupancy?.schedule?.start == "08:00")
+    #expect(draft.occupancy?.schedule?.end == "18:00")
+}

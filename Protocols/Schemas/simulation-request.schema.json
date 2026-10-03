@@ -1,44 +1,41 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:simunow:p0:simulation-request:1",
+  "$id": "urn:simunow:p3:simulation-request:1",
   "title": "simulation-request",
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "schemaVersion",
     "identity",
-    "fidelity"
+    "fidelity",
+    "snapshotPath",
+    "snapshotHash"
   ],
   "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "runID",
-        "scenarioID",
-        "inputHash"
-      ],
+      "required": ["runID", "scenarioID", "inputHash"],
       "properties": {
-        "runID": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "scenarioID": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "inputHash": {
-          "type": "string",
-          "minLength": 1
-        }
+        "runID": { "type": "string", "format": "uuid" },
+        "scenarioID": { "type": "string", "format": "uuid" },
+        "inputHash": { "type": "string", "minLength": 1 }
       }
     },
-    "fidelity": {
-      "enum": [
-        "l0",
-        "l1",
-        "l2",
-        "l3"
-      ]
-    }
+    "fidelity": { "enum": ["l0", "l1", "l2", "l3"] },
+    "snapshotPath": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "^/|\\.\\.|/Users/|/Downloads/|/Desktop/" }
+    },
+    "snapshotHash": { "type": "string", "minLength": 1 },
+    "weatherPath": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "^/|\\.\\.|/Users/|/Downloads/|/Desktop/" }
+    },
+    "weatherHash": { "type": "string", "minLength": 1 },
+    "scheduleHash": { "type": "string", "minLength": 1 }
   }
 }

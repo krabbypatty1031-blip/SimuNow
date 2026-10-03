@@ -38,4 +38,19 @@ enum ProjectLocationPicker {
         return nil
         #endif
     }
+
+    static func requestDirectoryURL(message: String, prompt: String) -> URL? {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = prompt
+        panel.message = message
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
+        #else
+        return nil
+        #endif
+    }
 }

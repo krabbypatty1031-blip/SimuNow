@@ -174,7 +174,12 @@ private func makeOfficeDraft() -> ProjectDraft {
 }
 
 @Test func missingEngineCannotProduceSuccessfulResults() async {
-    let request = SimulationRequest(identity: RunIdentity(scenarioID: UUID(), inputHash: "input"), fidelity: .l2)
+    let request = SimulationRequest(
+        identity: RunIdentity(scenarioID: UUID(), inputHash: "input"),
+        fidelity: .l2,
+        snapshotPath: "runs/input.json",
+        snapshotHash: "input"
+    )
     do {
         _ = try await UnconfiguredSimulationClient().submit(request)
         Issue.record("An unavailable engine must not report a successful calculation.")

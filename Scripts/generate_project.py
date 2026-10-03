@@ -56,6 +56,23 @@ def generate():
         phases = []
         for kind, build_ref in (("Sources", source_build), ("Resources", resource_build), ("Frameworks", framework_build)):
             phases.append(obj(f"{name}-{kind}", f"isa = PBX{kind}BuildPhase; buildActionMask = 2147483647; files = ({build_ref},); runOnlyForDeploymentPostprocessing = 0;"))
+        if name == "SimuNowMac":
+            script = (
+                'mkdir -p "${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/Backend/src" '
+                '"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/test/p1"\n'
+                'rm -rf "${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/Backend/src/simunow_worker"\n'
+                'cp -R "${SRCROOT}/Backend/src/simunow_worker" '
+                '"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/Backend/src/simunow_worker"\n'
+                'cp "${SRCROOT}/test/p1/write_idf.py" "${SRCROOT}/test/p1/run_l1.py" "${SRCROOT}/test/p1/room_input.py" '
+                '"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/test/p1/"\n'
+            )
+            escaped = script.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+            phases.append(obj(
+                f"{name}-stage-worker",
+                f'isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = (); '
+                f'name = "Stage WorkerTree"; outputPaths = (); runOnlyForDeploymentPostprocessing = 0; '
+                f'shellPath = /bin/bash; shellScript = "{escaped}"; showEnvVarsInLog = 0;',
+            ))
 
         build_configs = []
         for mode in ("Debug", "Release"):

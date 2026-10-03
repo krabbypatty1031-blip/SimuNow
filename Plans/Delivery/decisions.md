@@ -42,11 +42,18 @@
 影响：Mac 用 NSSavePanel/NSOpenPanel；iOS 用 folder/json 文件选择器。包路径只留在内存，不写入 project.json。P3 再在包内加 runs 快照。
 验证：`PackageTests` 关闭重开与失败替换；工作区「打开 / 保存」绑定 `ProjectPackage`。
 
+## ADR-008：沙盒内包 worker、用户只选引擎（已接受）
+
+日期：2026-10-03。
+背景：P3 要在 App 里提交真实 L1，但不能默认关闭 sandbox，也不能把开发者 Desktop 路径写进项目。
+选择：Mac 把 `simunow_worker` 与 `test/p1` 三个 IDF 脚本打进 Resources/WorkerTree，运行时拷到 Application Support；用户用书签选一次 `test/engines`。iOS 保持 `UnconfiguredL1TaskClient`。不在本阶段做 helper。
+影响：本机闭环只在 Mac；EnergyPlus 二进制仍由用户提供，不进 Git。`cs.disable-library-validation` 仅用于加载用户引擎。
+验证：`WorkerStagingTests`；沙盒 App 手测办公室 L1 `succeeded`；entitlement 中 sandbox 仍为 true。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。
-- P3：Mac helper/companion 运行时和权限桥接，事件/重启策略。
-- P4：renderer 及各平台预算、舒适档案与边界。
+- P4：renderer 及各平台预算、舒适档案与边界；L1 事件流式刷新。
 - P5：PDF 实现与成本数据；P7：代理/远程/发布渠道。
 
 每条新增决策记录触发原因、备选、选择、影响、验证证据与日期。

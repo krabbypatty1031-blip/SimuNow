@@ -1,0 +1,75 @@
+import json
+import unittest
+from pathlib import Path
+
+from simunow_worker.models.task import EventStream, TaskProtocolError, parse_result, sha256_hex, validate_request
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = ROOT / "Fixtures" / "task"
+
+
+class TaskProtocolTests(unittest.TestCase):
+    def test_request_hash_matches_fixture_snapshot(self):
+        request = json.loads((FIXTURES / "request-l1.json").read_text(encoding="utf-8"))
+        snapshot = (FIXTURES / "snapshot.json").read_bytes()
+        validate_request(request, snapshot)
+        with self.assertRaises(TaskProtocolError) as raised:
+            validate_request(request, b"not-the-snapshot")
+        self.assertEqual(raised.exception.code, TaskProtocolError.hash_mismatch)
+
+    def test_request_rejects_absolute_weather_path(self):
+        request = json.loads((FIXTURES / "request-l1.json").read_text(encoding="utf-8"))
+        request["weatherPath"] = "/Users/krabbypatty/weather.epw"
+        with self.assertRaises(TaskProtocolError) as raised:
+            validate_request(request, b"x")
+        self.assertEqual(raised.exception.code, TaskProtocolError.unsafe_snapshot_path)
+
+    def test_request_rejects_home_path(self):
+        request = json.loads((FIXTURES / "request-l1.json").read_text(encoding="utf-8"))
+        request["snapshotPath"] = "/Users/krabbypatty/office.json"
+        with self.assertRaises(TaskProtocolError) as raised:
+            validate_request(request, b"x")
+        self.assertEqual(raised.exception.code, TaskProtocolError.unsafe_snapshot_path)
+
+    def test_out_of_order_sequence_is_rejected(self):
+        stream = EventStream("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        lines = (FIXTURES / "events-ok.jsonl").read_text(encoding="utf-8").splitlines()
+        stream.ingest(lines[0] + "\n")
+        with self.assertRaises(TaskProtocolError) as raised:
+            stream.ingest(lines[0] + "\n")
+        self.assertEqual(raised.exception.code, TaskProtocolError.stale_sequence)
+        self.assertEqual(len(stream.events), 1)
+
+    def test_truncated_line_and_wrong_run(self):
+        stream = EventStream("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        first = (FIXTURES / "events-ok.jsonl").read_text(encoding="utf-8").splitlines()[0]
+        self.assertEqual(stream.ingest(first[:20]), [])
+        stream.ingest(first[20:] + "\n")
+        self.assertEqual(len(stream.events), 1)
+        hanging = EventStream("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        hanging.ingest('{"schemaVersion":1')
+        with self.assertRaises(TaskProtocolError) as raised:
+            hanging.finish()
+        self.assertEqual(raised.exception.code, TaskProtocolError.truncated_line)
+        foreign = first.replace("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        other = EventStream("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        with self.assertRaises(TaskProtocolError) as raised:
+            other.ingest(foreign + "\n")
+        self.assertEqual(raised.exception.code, TaskProtocolError.wrong_run)
+
+    def test_result_omits_annual_energy(self):
+        payload = json.loads((FIXTURES / "result-l1.json").read_text(encoding="utf-8"))
+        result = parse_result(payload)
+        cool = next(item for item in result["metrics"] if item["name"] == "q_cool_w")
+        elec = next(item for item in result["metrics"] if item["name"] == "p_elec_w")
+        annual = next(item for item in result["metrics"] if item["name"] == "annual_kwh")
+        self.assertEqual(cool["value"], 6334.87)
+        self.assertEqual(elec["value"], 2111.62)
+        self.assertIsNone(annual["value"])
+        self.assertTrue(annual["omitted"])
+        self.assertEqual(result["period"]["kind"], "representative_day")
+        self.assertEqual(result["weatherPath"], "weather/CHN_Hong.Kong.SAR.450070_CityUHK.epw")
+
+
+if __name__ == "__main__":
+    unittest.main()

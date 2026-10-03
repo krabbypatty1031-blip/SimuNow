@@ -215,25 +215,83 @@ public struct ObstacleBox: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// Occupied clock window on the representative day. Not an 8760 file and not annual energy.
+public struct OccupiedHours: Codable, Equatable, Sendable {
+    public var kind: String
+    public var start: String
+    public var end: String
+    public var source: ParameterSource
+    public var reference: String?
+
+    public init(
+        kind: String = "occupied_hours",
+        start: String,
+        end: String,
+        source: ParameterSource,
+        reference: String? = nil
+    ) {
+        self.kind = kind
+        self.start = start
+        self.end = end
+        self.source = source
+        self.reference = reference
+    }
+
+    /// Zero-padded `HH:MM`. `24:00` is only valid as an end clock.
+    public static func isValidClock(_ text: String) -> Bool {
+        if text == "24:00" { return true }
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts[0].count == 2, parts[1].count == 2,
+              let hour = Int(parts[0]), let minute = Int(parts[1]) else {
+            return false
+        }
+        return (0...23).contains(hour) && (0...59).contains(minute)
+    }
+
+    public static func minutes(from text: String) -> Int? {
+        if text == "24:00" { return 24 * 60 }
+        guard isValidClock(text) else { return nil }
+        let parts = text.split(separator: ":")
+        return (Int(parts[0]) ?? 0) * 60 + (Int(parts[1]) ?? 0)
+    }
+}
+
 public struct OccupancyModel: Codable, Equatable, Sendable {
     public var occupantCount: PhysicalQuantity
     public var occupantSensibleW: PhysicalQuantity
     public var lightingW: PhysicalQuantity
     public var equipmentW: PhysicalQuantity
     public var seats: [Seat]
+    public var schedule: OccupiedHours?
 
     public init(
         occupantCount: PhysicalQuantity,
         occupantSensibleW: PhysicalQuantity,
         lightingW: PhysicalQuantity,
         equipmentW: PhysicalQuantity,
-        seats: [Seat]
+        seats: [Seat],
+        schedule: OccupiedHours? = nil
     ) {
         self.occupantCount = occupantCount
         self.occupantSensibleW = occupantSensibleW
         self.lightingW = lightingW
         self.equipmentW = equipmentW
         self.seats = seats
+        self.schedule = schedule
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case occupantCount, occupantSensibleW, lightingW, equipmentW, seats, schedule
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(occupantCount, forKey: .occupantCount)
+        try container.encode(occupantSensibleW, forKey: .occupantSensibleW)
+        try container.encode(lightingW, forKey: .lightingW)
+        try container.encode(equipmentW, forKey: .equipmentW)
+        try container.encode(seats, forKey: .seats)
+        try container.encodeIfPresent(schedule, forKey: .schedule)
     }
 }
 
@@ -264,6 +322,8 @@ public struct HVACModel: Codable, Equatable, Sendable {
     public var returnTerminal: AirTerminal
     public var outdoorAirM3s: PhysicalQuantity
     public var cop: PhysicalQuantity
+    /// System-on window for the representative day. Not a return-air temperature.
+    public var schedule: OccupiedHours?
 
     public init(
         kind: HVACKind = .splitAC,
@@ -274,7 +334,8 @@ public struct HVACModel: Codable, Equatable, Sendable {
         supply: AirTerminal,
         returnTerminal: AirTerminal,
         outdoorAirM3s: PhysicalQuantity,
-        cop: PhysicalQuantity
+        cop: PhysicalQuantity,
+        schedule: OccupiedHours? = nil
     ) {
         self.kind = kind
         self.setpointC = setpointC
@@ -285,6 +346,26 @@ public struct HVACModel: Codable, Equatable, Sendable {
         self.returnTerminal = returnTerminal
         self.outdoorAirM3s = outdoorAirM3s
         self.cop = cop
+        self.schedule = schedule
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, setpointC, supplyTemperatureC, supplySpeedMs, supplyAirflowM3s
+        case supply, returnTerminal, outdoorAirM3s, cop, schedule
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(setpointC, forKey: .setpointC)
+        try container.encode(supplyTemperatureC, forKey: .supplyTemperatureC)
+        try container.encode(supplySpeedMs, forKey: .supplySpeedMs)
+        try container.encode(supplyAirflowM3s, forKey: .supplyAirflowM3s)
+        try container.encode(supply, forKey: .supply)
+        try container.encode(returnTerminal, forKey: .returnTerminal)
+        try container.encode(outdoorAirM3s, forKey: .outdoorAirM3s)
+        try container.encode(cop, forKey: .cop)
+        try container.encodeIfPresent(schedule, forKey: .schedule)
     }
 
     /// Compares declared supply volume flow with speed × patch area. Relative tolerance is not a confidence interval.

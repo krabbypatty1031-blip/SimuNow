@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "runID": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "scenarioID": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "inputHash": "da878a7ad0b01c3ac37d4c38b4fc6b2960dd0e772de5008aa57f3cf49d89cbcd"
+  },
+  "state": "succeeded",
+  "quality": "notEvaluated",
+  "period": { "kind": "representative_day", "start": "07-15", "end": "07-15" },
+  "weatherPath": "weather/CHN_Hong.Kong.SAR.450070_CityUHK.epw",
+  "weatherHash": "epw-hash",
+  "supplyTemperatureC": 16,
+  "setpointC": 26,
+  "schedule": { "kind": "occupied_hours", "start": "08:00", "end": "18:00" },
+  "hvacSchedule": { "kind": "occupied_hours", "start": "08:00", "end": "18:00" },
+  "scheduleHash": "schedule-hash",
+  "metrics": [
+    {
+      "name": "q_cool_w",
+      "value": 6334.87,
+      "unit": "W",
+      "method": "equivalent_ideal_loads",
+      "fidelity": "l1",
+      "omitted": false
+    },
+    {
+      "name": "p_elec_w",
+      "value": 2111.62,
+      "unit": "W",
+      "method": "equivalent_ideal_loads",
+      "fidelity": "l1",
+      "omitted": false
+    },
+    {
+      "name": "annual_kwh",
+      "value": null,
+      "unit": "kWh",
+      "method": "not_modeled",
+      "fidelity": "l1",
+      "omitted": true
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p3:simulation-event:1",
+  "title": "simulation-event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runID",
+    "scenarioID",
+    "inputHash",
+    "sequence",
+    "timestamp",
+    "eventType",
+    "stage"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "runID": { "type": "string", "format": "uuid" },
+    "scenarioID": { "type": "string", "format": "uuid" },
+    "inputHash": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "eventType": {
+      "enum": ["accepted", "progress", "log", "quality", "completed", "failed", "cancelled"]
+    },
+    "stage": {
+      "enum": [
+        "queued", "validating", "meshing", "solving", "postprocessing", "checking",
+        "succeeded", "failed", "cancelled"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fraction": { "type": "number" },
+        "monitor": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

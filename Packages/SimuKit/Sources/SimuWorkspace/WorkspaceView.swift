@@ -66,6 +66,9 @@ public struct WorkspaceView: View {
             handleSaveFolder(result)
         }
         #if os(macOS)
+        .onAppear {
+            store.restoreEngineBookmarks()
+        }
         .inspector(isPresented: .constant(true)) {
             RoomEditorForm(store: store)
                 .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
@@ -99,7 +102,7 @@ public struct WorkspaceView: View {
                 EmptyStateView("暂无方案", symbol: "square.stack.3d.up", message: "从办公室或教室模板创建后，这里显示冻结基准与当前编辑。")
             }
         case .runs:
-            EmptyStateView("暂无计算任务", symbol: "waveform.path", message: "计算引擎接入后，这里显示任务进度与质量状态。")
+            runsDetail
         case .reports:
             EmptyStateView("暂无报告", symbol: "doc.text", message: "通过质量检查的结果可用于生成建议报告。")
         }
@@ -132,13 +135,87 @@ public struct WorkspaceView: View {
         #endif
     }
 
+    @ViewBuilder
+    private var runsDetail: some View {
+        if store.activeRun == nil && store.lastResult == nil {
+            EmptyStateView(
+                "暂无计算任务",
+                symbol: "waveform.path",
+                message: "配置引擎并提交代表日 L1 后，这里显示进度、电耗与边界。不是气流场。"
+            )
+        } else {
+            Form {
+                Section("任务") {
+                    LabeledContent("状态", value: store.activeRun?.state.rawValue ?? "无")
+                    LabeledContent("新鲜度", value: freshnessText)
+                    if store.isSubmitting {
+                        Text("正在求解代表日 L1…")
+                            .font(.footnote)
+                    }
+                    if let message = store.runMessage {
+                        Text(message)
+                            .font(.footnote)
+                    }
+                }
+                Section("代表日指标") {
+                    LabeledContent("制冷量", value: store.metricText(named: "q_cool_w"))
+                    LabeledContent("电功率", value: store.metricText(named: "p_elec_w"))
+                    LabeledContent("全年电量", value: store.metricText(named: "annual_kwh"))
+                    Text("制冷量不是电功率。一天不能推全年。围护仍是引擎默认构造。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Section("L2 边界（未跑 OpenFOAM）") {
+                    LabeledContent("送风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
+                    LabeledContent("设定温度", value: temperatureText(store.lastBoundary?.setpointC, unit: "°C"))
+                    LabeledContent("回风口", value: store.lastBoundary?.returnTerminal.id ?? "无")
+                    LabeledContent("新风", value: flowText(store.lastBoundary?.outdoorAirM3s))
+                    LabeledContent("循环风", value: flowText(store.lastBoundary?.recirculatedAirM3s))
+                    Text("送风温度不是设定温度。回风与新风分开。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Section("进度事件") {
+                    if store.runEvents.isEmpty {
+                        Text("尚无 JSONL 事件。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(store.runEvents.enumerated()), id: \.offset) { _, event in
+                            Text("\(event.sequence) \(event.eventType.rawValue) \(event.payload?.message ?? event.payload?.monitor ?? "")")
+                                .accessibilityLabel("事件 \(event.sequence) \(event.eventType.rawValue)")
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+        }
+    }
+
+    private var freshnessText: String {
+        switch store.resultFreshness {
+        case .current: "当前输入"
+        case .stale: "输入已改，待重算"
+        case nil: "无结果"
+        }
+    }
+
+    private func temperatureText(_ value: Double?, unit: String) -> String {
+        guard let value else { return "无" }
+        return "\(value) \(unit)"
+    }
+
+    private func flowText(_ value: Double?) -> String {
+        guard let value else { return "无" }
+        return "\(value) m³/s"
+    }
+
     /// Visible start actions; the title-bar 模板 menu is easy to miss on macOS split views.
     private var emptyProjectPane: some View {
         VStack(spacing: 16) {
             EmptyStateView(
                 "房间工作区",
                 symbol: "cube.transparent",
-                message: "还没有项目。从办公室或教室模板开始，或打开已有的 .simunow 包。计算引擎尚未接入。"
+                message: "还没有项目。从办公室或教室模板开始，或打开已有的 .simunow 包。未配置引擎时不能提交代表日 L1。"
             )
             HStack(spacing: 12) {
                 Button("办公室模板") {

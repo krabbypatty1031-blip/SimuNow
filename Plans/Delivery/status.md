@@ -1,6 +1,6 @@
 # 实施状态
 
-日期：2026-10-03。当前阶段：**P2 房间编辑通过**（内存编辑、项目包、模板与 P1 映射）。P1 物理验证仍只在 CLI。Mac App 不能当产品 CFD 或定量推荐。
+日期：2026-10-03。当前阶段：**P3 产品门（App 提交代表日 L1）已落地**。Mac 可改人数/占用时段并提交不可变 L1；未配置引擎时按钮不可点。OpenFOAM / 场 / 舒适仍属 P4/P5。Mac App 不能当产品 CFD 或定量推荐。
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
@@ -22,13 +22,29 @@
 | P2-05 模板与 P1 映射 | 办公/教室模板、基准快照、只读 P1 字段 | 独立验收 PASS；`TemplateTests`；Python `test_p1_mapping`；窗面积 1.95 不是墙宽 |
 | P2 手测 | 沙盒内从内嵌模板创建；尺寸刷新；方案对比 | 办公室 6×6×2.8；改长度后对比页基准 6 / 当前 7；视口仍为空状态 |
 | P2 房间编辑 | 阶段门已满足；仍未接求解器 | 见下方阶段结论 |
-| L0/L3 与 App 接入 | 待开发 | P3/P4/P7 |
+| P3-01 任务协议 | request/event/result 可解析 | 独立验收 PASS；`TaskProtocolTests`；Python `test_task_protocol`；乱序/截断/错 run 拒绝；无计算按钮 |
+| P3-02 本地执行器 | Mac stub worker + JSONL + 取消 | 独立验收 PASS；`TaskExecutorTests`；`stub-task` 不跑 EnergyPlus；失败留目录；日志去掉 `/Users` |
+| P3-03 L1 代表日会计 | 冷量/电耗分字段；缺天气 omitted | 独立验收 PASS；`L1AccountingTests`；Python `test_l1_accounting`；`p_elec = q_cool/COP`；`annual_kwh` 永 omitted；request/result 可选天气路径与哈希 |
+| P3-04 L2 边界 DTO | 送风 16 不是设定 26；人员显热一次 | 独立验收 PASS；`L2BoundaryTests`；Python `test_boundary`；envelope_u_value omitted |
+| P3-05 缓存/超时/恢复 | 同 hash 复用 runID；超时 failed+log | 独立验收 PASS；`TaskExecutorTests` 缓存与超时；`openingPackageIgnoresUnfinishedRun`；freshness 独立 |
+| P3-06 真实 L1 | worker `run-l1` 接 EnergyPlus | `test_l1_room` / `test_l1_runner`；缺引擎不填 0；`test/engines` 跑通冷量/电耗 |
+| P3-07 占用时段 IDF | Compact 日程，不是 AlwaysOn | `test_l1_schedule`；人数≠座位数；P1 无日程仍 AlwaysOn |
+| P3-08 Workspace 提交 | 未配置不可点；「提交代表日 L1」 | `WorkspaceL1Tests`；无「开始计算」 |
+| P3-09 沙盒引擎 | 用户选工作副本+引擎；sandbox 保持 | `LocalEngineTests`；书签不进 project.json |
+| P3-10 结果与安全 | 电耗/边界；stale；失败不坏稿 | `WorkspaceL1Tests`；年电量显示未知 |
+| P3-11 沙盒 App L1 | 包内 WorkerTree + 系统 Python + 用户引擎 | `WorkerStagingTests`；`/usr/bin/python3` doctor；App 资源跑通 `q_cool_w>0`；sandbox 仍 true |
+| P3 手测 | 沙盒 Mac 提交办公室代表日 L1 成功 | 冷量 3099.335 W；电功率 1033.112 W = 冷量/COP；全年未知；送风 16 ≠ 设定 26；回风 RET1；新风 0.02 / 回风 0.088 m³/s；新鲜度「当前输入」 |
+| L0/L3 与场显示接入 | 待开发 | P4 起 |
 | 场渲染/舒适/成本/报告 | 待开发 | P4/P5 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P3 任务协议与引擎接入。人数/显热/设定温度仍无独立表单。P1 映射是只读 DTO，不是可提交的 `room_p1.json`。不要用示意场做定量推荐。未完成计算接入时，界面不得出现可点的「开始计算 / 导出报告」。
+P3 产品闭环已手测并合入 `dev`（仓库无 `dest` 分支，按 P2 同一条集成线）。下一步是 P4 场显示与 OpenFOAM，不是把这一页当成 CFD 或全年节能。未推远程。
+
+## P3 阶段结论
+
+阶段门已满足：Mac 改人数/占用时段后可提交不可变代表日 L1；未配置引擎时按钮不可点；失败不把冷量写成 0；一天结果不推全年 kWh。占用时段进入 IDF `Schedule:Compact`，不是 AlwaysOn。沙盒保持开启；worker 从 App 资源拷到容器，用户只选引擎目录。iPhone/iPad 不跑本地 EnergyPlus。围护仍是引擎默认构造。OpenFOAM、三维视口、舒适与报告未做。
 
 ## P2 阶段结论
 

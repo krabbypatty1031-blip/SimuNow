@@ -215,6 +215,45 @@ extension ProjectDraft {
         upsertSeat(Seat(id: id, position: position, source: source))
     }
 
+    /// Headcount is a thermal source count, not the number of seat sample points.
+    @discardableResult
+    public mutating func applyOccupantCount(_ value: Double, source: ParameterSource) -> [FieldIssue] {
+        guard value > 0 else {
+            return [FieldIssue(path: "occupancy.occupantCount", message: "人数必须为正")]
+        }
+        guard var occupancy else {
+            return [FieldIssue(path: "occupancy", message: "请先从模板创建人员分区")]
+        }
+        occupancy.occupantCount = PhysicalQuantity(value: value, unit: "1", source: source)
+        self.occupancy = occupancy
+        return allFieldIssues()
+    }
+
+    /// One representative-day window for people and HVAC. Not an 8760 file.
+    @discardableResult
+    public mutating func applyOccupiedHours(start: String, end: String, source: ParameterSource) -> [FieldIssue] {
+        guard OccupiedHours.isValidClock(start), OccupiedHours.isValidClock(end) else {
+            return [FieldIssue(path: "occupancy.schedule", message: "占用时段须为 HH:MM")]
+        }
+        guard let startMinutes = OccupiedHours.minutes(from: start),
+              let endMinutes = OccupiedHours.minutes(from: end),
+              endMinutes > startMinutes else {
+            return [FieldIssue(path: "occupancy.schedule", message: "结束须晚于开始")]
+        }
+        guard var occupancy else {
+            return [FieldIssue(path: "occupancy", message: "请先从模板创建人员分区")]
+        }
+        let reference = occupancy.schedule?.reference ?? "representative-day occupied hours, not annual"
+        occupancy.schedule = OccupiedHours(start: start, end: end, source: source, reference: reference)
+        self.occupancy = occupancy
+        if var hvac {
+            let hvacReference = hvac.schedule?.reference ?? "representative-day system-on hours, not annual"
+            hvac.schedule = OccupiedHours(start: start, end: end, source: source, reference: hvacReference)
+            self.hvac = hvac
+        }
+        return allFieldIssues()
+    }
+
     public mutating func removeSeat(id: String) {
         occupancy?.seats.removeAll { $0.id == id }
     }

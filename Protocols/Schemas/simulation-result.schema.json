@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p3:simulation-result:1",
+  "title": "simulation-result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "identity", "state", "quality", "metrics"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runID", "scenarioID", "inputHash"],
+      "properties": {
+        "runID": { "type": "string", "format": "uuid" },
+        "scenarioID": { "type": "string", "format": "uuid" },
+        "inputHash": { "type": "string", "minLength": 1 }
+      }
+    },
+    "state": {
+      "enum": [
+        "queued", "validating", "meshing", "solving", "postprocessing", "checking",
+        "succeeded", "failed", "cancelled"
+      ]
+    },
+    "quality": { "enum": ["notEvaluated", "passed", "failed"] },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "start", "end"],
+      "properties": {
+        "kind": { "type": "string" },
+        "start": { "type": "string" },
+        "end": { "type": "string" }
+      }
+    },
+    "weatherPath": { "type": "string" },
+    "weatherHash": { "type": "string" },
+    "supplyTemperatureC": { "type": "number" },
+    "setpointC": { "type": "number" },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "start", "end"],
+      "properties": {
+        "kind": { "type": "string" },
+        "start": { "type": "string" },
+        "end": { "type": "string" }
+      }
+    },
+    "hvacSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "start", "end"],
+      "properties": {
+        "kind": { "type": "string" },
+        "start": { "type": "string" },
+        "end": { "type": "string" }
+      }
+    },
+    "scheduleHash": { "type": "string" },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "unit", "method", "fidelity", "omitted"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": ["number", "null"] },
+          "unit": { "type": "string" },
+          "method": { "type": "string" },
+          "fidelity": { "enum": ["l0", "l1", "l2", "l3"] },
+          "omitted": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

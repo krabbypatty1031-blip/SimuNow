@@ -1,4 +1,6 @@
 """A truthful capability probe. Does not simulate or emit numerical results."""
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -146,8 +148,16 @@ def build_report() -> dict:
 def main():
     _configure_logging()
     parser = argparse.ArgumentParser(prog="simunow-worker")
-    parser.add_argument("command", choices=["doctor"])
-    parser.parse_args()
+    parser.add_argument("command", choices=["doctor", "stub-task", "run-l1"])
+    args, rest = parser.parse_known_args()
+    if args.command == "stub-task":
+        from .task_runner import run_stub
+
+        raise SystemExit(run_stub(rest))
+    if args.command == "run-l1":
+        from .l1_runner import run_l1_task
+
+        raise SystemExit(run_l1_task(rest))
     # ensure_ascii stays off so the repair hint is readable Chinese, not \\u escapes.
     print(json.dumps(build_report(), ensure_ascii=False))
 

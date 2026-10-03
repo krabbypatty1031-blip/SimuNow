@@ -8,6 +8,9 @@ public struct RoomEditorForm: View {
     @State private var sizeY: Double = 0
     @State private var sizeZ: Double = 0
     @State private var northYaw: Double = 0
+    @State private var occupantCount: Double = 0
+    @State private var occupiedStart = "08:00"
+    @State private var occupiedEnd = "18:00"
 
     public init(store: WorkspaceStore) {
         self.store = store
@@ -143,6 +146,62 @@ public struct RoomEditorForm: View {
                     .accessibilityLabel("添加家具盒体，原点与尺寸单位米")
                 }
             }
+            Section("代表日人员") {
+                Text("人数是热源计数，不是座位数。时段是代表日时钟窗，不是全年。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                TextField("人数", value: $occupantCount, format: .number)
+                    .accessibilityLabel("代表日人数")
+                Button("应用人数") {
+                    store.applyOccupantCount(occupantCount)
+                }
+                .accessibilityLabel("应用代表日人数")
+                TextField("开始 HH:MM", text: $occupiedStart)
+                    .accessibilityLabel("占用开始时间")
+                TextField("结束 HH:MM", text: $occupiedEnd)
+                    .accessibilityLabel("占用结束时间")
+                Button("应用占用时段") {
+                    store.applyOccupiedHours(start: occupiedStart, end: occupiedEnd)
+                }
+                .accessibilityLabel("应用代表日占用时段")
+            }
+            Section("代表日 L1") {
+                Text(store.engineStatus)
+                    .font(.footnote)
+                    .accessibilityLabel(store.engineStatus)
+                #if os(macOS)
+                Text("worker 从 App 复制到容器。只需选择引擎目录，不要把路径写进项目。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button("选择引擎目录") {
+                    store.chooseEnginesRoot()
+                }
+                .accessibilityLabel("选择 EnergyPlus 引擎目录")
+                Button("选择工作副本（备用）") {
+                    store.chooseRepositoryRoot()
+                }
+                .accessibilityLabel("选择含 worker 的工作副本，仅当 App 资源缺失时")
+                #else
+                Text("iOS 本阶段不运行本地 EnergyPlus。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                #endif
+                Button("提交代表日 L1") {
+                    Task { await store.submitL1() }
+                }
+                .disabled(!store.canSubmitL1)
+                .accessibilityLabel("提交代表日 L1")
+                Button("取消任务") {
+                    Task { await store.cancelActiveRun() }
+                }
+                .disabled(store.activeRun == nil || !store.isSubmitting)
+                .accessibilityLabel("取消代表日 L1")
+                if let message = store.runMessage {
+                    Text(message)
+                        .font(.footnote)
+                        .accessibilityLabel(message)
+                }
+            }
             Section("座位") {
                 ForEach(store.project?.occupancy?.seats ?? []) { seat in
                     SeatEditor(
@@ -236,6 +295,12 @@ public struct RoomEditorForm: View {
         .onChange(of: store.project?.geometry?.northYawDegrees.value) { _, _ in
             refreshFromStore()
         }
+        .onChange(of: store.project?.occupancy?.occupantCount.value) { _, _ in
+            refreshFromStore()
+        }
+        .onChange(of: store.project?.occupancy?.schedule?.start) { _, _ in
+            refreshFromStore()
+        }
     }
 
     private var statusText: String {
@@ -243,7 +308,7 @@ public struct RoomEditorForm: View {
             return "尚未载入"
         }
         if store.isPhysicalModelComplete {
-            return "物理分区齐全（未接计算）"
+            return store.l1Client.isConfigured ? "物理分区齐全，可提交代表日 L1" : "物理分区齐全（引擎未配置）"
         }
         return "模型不完整"
     }
@@ -270,6 +335,9 @@ public struct RoomEditorForm: View {
         sizeY = store.project?.geometry?.sizeY.value ?? 0
         sizeZ = store.project?.geometry?.sizeZ.value ?? 0
         northYaw = store.project?.geometry?.northYawDegrees.value ?? 0
+        occupantCount = store.project?.occupancy?.occupantCount.value ?? 0
+        occupiedStart = store.project?.occupancy?.schedule?.start ?? "08:00"
+        occupiedEnd = store.project?.occupancy?.schedule?.end ?? "18:00"
     }
 
     private func addOpening(kind: OpeningKind) {

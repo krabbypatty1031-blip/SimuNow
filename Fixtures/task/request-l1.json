@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "runID": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "scenarioID": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "inputHash": "da878a7ad0b01c3ac37d4c38b4fc6b2960dd0e772de5008aa57f3cf49d89cbcd"
+  },
+  "fidelity": "l1",
+  "snapshotPath": "runs/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/input.json",
+  "snapshotHash": "da878a7ad0b01c3ac37d4c38b4fc6b2960dd0e772de5008aa57f3cf49d89cbcd",
+  "weatherPath": "weather/CHN_Hong.Kong.SAR.450070_CityUHK.epw",
+  "weatherHash": "epw-hash",
+  "scheduleHash": "schedule-hash"
+}

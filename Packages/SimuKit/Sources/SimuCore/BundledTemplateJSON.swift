@@ -64,6 +64,13 @@ enum BundledTemplateJSON {
       "occupantSensibleW": { "value": 70.0, "unit": "W", "source": "preset" },
       "lightingW": { "value": 180.0, "unit": "W", "source": "preset" },
       "equipmentW": { "value": 400.0, "unit": "W", "source": "preset" },
+      "schedule": {
+        "kind": "occupied_hours",
+        "start": "08:00",
+        "end": "18:00",
+        "source": "assumed",
+        "reference": "representative-day occupied hours, not annual"
+      },
       "seats": [
         { "id": "S1", "position": { "x": 1.5, "y": 1.5, "z": 1.1 }, "source": "preset" },
         { "id": "S2", "position": { "x": 1.5, "y": 4.5, "z": 1.1 }, "source": "preset" },
@@ -94,7 +101,14 @@ enum BundledTemplateJSON {
         "z1": { "value": 2.05, "unit": "m", "source": "preset" }
       },
       "outdoorAirM3s": { "value": 0.02, "unit": "m3/s", "source": "assumed" },
-      "cop": { "value": 3.0, "unit": "1", "source": "assumed" }
+      "cop": { "value": 3.0, "unit": "1", "source": "assumed" },
+      "schedule": {
+        "kind": "occupied_hours",
+        "start": "08:00",
+        "end": "18:00",
+        "source": "assumed",
+        "reference": "representative-day system-on hours, not annual"
+      }
     }
   }
 }
@@ -149,6 +163,13 @@ enum BundledTemplateJSON {
       "occupantSensibleW": { "value": 70.0, "unit": "W", "source": "preset" },
       "lightingW": { "value": 480.0, "unit": "W", "source": "preset" },
       "equipmentW": { "value": 600.0, "unit": "W", "source": "preset" },
+      "schedule": {
+        "kind": "occupied_hours",
+        "start": "08:00",
+        "end": "17:00",
+        "source": "assumed",
+        "reference": "representative-day occupied hours, not annual"
+      },
       "seats": [
         { "id": "S1", "position": { "x": 2.0, "y": 1.2, "z": 1.1 }, "source": "preset" },
         { "id": "S2", "position": { "x": 2.0, "y": 2.4, "z": 1.1 }, "source": "preset" },
@@ -187,7 +208,14 @@ enum BundledTemplateJSON {
         "z1": { "value": 2.05, "unit": "m", "source": "preset" }
       },
       "outdoorAirM3s": { "value": 0.05, "unit": "m3/s", "source": "assumed" },
-      "cop": { "value": 3.0, "unit": "1", "source": "assumed" }
+      "cop": { "value": 3.0, "unit": "1", "source": "assumed" },
+      "schedule": {
+        "kind": "occupied_hours",
+        "start": "08:00",
+        "end": "17:00",
+        "source": "assumed",
+        "reference": "representative-day system-on hours, not annual"
+      }
     }
   }
 }

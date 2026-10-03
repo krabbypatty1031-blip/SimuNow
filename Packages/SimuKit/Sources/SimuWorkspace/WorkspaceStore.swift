@@ -19,9 +19,40 @@ public final class WorkspaceStore {
     public var overridable: [String] = []
     public var lockedAssumptions: [String] = []
     public let simulationClient: any SimulationClient
+    public var l1Client: any L1TaskClient
+    public var activeRun: RunReceipt?
+    public var lastResult: SimulationResult?
+    public var lastBoundary: L2Boundary?
+    public var runEvents: [SimulationEvent] = []
+    public var runMessage: String?
+    public var isSubmitting = false
+    public var engineStatus = "未配置本地 EnergyPlus"
+    public var pendingRepositoryRoot: URL?
+    public var pendingEnginesRoot: URL?
 
-    public init(simulationClient: any SimulationClient = UnconfiguredSimulationClient()) {
+    public init(
+        simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
+        l1Client: (any L1TaskClient)? = nil
+    ) {
         self.simulationClient = simulationClient
+        self.l1Client = l1Client ?? UnconfiguredL1TaskClient()
+        if l1Client != nil {
+            engineStatus = self.l1Client.isConfigured ? "已配置代表日 L1" : "未配置本地 EnergyPlus"
+        }
+    }
+
+    public var canSubmitL1: Bool {
+        l1Client.isConfigured && isPhysicalModelComplete && !isSubmitting
+    }
+
+    public var resultFreshness: ResultFreshness? {
+        guard let lastResult, let hash = currentInputHash() else { return nil }
+        return lastResult.identity.freshness(relativeTo: hash)
+    }
+
+    public func currentInputHash() -> String? {
+        guard let project else { return nil }
+        return InputSnapshotHash.sha256Hex(encodeSnapshot(project))
     }
 
     public var isPhysicalModelComplete: Bool {
@@ -132,6 +163,18 @@ public final class WorkspaceStore {
         project = draft
     }
 
+    public func applyOccupantCount(_ value: Double) {
+        var draft = project ?? ProjectDraft(name: "未命名房间")
+        fieldIssues = draft.applyOccupantCount(value, source: .user)
+        project = draft
+    }
+
+    public func applyOccupiedHours(start: String, end: String) {
+        var draft = project ?? ProjectDraft(name: "未命名房间")
+        fieldIssues = draft.applyOccupiedHours(start: start, end: end, source: .user)
+        project = draft
+    }
+
     public func applyOutdoorAirM3s(_ value: Double) {
         var draft = project ?? ProjectDraft(name: "未命名房间")
         fieldIssues = draft.applyOutdoorAirM3s(value, source: .user)
@@ -176,6 +219,7 @@ public final class WorkspaceStore {
             baselineScenarioID = nil
             overridable = []
             lockedAssumptions = []
+            resetRunState()
         } catch {
             presentPackageError(error)
         }
@@ -232,6 +276,160 @@ public final class WorkspaceStore {
         lockedAssumptions = session.lockedAssumptions
         fieldIssues = session.current.allFieldIssues()
         packageError = nil
+        resetRunState()
+    }
+
+    /// Submit an immutable representative-day L1. Does not invent watts if the client fails.
+    public func submitL1() async {
+        guard let project else {
+            runMessage = "没有可提交的项目。"
+            return
+        }
+        guard canSubmitL1 else {
+            runMessage = l1Client.isConfigured ? "模型不完整或已有任务在运行。" : "计算引擎尚未配置。请选择工作副本与引擎目录。"
+            return
+        }
+        isSubmitting = true
+        runMessage = nil
+        let snapshot = encodeSnapshot(project)
+        let digest = InputSnapshotHash.sha256Hex(snapshot)
+        let request = SimulationRequest(
+            identity: RunIdentity(runID: UUID(), scenarioID: project.id, inputHash: digest),
+            fidelity: .l1,
+            snapshotPath: "input.json",
+            snapshotHash: digest,
+            scheduleHash: L1Accounting.scheduleHash(of: project)
+        )
+        activeRun = RunReceipt(identity: request.identity, state: .queued)
+        selection = .runs
+        do {
+            let receipt = try await l1Client.submitL1(request, snapshot: snapshot)
+            activeRun = receipt
+            runEvents = (try? await l1Client.loadEvents(runID: receipt.identity.runID)) ?? []
+            lastResult = try await l1Client.loadResult(runID: receipt.identity.runID)
+            if let lastResult {
+                lastBoundary = try? L2BoundaryMapping.map(draft: project, l1: lastResult)
+            }
+            if receipt.state == .failed {
+                runMessage = "代表日 L1 失败。冷量未写成 0。"
+            }
+        } catch {
+            runMessage = error.localizedDescription
+        }
+        isSubmitting = false
+    }
+
+    public func cancelActiveRun() async {
+        guard let runID = activeRun?.identity.runID else { return }
+        try? await l1Client.cancel(runID: runID)
+    }
+
+    #if os(macOS)
+    public func restoreEngineBookmarks() {
+        if let saved = EngineBookmarkStore.restore() {
+            applyLocalEngine(repositoryRoot: saved.repositoryRoot, enginesRoot: saved.enginesRoot)
+            return
+        }
+        if let engines = EngineBookmarkStore.restoreEngines() {
+            applyEnginesOnly(engines)
+        }
+    }
+
+    public func chooseRepositoryRoot() {
+        guard let url = ProjectLocationPicker.requestDirectoryURL(
+            message: "选择含 Backend/src 的工作副本。App 包内已有 worker 时不必选。",
+            prompt: "选择工作副本"
+        ) else { return }
+        pendingRepositoryRoot = url
+        if let engines = pendingEnginesRoot {
+            applyEnginesOnly(engines)
+        } else {
+            engineStatus = "已选工作副本，还需要引擎目录"
+        }
+    }
+
+    public func chooseEnginesRoot() {
+        guard let url = ProjectLocationPicker.requestDirectoryURL(
+            message: "选择含 EnergyPlus/energyplus 的引擎目录。只需选一次。",
+            prompt: "选择引擎目录"
+        ) else { return }
+        applyEnginesOnly(url)
+    }
+
+    /// Stage worker into the app container, then point L1 at the staged tree plus engines.
+    public func applyEnginesOnly(_ enginesRoot: URL, runtimeRoot: URL? = nil) {
+        pendingEnginesRoot = enginesRoot
+        guard let source = workerSourceRoot() else {
+            engineStatus = "已选引擎目录。还需要 App 内 worker 或工作副本。"
+            return
+        }
+        do {
+            let runtime = try runtimeRoot ?? WorkerTreeStaging.applicationSupportRuntime()
+            try WorkerTreeStaging.stageWorker(from: source, into: runtime)
+            _ = enginesRoot.startAccessingSecurityScopedResource()
+            try WorkerTreeStaging.stageEngines(from: enginesRoot, into: runtime)
+            applyLocalEngine(
+                repositoryRoot: runtime,
+                enginesRoot: WorkerTreeStaging.enginesURL(in: runtime)
+            )
+            if l1Client.isConfigured {
+                EngineBookmarkStore.saveEngines(enginesRoot)
+            }
+        } catch {
+            l1Client = UnconfiguredL1TaskClient()
+            engineStatus = error.localizedDescription
+        }
+    }
+
+    public func applyLocalEngine(repositoryRoot: URL, enginesRoot: URL) {
+        pendingRepositoryRoot = repositoryRoot
+        pendingEnginesRoot = enginesRoot
+        _ = repositoryRoot.startAccessingSecurityScopedResource()
+        _ = enginesRoot.startAccessingSecurityScopedResource()
+        let runRoot = (packageURL ?? FileManager.default.temporaryDirectory)
+            .appendingPathComponent("runs", isDirectory: true)
+        let client = LocalProcessL1Client(
+            repositoryRoot: repositoryRoot,
+            enginesRoot: enginesRoot,
+            runRoot: runRoot
+        )
+        l1Client = client
+        if client.isConfigured {
+            engineStatus = "已配置 EnergyPlus 代表日 L1，不是 CFD"
+        } else {
+            l1Client = UnconfiguredL1TaskClient()
+            engineStatus = "未配置：运行时须含 worker，引擎目录须含 EnergyPlus/energyplus"
+        }
+    }
+
+    private func workerSourceRoot() -> URL? {
+        if let bundled = WorkerTreeStaging.bundledSource(), WorkerTreeStaging.isWorkerPresent(in: bundled) {
+            return bundled
+        }
+        return pendingRepositoryRoot
+    }
+    #endif
+
+    private func encodeSnapshot(_ draft: ProjectDraft) -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return (try? encoder.encode(draft)) ?? Data()
+    }
+
+    public func metricText(named name: String) -> String {
+        guard let metric = lastResult?.metric(named: name), let value = metric.value, !metric.omitted else {
+            return lastResult == nil ? "无结果" : "未知"
+        }
+        return "\(value) \(metric.unit)"
+    }
+
+    private func resetRunState() {
+        activeRun = nil
+        lastResult = nil
+        lastBoundary = nil
+        runEvents = []
+        runMessage = nil
+        isSubmitting = false
     }
 
     private func presentPackageError(_ error: Error) {

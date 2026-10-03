@@ -24,7 +24,7 @@ public enum EvidencePDFAssembler {
         to url: URL
     ) throws {
         #if os(macOS)
-        let guarded = NarrationGuard.filter(report, evidence: evidence)
+        let guarded = NarrationGuard.filter(report, evidence: evidence, language: copy.language)
         try writePDF(report: guarded, evidence: evidence, copy: copy, to: url)
         #else
         throw EvidencePDFError.unsupportedPlatform
@@ -94,7 +94,7 @@ public enum EvidencePDFAssembler {
         } else {
             for item in evidence.comfortAssumptions {
                 let value = item.value.map(format) ?? copy.notYet
-                let reference = item.reference ?? ""
+                let reference = item.reference.map { copy.displayStoredNote($0) } ?? ""
                 lines.append("\(copy.comfortKeyTitle(item.name)) \(value) \(item.unit) \(reference)")
             }
         }
@@ -203,7 +203,8 @@ public enum EvidencePDFAssembler {
         }
 
         context.beginPDFPage(nil)
-        drawWrapped(report.title, font: titleFont, lineHeight: 24)
+        let title = report.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        drawWrapped(title.isEmpty ? copy.pdfFallbackTitle : title, font: titleFont, lineHeight: 24)
         drawWrapped(copy.pdfDeepSeekCaption, font: captionFont, lineHeight: 13)
         drawWrapped(report.summary, font: bodyFont, lineHeight: 16)
         for section in report.sections {

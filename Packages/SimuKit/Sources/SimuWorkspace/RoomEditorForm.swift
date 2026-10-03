@@ -627,8 +627,8 @@ public struct RoomEditorForm: View {
                 .foregroundStyle(.secondary)
         } else {
             ForEach(store.lockedAssumptions, id: \.self) { note in
-                Text(copy.omittedAssumptionTitle(note))
-                    .accessibilityLabel(copy.omittedAssumptionTitle(note))
+                Text(copy.displayStoredNote(note))
+                    .accessibilityLabel(copy.displayStoredNote(note))
             }
             ForEach(listed) { item in
                 VStack(alignment: .leading, spacing: 2) {

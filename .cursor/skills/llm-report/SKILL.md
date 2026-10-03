@@ -26,6 +26,8 @@ description: >-
 
 `NarrationGuard` 只放行证据 JSON 里已有的数字。全年用电、全年电费、窗面积、室内平均温度、气流范围必须在 Swift 里算好，写进 `EvidenceRun`，再送给模型；方案差值由 `CandidateDiff` 在 Swift 里减好（half-up 两位）写进 `pairDiff`，AI 只照抄。
 
+被守卫拒绝的段落直接丢掉，不要写成「叙述未采用」或任何英文等价句；PDF 仍保留证据附录。小节 heading 必须是四个规定标题之一，否则按序号换成对应标题，避免把提示词写进 PDF。
+
 - EnergyPlus：`coolingW`、`electricPowerW`、`dayEnergyKWh`、`annualEnergyKWh`、`annualCost`、`windowCount`、`windowAreaM2`、设定/送风温度
 - OpenFOAM：`indoorMeanC`、`indoorMinC`/`indoorMaxC`、`flowMinMps`/`flowMaxMps`、座位温度与风速
 - 全年：`annualEnergyKWh` / `annualCost` = 代表日 × `occupiedDaysPerYear`（365）。不要改 L1 指标 `annual_kwh`（仍 omitted）

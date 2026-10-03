@@ -617,10 +617,14 @@ public struct WorkspaceView: View {
         if let evidence = store.reportEvidence {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(evidence.tariffReference)
+                    Text(store.copy.displayTariffReference(evidence.tariffReference))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel(store.copy.tariffReferenceAccessibility(evidence.tariffReference))
+                        .accessibilityLabel(
+                            store.copy.tariffReferenceAccessibility(
+                                store.copy.displayTariffReference(evidence.tariffReference)
+                            )
+                        )
                     // ADR-021: the AI narrates the comparison in the PDF; the
                     // page shows the code-computed diff so the numbers stay
                     // readable even without a configured DeepSeek key.

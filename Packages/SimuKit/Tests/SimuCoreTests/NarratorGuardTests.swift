@@ -42,12 +42,14 @@ import PDFKit
     )
     let filtered = NarrationGuard.filter(report, evidence: evidence)
     #expect(filtered.sections.first { $0.heading == NarrationGuard.rejection } == nil)
-    #expect(filtered.sections.first { $0.body == "相对基准节电 37%。" } == nil)
-    #expect(filtered.sections.contains { $0.body == NarrationGuard.rejection })
+    #expect(filtered.sections.contains { $0.body == "相对基准节电 37%。" } == false)
+    #expect(filtered.sections.contains { $0.body == NarrationGuard.rejection } == false)
     #expect(filtered.sections.contains { $0.body.contains(listed) })
     #expect(filtered.sections.contains { $0.body.contains(prefix) })
     #expect(filtered.title == report.title)
     #expect(filtered.caveats == report.caveats)
+    #expect(!filtered.title.contains(NarrationGuard.rejection))
+    #expect(filtered.sections.allSatisfy { !$0.heading.contains(NarrationGuard.rejection) && !$0.body.contains(NarrationGuard.rejection) })
 
     #if os(macOS)
     let url = FileManager.default.temporaryDirectory
@@ -55,10 +57,38 @@ import PDFKit
     try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("叙述未采用（含证据外数字）"))
+    #expect(!text.contains("叙述未采用"))
+    #expect(!text.contains("not adopted"))
     #expect(!text.contains("37"))
     #expect(text.contains(evidence.candidates[0].runID.uuidString))
     #endif
+}
+
+/// Prompt text pasted into a heading is replaced with the ADR-021 title for that slot.
+@Test func instructionHeadingsAreReplacedWithCanonicalTitles() throws {
+    let evidence = try narratorEvidence()
+    let listed = String(format: "%g", evidence.candidates[0].seatBandLowC)
+    let leaked = "Energy comparison: First answer the user's main question: is the electricity-cost difference between these two schemes worth caring about."
+    let report = GeneratedReport(
+        title: "送风高度不同",
+        summary: "座位带下限 \(listed) °C。",
+        sections: [
+            ReportSection(
+                heading: leaked,
+                body: "座位带下限 \(listed) °C，见计算依据。"
+            ),
+            ReportSection(heading: "用电对比", body: "两个方案输入相同。"),
+        ],
+        caveats: []
+    )
+    let filtered = NarrationGuard.filter(report, evidence: evidence, language: .english)
+    #expect(filtered.sections.map(\.heading) == [
+        ReportWriterSkill.planSummaryHeading(for: .english),
+        ReportWriterSkill.energyHeading(for: .english),
+    ])
+    #expect(filtered.sections.allSatisfy { !$0.heading.contains("First answer") })
+    #expect(filtered.sections.allSatisfy { !$0.heading.contains(NarrationGuard.rejection) })
+    #expect(!filtered.summary.contains(NarrationGuard.rejection))
 }
 
 /// Two-decimal display used in the UI is allowed because that is how the rest of the app writes numbers.
@@ -157,6 +187,8 @@ import PDFKit
     #expect(prompt.contains("yearly electricity cost"))
     #expect(!prompt.contains("不得推算全年电费"))
     #expect(!prompt.contains("不是全年电费"))
+    #expect(prompt.contains("heading field of each section must be exactly"))
+    #expect(!prompt.contains("叙述未采用"))
     let chinesePrompt = ReportWriterSkill.systemPrompt(for: .chinese)
     #expect(chinesePrompt.contains("顾问"))
     #expect(chinesePrompt.contains(ReportWriterSkill.planSummaryHeading(for: .chinese)))

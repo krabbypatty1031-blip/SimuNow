@@ -365,6 +365,9 @@ public struct UserFacingCopy: Sendable, Equatable {
             return t("Weather file is not filled in and will not be treated as 0", zh: "天气文件尚未填写，不会按 0 计算")
         case "furniture_boxes":
             return t("Furniture is not drawn in detail and will not be treated as 0", zh: "家具尚未细画，不会按 0 计算")
+        case Self.storedChildrenUnevaluated,
+             "Children are not evaluated separately":
+            return t("Children are not evaluated separately", zh: Self.storedChildrenUnevaluated)
         default:
             return t("One item is not filled in and will not be treated as 0", zh: "有一项尚未填写，不会按 0 计算")
         }

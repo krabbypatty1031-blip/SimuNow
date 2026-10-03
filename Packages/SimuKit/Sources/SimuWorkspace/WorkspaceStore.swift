@@ -903,8 +903,14 @@ public final class WorkspaceStore {
         pendingEnginesRoot = enginesRoot
         _ = repositoryRoot.startAccessingSecurityScopedResource()
         _ = enginesRoot.startAccessingSecurityScopedResource()
-        let runRoot = (packageURL ?? FileManager.default.temporaryDirectory)
-            .appendingPathComponent("runs", isDirectory: true)
+        let runRoot: URL
+        if let packageURL {
+            runRoot = packageURL.appendingPathComponent("runs", isDirectory: true)
+        } else if let support = try? WorkerTreeStaging.applicationSupportRuns() {
+            runRoot = support
+        } else {
+            runRoot = FileManager.default.temporaryDirectory.appendingPathComponent("runs", isDirectory: true)
+        }
         let client = LocalProcessL1Client(
             repositoryRoot: repositoryRoot,
             enginesRoot: enginesRoot,

@@ -26,8 +26,18 @@ public struct ListedAssumption: Equatable, Identifiable, Sendable {
     public var id: String { path }
 
     /// Missing literature is unknown, not zero. Uncertainty is labeled in the quantity's unit.
+    /// Stored tokens stay as written in JSON; this string is display-layer only.
     public var provenanceText: String {
-        var text = note ?? reference ?? copy.unknownProvenance
+        var text: String
+        if let note {
+            text = copy.displayStoredNote(note)
+        } else if let reference {
+            text = copy.displayStoredNote(reference)
+        } else if let source {
+            text = copy.sourceTitle(source)
+        } else {
+            text = copy.unknownProvenance
+        }
         if let uncertainty, let unit {
             text += " · \(copy.uncertainty) \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))"
         }

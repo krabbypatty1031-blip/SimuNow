@@ -135,3 +135,32 @@ import SimuWorkspace
     store.language = .english
     #expect(store.copy.destinationTitle("runs") == "Calculation results")
 }
+
+@Test func storedAssumptionNotesDisplayInTheUILanguage() throws {
+    #expect(
+        UserFacingCopy.english.displayStoredNote(UserFacingCopy.storedDemoTariffReference)
+            == "Contest demo assumption, not a real tariff"
+    )
+    #expect(
+        UserFacingCopy.chinese.displayStoredNote(UserFacingCopy.storedDemoTariffReference)
+            == UserFacingCopy.storedDemoTariffReference
+    )
+    #expect(
+        UserFacingCopy.english.displayStoredNote(UserFacingCopy.storedMRTEqualsSetpoint)
+            == "Assumed equal to the zone setpoint, not a radiation solve"
+    )
+    #expect(
+        UserFacingCopy.english.displayStoredNote(UserFacingCopy.storedChildrenUnevaluated)
+            == "Children are not evaluated separately"
+    )
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    var listed = draft.listedAssumptions()
+    for index in listed.indices {
+        listed[index].copy = .english
+    }
+    let mrt = listed.first { $0.path == "occupancy.comfort.mrtC" }
+    #expect(mrt?.reference == UserFacingCopy.storedMRTEqualsSetpoint)
+    #expect(mrt?.provenanceText == "Assumed equal to the zone setpoint, not a radiation solve")
+    let occupants = listed.first { $0.path == "occupancy.occupantCount" }
+    #expect(occupants?.provenanceText == "Template preset")
+}

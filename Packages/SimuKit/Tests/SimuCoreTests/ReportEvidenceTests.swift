@@ -127,7 +127,9 @@ import PDFKit
     let ratio = try #require(evidence.candidates.first { $0.runID == pair.high.identity.runID }?.seatPassRatio)
     #expect(text.contains(UserFacingCopy.displayNumber(ratio)))
     let assumption = try #require(evidence.comfortAssumptions.first?.reference)
-    #expect(text.contains(assumption))
+    #expect(assumption == UserFacingCopy.storedMRTEqualsSetpoint)
+    #expect(text.contains(UserFacingCopy.english.displayStoredNote(assumption)))
+    #expect(!text.contains(UserFacingCopy.storedMRTEqualsSetpoint))
     #expect(!text.contains("叙述未采用"))
 }
 #endif

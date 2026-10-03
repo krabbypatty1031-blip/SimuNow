@@ -855,29 +855,82 @@ extension UserFacingCopy {
 
     /// Stored in project JSON. Display maps this token; custom notes stay as written.
     public static let storedDemoTariffReference = "比赛演示假设，非真实电价"
+    public static let storedMRTEqualsSetpoint = "假设等于区设定，不是辐射求解"
+    public static let storedDemoHumidity = "比赛演示湿度假设，不是房间湿度场"
+    public static let storedISO7730Clothing = "ISO 7730 夏季轻薄办公着装量级"
+    public static let storedISO7730Met = "ISO 7730 久坐办公 70 W/m2（1 met = 58.15 W/m2 → 1.2 met）"
+    public static let storedChildrenUnevaluated = "儿童人群未单独评价"
+    public static let storedOccupiedHoursReference = "representative-day occupied hours, not annual"
+    public static let storedSystemOnHoursReference = "representative-day system-on hours, not annual"
 
     public var demoTariffReference: String {
         t("Contest demo assumption, not a real tariff", zh: Self.storedDemoTariffReference)
     }
 
-    public func displayTariffReference(_ stored: String) -> String {
+    /// Maps known stored assumption/tariff tokens into the current UI language.
+    /// Custom notes the user typed are returned as written.
+    public func displayStoredNote(_ stored: String) -> String {
         let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed == Self.storedDemoTariffReference
-            || trimmed == UserFacingCopy.english.demoTariffReference
-            || trimmed == UserFacingCopy.chinese.demoTariffReference {
+        if trimmed.isEmpty { return trimmed }
+        if trimmed.hasPrefix("omitted:") || matches(trimmed, stored: Self.storedChildrenUnevaluated, en: "Children are not evaluated separately") {
+            return omittedAssumptionTitle(trimmed)
+        }
+        if matches(trimmed, stored: Self.storedDemoTariffReference, en: "Contest demo assumption, not a real tariff") {
             return demoTariffReference
         }
-        return stored
+        if matches(trimmed, stored: Self.storedMRTEqualsSetpoint, en: "Assumed equal to the zone setpoint, not a radiation solve") {
+            return t("Assumed equal to the zone setpoint, not a radiation solve", zh: Self.storedMRTEqualsSetpoint)
+        }
+        if matches(trimmed, stored: Self.storedDemoHumidity, en: "Contest demo humidity assumption, not a room humidity field") {
+            return t("Contest demo humidity assumption, not a room humidity field", zh: Self.storedDemoHumidity)
+        }
+        if matches(trimmed, stored: Self.storedISO7730Clothing, en: "ISO 7730 light summer office clothing level") {
+            return t("ISO 7730 light summer office clothing level", zh: Self.storedISO7730Clothing)
+        }
+        if matches(trimmed, stored: Self.storedISO7730Met, en: "ISO 7730 seated office 70 W/m2 (1 met = 58.15 W/m2 → 1.2 met)") {
+            return t(
+                "ISO 7730 seated office 70 W/m2 (1 met = 58.15 W/m2 → 1.2 met)",
+                zh: Self.storedISO7730Met
+            )
+        }
+        if matches(trimmed, stored: Self.storedOccupiedHoursReference, en: Self.storedOccupiedHoursReference) {
+            return t("Representative-day occupied hours, not annual", zh: "代表日占用时段，不是全年")
+        }
+        if matches(trimmed, stored: Self.storedSystemOnHoursReference, en: Self.storedSystemOnHoursReference) {
+            return t("Representative-day system-on hours, not annual", zh: "代表日开机时段，不是全年")
+        }
+        return trimmed
+    }
+
+    public func displayTariffReference(_ stored: String) -> String {
+        displayStoredNote(stored)
     }
 
     public func storedTariffReference(_ displayed: String) -> String {
         let trimmed = displayed.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed == Self.storedDemoTariffReference
-            || trimmed == UserFacingCopy.english.demoTariffReference
-            || trimmed == UserFacingCopy.chinese.demoTariffReference {
+        if matches(trimmed, stored: Self.storedDemoTariffReference, en: "Contest demo assumption, not a real tariff") {
             return Self.storedDemoTariffReference
         }
         return trimmed
+    }
+
+    private func matches(_ trimmed: String, stored: String, en: String) -> Bool {
+        trimmed == stored || trimmed == en || trimmed == UserFacingCopy.chinese.displayForm(stored: stored, en: en)
+    }
+
+    /// Chinese display form of a mapped token, used only to recognise a previously shown string.
+    private func displayForm(stored: String, en: String) -> String {
+        switch stored {
+        case Self.storedDemoTariffReference: stored
+        case Self.storedMRTEqualsSetpoint: stored
+        case Self.storedDemoHumidity: stored
+        case Self.storedISO7730Clothing: stored
+        case Self.storedISO7730Met: stored
+        case Self.storedChildrenUnevaluated: stored
+        case Self.storedOccupiedHoursReference: "代表日占用时段，不是全年"
+        case Self.storedSystemOnHoursReference: "代表日开机时段，不是全年"
+        default: en
+        }
     }
 
     public func progressAccessibility(_ title: String) -> String {
@@ -1036,9 +1089,10 @@ extension UserFacingCopy {
     }
 
     public func comfortAssumptionLine(key: String, quantity: String, reference: String) -> String {
-        t(
-            "\(comfortKeyTitle(key)) \(quantity): \(reference)",
-            zh: "\(comfortKeyTitle(key)) \(quantity)：\(reference)"
+        let shown = displayStoredNote(reference)
+        return t(
+            "\(comfortKeyTitle(key)) \(quantity): \(shown)",
+            zh: "\(comfortKeyTitle(key)) \(quantity)：\(shown)"
         )
     }
 
@@ -1120,6 +1174,7 @@ extension UserFacingCopy {
     public var pdfDeepSeekCaption: String {
         t("The following text was prepared by DeepSeek from the calculation results.", zh: "以下正文由 DeepSeek 根据计算结果整理。")
     }
+    public var pdfFallbackTitle: String { t("Comparison notes", zh: "对比说明") }
     public var pdfNoComfortAssumptions: String { t("No comfort assumptions yet", zh: "还没有舒适假设") }
     public func pdfTariff(_ price: String, currency: String) -> String {
         t("Electricity price \(price) \(currency)/kWh", zh: "电价 \(price) \(currency)/kWh")

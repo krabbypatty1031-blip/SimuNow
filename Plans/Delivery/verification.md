@@ -12,6 +12,7 @@
 | `python3 test/p1/test_quality.py` | 通过，5 项 | 进口面导热合成 case 手算 −51.0087 W；湍流/计数不匹配/缺 patch 拒绝；2026-10-03 弱射流回归：计入过、不计 23% 挂 |
 | `python3 test/p1/test_room.py` | 通过，8 项 | 预算新必填 `q_inlet_cond_w` 后全绿 |
 | 钉版 L2 管线数值 | quality passed | 质量相对误差 2.35e-6；能量相对误差 **0.19%**（计入门禁前假象 23.4%）；`terms_w.q_inlet_cond = −305.9 W`；座位 25.08 / 25.09 / 25.39 / 25.38 °C，uMag 0.026–0.034 m/s 全带 `lowSpeedAbsoluteError` |
+| P4-03 座位采样 | 通过 | `Backend.tests.test_l2_sampling` 3 项（合成场）；钉版 `test_l2_runner` 追加最近单元温度复算；证据 run：域外座位 omitted（`reason: not_in_fluid`），4 有效座位采样，state succeeded / quality passed |
 | `Fixtures/task/result-l2.json` | 钉版真值 | 固定 UUID（aaaa…/cccc…）；真实收敛场数值，非手编 |
 | `Scripts/check.sh mac` | BUILD SUCCEEDED | `SimulationResult` 加可选 `qualityDetail`/`seatSamples` 后两端编译兼容 |
 | `Scripts/check.sh ios` | BUILD SUCCEEDED | 同上 |

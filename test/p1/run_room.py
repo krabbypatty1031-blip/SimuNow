@@ -120,6 +120,40 @@ def _phi_sum(post: Path, name: str) -> float | None:
     return rows[-1][-1]
 
 
+def sample_seats(
+    room: dict[str, Any],
+    *,
+    temperature: list[float],
+    velocity: list[tuple[float, float, float]],
+    cx: list[float],
+    cy: list[float],
+    cz: list[float],
+) -> dict[str, Any]:
+    """Contract seat samples from solve-mesh cell fields.
+
+    Every seat is accounted for: a seat outside the fluid is omitted with a
+    reason, never fabricated as 0 or nearest-wall air. Seat T and |U| are the
+    nearest solve-mesh cell values, so display-slice density can never change
+    the reported seat numbers.
+    """
+    seats_out: list[dict[str, Any]] = []
+    omitted: list[dict[str, Any]] = []
+    for seat in room["seats"]:
+        x, y, z = float(seat["x_m"]), float(seat["y_m"]), float(seat["z_m"])
+        if not point_in_fluid(room, x, y, z):
+            omitted.append({"id": str(seat["id"]), "omitted": True, "reason": "not_in_fluid"})
+            LOGGER.error("seat %s outside the fluid; sample omitted, not invented", seat["id"])
+            continue
+        fx, fy, fz = foam_xyz(x, y, z)
+        index = _nearest_cell(fx, fy, fz, cx, cy, cz)
+        u_foam = velocity[index]
+        ux, uy, uz = contract_xyz(u_foam[0], u_foam[1], u_foam[2])
+        seats_out.append(
+            seat_sample(seat_id=str(seat["id"]), x=x, y=y, z=z, t_k=temperature[index], ux=ux, uy=uy, uz=uz)
+        )
+    return {"seats": seats_out, "omitted_seats": omitted}
+
+
 def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dict[str, Any]:
     """Mesh, gate, solve, sample. quality.pass is false unless every gate holds."""
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -256,19 +290,19 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
     quality["phi_in_m3_s"] = phi_in
     quality["phi_out_m3_s"] = phi_out
 
-    seats_out: list[dict[str, Any]] = []
-    for seat in room["seats"]:
-        x, y, z = float(seat["x_m"]), float(seat["y_m"]), float(seat["z_m"])
-        if not point_in_fluid(room, x, y, z):
-            raise RoomError(f"seat {seat['id']} is not in the fluid")
-        fx, fy, fz = foam_xyz(x, y, z)
-        index = _nearest_cell(fx, fy, fz, cx, cy, cz)
-        u_foam = velocity[index]
-        ux, uy, uz = contract_xyz(u_foam[0], u_foam[1], u_foam[2])
-        seats_out.append(seat_sample(seat_id=str(seat["id"]), x=x, y=y, z=z, t_k=temperature[index], ux=ux, uy=uy, uz=uz))
+    sampled = sample_seats(
+        room,
+        temperature=temperature,
+        velocity=velocity,
+        cx=cx,
+        cy=cy,
+        cz=cz,
+    )
+    seats_out = sampled["seats"]
     samples = {
         "count": len(seats_out),
         "seats": seats_out,
+        "omitted_seats": sampled["omitted_seats"],
         "input_hash": digest,
         "pyvista": False,
     }
@@ -278,13 +312,14 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
     samples["slice_files"] = [path.relative_to(run_dir).as_posix() for path in vtk]
     (run_dir / "samples.json").write_text(json.dumps(samples, indent=2) + "\n", encoding="utf-8")
 
+    # Sampled + omitted must cover every seat; a silent drop is a failure.
     quality["pass"] = bool(
         quality["checkMesh"] == "ok"
         and quality["solver_end"]
         and quality["monitors"]["stable"]
         and budget["mass"]["pass"]
         and budget["energy"]["pass"]
-        and len(seats_out) == len(room["seats"])
+        and len(seats_out) + len(samples["omitted_seats"]) == len(room["seats"])
     )
     LOGGER.info("quality.pass=%s mass=%s energy=%s", quality["pass"], budget["mass"]["pass"], budget["energy"]["pass"])
     (run_dir / "quality.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")

@@ -36,13 +36,14 @@
 | P3 手测 | 沙盒 Mac 提交办公室代表日 L1 成功 | 冷量 3099.335 W；电功率 1033.112 W = 冷量/COP；全年未知；送风 16 ≠ 设定 26；回风 RET1；新风 0.02 / 回风 0.088 m³/s；新鲜度「当前输入」 |
 | P4-01 几何与 case | 草稿→L2 房间；可写 case；缺引擎不编造温度 | `L2RoomMappingTests`；Python `test_l2_room` / `test_l2_runner`；office 送风 16≠26；人数≠座位；`run-l2` failed + `seat_t_c` omitted |
 | P4-02 质量门禁 | 钉版求解全管线；五门禁全过；进口面导热实测入账 | 钉版 `test_l2_runner`：state succeeded、quality passed、`checkMesh ok`、`monitorsStable`、质量相对误差 2.35e-6、能量相对误差 0.19%；`test/p1/test_quality.py`（进口面导热 −51.01 W 手算锁定 + 2026-10-03 弱射流回归）；`quality.json` energy.terms_w 含 `q_inlet_cond=-305.9W`；座位 tC 25.08–25.39 仅质量通过时出现；`Fixtures/task/result-l2.json`（钉版真值，固定 UUID）；`L2ResultTests`（门禁缺项不通过；`allGatesPass` 镜像 Python）；`parse_result` 透传 `qualityDetail`/`seatSamples`；schema 同步可选字段 |
-| L0/L3 与场显示接入 | 进行中 | P4-03 起采样；视口仍空 |
+| P4-03 座位采样 | 逐座位核算；域外座位 omitted；座位值钉在求解网格 | `Backend.tests.test_l2_sampling`（合成场：域外座位 omitted + reason；sampled+omitted=座位数；座位值=传入求解网格单元值）；钉版 `test_l2_runner` 追加独立复算最近单元温度 == samples.json；证据 run（5 座位含 x=7 域外）：state succeeded、quality passed、`omitted_seats=[{id:S9-outside, reason:not_in_fluid}]`、4 有效座位照常采样 |
+| L0/L3 与场显示接入 | 进行中 | P4-04 舒适；视口仍空 |
 | 场渲染/舒适/成本/报告 | 待开发 | P4/P5 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。下一步 P4-03 采样补充测试（实体外座位拒绝），然后 P4-04 舒适与 P4-05 视口。未推远程。
+P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。P4-03 已通过：座位采样逐座位核算。下一步 P4-04 舒适（缺 RH/辐射/衣着 → 不可评价），然后 P4-05 视口与 P4-06 候选对比。未推远程。
 
 ## P4-02 质量门禁技术记录
 

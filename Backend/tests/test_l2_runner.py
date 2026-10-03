@@ -91,6 +91,28 @@ class L2RunnerTests(unittest.TestCase):
                 seat_min = next(item for item in result["metrics"] if item["name"] == "seat_t_c_min")
                 self.assertFalse(seat_min["omitted"])
                 self.assertEqual(seat_min["value"], min(seat["tC"] for seat in seats))
+
+                # Display-slice independence pin: seat values must equal the
+                # nearest solve-mesh cell, re-derived from the case fields.
+                import sys as _sys
+
+                if str(ROOT / "test" / "p1") not in _sys.path:
+                    _sys.path.insert(0, str(ROOT / "test" / "p1"))
+                from foam_io import latest_time, parse_scalar_field, parse_vector_field
+                from room_input import foam_xyz
+
+                case = run_dir / "case"
+                time_dir = latest_time(case)
+                temps = parse_scalar_field((time_dir / "T").read_text(encoding="utf-8"))
+                centres = parse_vector_field((time_dir / "C").read_text(encoding="utf-8"))
+                samples = json.loads((run_dir / "samples.json").read_text(encoding="utf-8"))
+                for row in samples["seats"]:
+                    fx, fy, fz = foam_xyz(float(row["x"]), float(row["y"]), float(row["z"]))
+                    index = min(
+                        range(len(centres)),
+                        key=lambda i: (centres[i][0] - fx) ** 2 + (centres[i][1] - fy) ** 2 + (centres[i][2] - fz) ** 2,
+                    )
+                    self.assertAlmostEqual(row["T_C"], temps[index] - 273.15, places=9)
         finally:
             if previous is None:
                 os.environ.pop("SIMUNOW_ENGINES_ROOT", None)

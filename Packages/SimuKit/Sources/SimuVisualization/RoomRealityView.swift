@@ -13,6 +13,9 @@ public struct RoomRealityView: View {
     private let field: FieldSlice?
     private let flow: FlowOverlay?
     private let sharedPalette: SlicePalette?
+    /// Quality-passed L2 seat samples for per-seat temperature labels; nil
+    /// or unmatched ids keep the plain seat name, never a fabricated number.
+    private let seatSamples: [SeatSample]?
     private let externalYaw: Binding<Double>?
     @State private var internalYaw: Double = ViewportOrbit.defaultYaw
     @State private var orbit = ViewportOrbit()
@@ -25,12 +28,14 @@ public struct RoomRealityView: View {
         field: FieldSlice? = nil,
         flow: FlowOverlay? = nil,
         sharedPalette: SlicePalette? = nil,
-        yaw: Binding<Double>? = nil
+        yaw: Binding<Double>? = nil,
+        seatSamples: [SeatSample]? = nil
     ) {
         self.scene = scene
         self.field = field
         self.flow = flow
         self.sharedPalette = sharedPalette
+        self.seatSamples = seatSamples
         self.externalYaw = yaw
     }
 
@@ -43,13 +48,20 @@ public struct RoomRealityView: View {
     }
 
     /// Rebuild geometry only when the draft or field changes. Drag updates
-    /// the root transform in `update` and must not recreate meshes.
+    /// the root transform in `update` and must not recreate meshes. Seat
+    /// temperatures are part of the key: a new run must rebuild the labels.
     private var buildID: String {
         RoomDisplayLayout.buildID(
             scene: scene,
             fieldHash: field?.inputHash,
             paletteKey: palette.map { "\($0.minC):\($0.maxC)" },
-            flowHash: flow?.inputHash
+            flowHash: flow?.inputHash,
+            seatKey: seatSamples.map { samples in
+                samples
+                    .map { "\($0.id):\($0.tC)" }
+                    .sorted()
+                    .joined(separator: ",")
+            }
         )
     }
 
@@ -67,7 +79,13 @@ public struct RoomRealityView: View {
     private func realityContent(phase: Double) -> some View {
         RealityView { content in
             content.camera = .virtual
-            let root = await RoomEntityBuilder.makeRoot(scene: scene, field: field, palette: palette, flow: flow)
+            let root = await RoomEntityBuilder.makeRoot(
+                scene: scene,
+                field: field,
+                palette: palette,
+                flow: flow,
+                seatSamples: seatSamples
+            )
             RoomEntityBuilder.applyOrbit(root, scene: scene, orbit: orbit)
             content.add(root)
             content.cameraTarget = root
@@ -108,17 +126,8 @@ public struct RoomRealityView: View {
                 orbit.yawRadians = newValue
             }
         }
-        .overlay(alignment: .topLeading) {
-            if !scene.seats.isEmpty {
-                Text(scene.seatDisplayNames.joined(separator: " · "))
-                    .font(.caption2)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                    .padding(10)
-                    .accessibilityHidden(true)
-            }
-        }
+        // Removed the top-leading seat-name strip (user request 2026-10-03):
+        // per-seat labels in the scene carry the information now.
         .overlay(alignment: .bottom) {
             if palette != nil || flow != nil {
                 ViewportLegend(palette: palette, flow: flow)
@@ -137,6 +146,15 @@ public struct RoomRealityView: View {
         }
         if let flow, flow.quality == "passed", let maxMag = flow.stats.maxMag {
             text += "，稳态气流箭头、流线和循环圆点，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点是示意流向，不是开机降温"
+        }
+        // Per-seat L2 temperatures reach VoiceOver users too; the in-scene
+        // flat labels are 3D graphics they cannot read.
+        let seatTemps = scene.seats.compactMap { seat -> String? in
+            guard let sample = seatSamples?.first(where: { $0.id == seat.id }) else { return nil }
+            return "\(seat.displayName) \(UserFacingCopy.displayNumber(sample.tC)) 摄氏度"
+        }
+        if !seatTemps.isEmpty {
+            text += "，座位气温 " + seatTemps.joined(separator: "、")
         }
         return text
     }

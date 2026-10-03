@@ -13,6 +13,12 @@ private typealias PlatformColor = UIColor
 private typealias PlatformColor = NSColor
 #endif
 
+#if os(iOS) || os(tvOS)
+private typealias PlatformFont = UIFont
+#else
+private typealias PlatformFont = NSFont
+#endif
+
 /// Platform colour for UnlitMaterial. Kept local so SimuVisualization does
 /// not leak AppKit/UIKit types into the display DTO layer.
 @available(macOS 15.0, iOS 18.0, *)
@@ -48,7 +54,8 @@ enum RoomEntityBuilder {
         scene: RoomScene,
         field: FieldSlice?,
         palette: SlicePalette?,
-        flow: FlowOverlay? = nil
+        flow: FlowOverlay? = nil,
+        seatSamples: [SeatSample]? = nil
     ) async -> Entity {
         let root = Entity()
         root.name = rootName
@@ -77,6 +84,11 @@ enum RoomEntityBuilder {
         }
         for seat in scene.seats {
             addOccupiedSeat(seat, to: root, scene: scene)
+            // Per-seat air temperature label from the quality-passed L2
+            // result; seats without a sample keep only the mannequin.
+            if let sample = seatSamples?.first(where: { $0.id == seat.id }) {
+                addSeatLabel(sample, seat: seat, to: root, scene: scene)
+            }
         }
         return root
     }
@@ -211,6 +223,94 @@ enum RoomEntityBuilder {
     private static func addOccupiedSeat(_ seat: SeatScene, to root: Entity, scene: RoomScene) {
         let display = RoomDisplayLayout.centeredDisplay(RoomDisplayLayout.seatFloor(seat), scene: scene)
         root.addChild(RoomSchematicMeshes.occupiedSeat(atFloor: SIMD3(display.x, display.y, display.z)))
+    }
+
+    /// Per-seat L2 air-temperature label, laid flat above the seated person
+    /// so the default overhead orbit reads it like a floor plan. Generated at
+    /// a regular 100 pt font size and scaled down, because tiny CoreText
+    /// font sizes can degrade path quality; the scale lands roughly 12 cm of
+    /// text height. A white backing board keeps black digits readable over
+    /// both the deep-blue cold end and the bright warm end of the slice.
+    private static func addSeatLabel(_ sample: SeatSample, seat: SeatScene, to root: Entity, scene: RoomScene) {
+        let text = RoomDisplayLayout.seatLabelText(seat: seat, sample: sample)
+        guard let font = platformLabelFont() else { return }
+        let mesh: MeshResource
+        do {
+            mesh = try MeshResource.generateText(
+                text,
+                extrusionDepth: SeatLabelStyle.extrusionPt,
+                font: font
+            )
+        } catch {
+            // A failed text mesh leaves the room and mannequin untouched.
+            return
+        }
+        let scale = SeatLabelStyle.worldScale
+        // Text bounds in metres (font units scaled down), used to centre the board.
+        let textM = mesh.bounds.extents * scale
+        // Clamp above the seated person and below the ceiling.
+        let labelZM = min(SeatLabelStyle.heightM, max(0.6, scene.sizeZM - 0.15))
+        let anchor = Entity()
+        anchor.name = "simunow.seat-label.\(seat.id)"
+        let display = RoomDisplayLayout.centeredDisplay(
+            Position3D(x: seat.position.x, y: seat.position.y, z: labelZM),
+            scene: scene
+        )
+        anchor.position = SIMD3(display.x, display.y, display.z)
+        // Lay flat: rotate the text face from local +Z to up (+Y); the text
+        // top then points to -Z (the room's far side), the floor-plan reading
+        // direction for the default overhead orbit.
+        anchor.orientation = simd_quatf(angle: -.pi / 2, axis: SIMD3(1, 0, 0))
+
+        let textEntity = ModelEntity(
+            mesh: mesh,
+            materials: [RoomDisplayColor.unlit(.black, transparent: false)]
+        )
+        textEntity.scale = SIMD3(repeating: scale)
+        anchor.addChild(textEntity)
+
+        // generatePlane(width:height:) faces +Z like the text, so the same
+        // anchor rotation lays the board flat; it sits just behind the text
+        // face to avoid z-fighting.
+        let boardEntity = ModelEntity(
+            mesh: .generatePlane(
+                width: textM.x + SeatLabelStyle.boardPaddingM,
+                height: textM.y + SeatLabelStyle.boardPaddingM * 0.6
+            ),
+            materials: [SeatLabelStyle.boardMaterial]
+        )
+        boardEntity.position = SIMD3(textM.x / 2, textM.y / 2, -SeatLabelStyle.boardOffsetM)
+        anchor.addChild(boardEntity)
+
+        root.addChild(anchor)
+    }
+
+    /// Seat label typography and board style, all in display metres.
+    private enum SeatLabelStyle {
+        /// CoreText renders a regular font size; the entity scales it down.
+        static let fontPt: CGFloat = 100
+        /// 100 pt units to metres, landing ~12 cm of text height.
+        static let worldScale: Float = 0.0011
+        /// Text extrusion in font units; after scaling it is ~2 mm thick.
+        static let extrusionPt: Float = 2
+        /// Label plane height above the floor: over the seated person's
+        /// head, under the ceiling, and clear of the seat-height slice.
+        static let heightM: Double = 1.45
+        /// White board padding around the text bounds, metres.
+        static let boardPaddingM: Float = 0.10
+        /// Board sits this far behind the text face, metres.
+        static let boardOffsetM: Float = 0.004
+        /// Near-opaque white board: readable over cold-blue and warm-red ends.
+        static var boardMaterial: UnlitMaterial {
+            var material = UnlitMaterial(color: PlatformColor.white)
+            material.blending = .transparent(opacity: 0.85)
+            return material
+        }
+    }
+
+    /// Platform font for text meshes without leaking AppKit/UIKit types.
+    private static func platformLabelFont() -> PlatformFont? {
+        PlatformFont.systemFont(ofSize: SeatLabelStyle.fontPt, weight: .semibold)
     }
 
     private static func addBox(

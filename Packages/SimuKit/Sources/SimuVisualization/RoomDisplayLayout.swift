@@ -239,7 +239,13 @@ public enum RoomDisplayLayout: Sendable {
         return unit
     }
 
-    public static func buildID(scene: RoomScene, fieldHash: String?, paletteKey: String?, flowHash: String? = nil) -> String {
+    public static func buildID(
+        scene: RoomScene,
+        fieldHash: String?,
+        paletteKey: String?,
+        flowHash: String? = nil,
+        seatKey: String? = nil
+    ) -> String {
         var parts = ["room:\(format(scene.sizeXM)),\(format(scene.sizeYM)),\(format(scene.sizeZM))"]
         for (index, window) in scene.windows.enumerated() {
             parts.append("w\(index):\(patchKey(window))")
@@ -264,7 +270,20 @@ public enum RoomDisplayLayout: Sendable {
         parts.append(fieldHash ?? "-")
         parts.append(paletteKey ?? "-")
         parts.append(flowHash ?? "-")
+        // Seat temperatures come from the L2 result, not the draft geometry;
+        // a new run with new numbers must rebuild the labels too.
+        parts.append(seatKey ?? "-")
         return parts.joined(separator: "|")
+    }
+
+    /// Seat label text: display name plus two-fraction Celsius when a
+    /// quality-passed L2 sample exists for that seat id. Without a sample
+    /// only the name shows - a temperature is never invented.
+    public static func seatLabelText(seat: SeatScene, sample: SeatSample?) -> String {
+        guard let sample else {
+            return seat.displayName
+        }
+        return "\(seat.displayName) \(UserFacingCopy.displayNumber(sample.tC))°C"
     }
 
     /// Seat-height plane covering every cell, including the half-spacing

@@ -60,6 +60,12 @@ class SeatGateTests(unittest.TestCase):
         # Still name a worst seat: largest |tC - 24.5|, not "everyone passed".
         self.assertEqual(by_name["worst_seat_id"]["reason"], "S4")
         self.assertFalse(by_name["worst_seat_id"]["omitted"])
+        # The worst seat's own numbers ride beside the gate text so the UI
+        # can write "偏凉，约 23.1 °C" instead of naming model gates.
+        self.assertEqual(by_name["worst_seat_t_c"]["value"], 23.1)
+        self.assertEqual(by_name["worst_seat_u_mag"]["value"], 0.20)
+        self.assertEqual(by_name["worst_seat_pmv"]["value"], 0.3)
+        self.assertFalse(by_name["worst_seat_t_c"]["omitted"])
 
     def test_one_hot_seat_fails_the_temperature_gate(self):
         seats = [dict(row) for row in IN_BAND]
@@ -70,6 +76,9 @@ class SeatGateTests(unittest.TestCase):
         self.assertEqual(by_name["seat_eval_count"]["value"], 4)
         self.assertEqual(by_name["worst_seat_id"]["reason"], "S4")
         self.assertIn("温度门", by_name["worst_seat_reason"]["reason"])
+        # Numbers for the direction sentence ("偏热，约 27 °C").
+        self.assertEqual(by_name["worst_seat_t_c"]["value"], 27.0)
+        self.assertEqual(by_name["worst_seat_u_mag"]["value"], 0.05)
 
     def test_omitted_seat_leaves_the_denominator(self):
         # 40 °C would win "farthest from 24.5" if a bug counted it.
@@ -99,6 +108,9 @@ class SeatGateTests(unittest.TestCase):
         by_name = _by_name(feasibility_metrics(seats, quality_passed=True))
         self.assertEqual(by_name["seat_pass_ratio"]["value"], 1.0)
         self.assertEqual(by_name["seat_eval_count"]["value"], 2)
+        # Absent PMV is not a miss and not a zero: the value stays None.
+        self.assertIsNone(by_name["worst_seat_pmv"]["value"])
+        self.assertFalse(by_name["worst_seat_pmv"]["omitted"])
 
     def test_band_edges_pass_and_speed_breaks_a_temperature_tie(self):
         # |23-24.5| == |26-24.5|. The faster seat is worse. Both edges pass.

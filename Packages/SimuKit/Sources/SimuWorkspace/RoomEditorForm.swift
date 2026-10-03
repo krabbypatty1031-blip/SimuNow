@@ -201,10 +201,16 @@ public struct RoomEditorForm: View {
                             toggle(.opening(opening.id))
                         }
                     }
-                    Button("添加窗") { addOpening(kind: .window) }
-                        .accessibilityLabel("添加窗，沿墙位置单位米")
-                    Button("添加门") { addOpening(kind: .door) }
-                        .accessibilityLabel("添加门，沿墙位置单位米")
+                    // 横排（用户要求 2026-10-03）：两个添加按钮并排一行，
+                    // 各占一半宽度，替代原来上下两行。
+                    HStack(spacing: 12) {
+                        Button("添加窗") { addOpening(kind: .window) }
+                            .frame(maxWidth: .infinity)
+                            .accessibilityLabel("添加窗，沿墙位置单位米")
+                        Button("添加门") { addOpening(kind: .door) }
+                            .frame(maxWidth: .infinity)
+                            .accessibilityLabel("添加门，沿墙位置单位米")
+                    }
                 }
             }
             Section("家具") {

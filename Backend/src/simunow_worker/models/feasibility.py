@@ -28,13 +28,17 @@ NOT_MODELED = "not_modeled"
 OMIT_REASON = "not evaluable: no quality-passed seat samples"
 
 # Counts stay numeric. Seat id and gate text ride in `reason` because a
-# ResultMetric value is a number.
+# ResultMetric value is a number. The worst seat's own numbers ride beside
+# the gate text so the UI can write "偏热，约 27 °C" instead of naming gates.
 METRIC_SPECS = (
     ("seat_pass_ratio", "1"),
     ("seat_pass_count", "count"),
     ("seat_eval_count", "count"),
     ("worst_seat_id", "id"),
     ("worst_seat_reason", "text"),
+    ("worst_seat_t_c", "°C"),
+    ("worst_seat_u_mag", "m/s"),
+    ("worst_seat_pmv", "index"),
     ("infeasibleReason", "text"),
 )
 
@@ -215,6 +219,16 @@ def feasibility_metrics(
         "seat_eval_count": (float(eval_count), False, shared_note),
         "worst_seat_id": (None, False, str(worst.get("id"))),
         "worst_seat_reason": (None, False, worst_reason),
+        # The worst seat's numbers let the UI give direction ("偏热", not
+        # "偏热或偏冷") and magnitude. pmv stays None when comfort did not run;
+        # omitted stays False: the value is absent, not unevaluated-to-zero.
+        "worst_seat_t_c": (float(worst["tC"]), False, None),
+        "worst_seat_u_mag": (float(worst["uMag"]), False, None),
+        "worst_seat_pmv": (
+            float(worst["pmv"]) if worst.get("pmv") is not None else None,
+            False,
+            None,
+        ),
         "infeasibleReason": (None, infeasible_omitted, infeasible_reason),
     }
     return [

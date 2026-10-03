@@ -31,14 +31,17 @@ struct ViewportLegend: View {
             }
             if let flow, let maxMag = flow.stats.maxMag {
                 let minMag = flow.stats.minMag ?? 0
-                Text("气流 \(UserFacingCopy.displayNumber(minMag))–\(UserFacingCopy.displayNumber(maxMag)) m/s。圆点沿流线循环是示意，箭头已放大，不是开机降温。")
+                // Range numbers stay; the not-cooling caveat stays visible
+                // (steady state must never read as start-up cooling).
+                Text("气流 \(UserFacingCopy.displayNumber(minMag))–\(UserFacingCopy.displayNumber(maxMag)) m/s · 箭头已放大；圆点是示意流向，不是开机降温")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                // The solver's simplifications, stated where the flow is shown:
-                // windows are per-rectangle (P4-07), supply/return stay full-wall bands.
-                Text("窗按实际墙面与宽度进入计算（每扇单独进网格）；送回风仍按整墙高度带进入计算（速度已按风量缩放），「送风」「回风」标注指该带，墙上空调只标位置。")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                // The pointer to the (temporarily hidden, 2026-10-03) 计算过程
+                // disclosure is removed so no visible text references a hidden
+                // section. Restore it together with the WorkspaceView
+                // disclosures (showsDetailDisclosures). The per-window /
+                // full-wall-band modeling disclosure itself lives in 计算过程
+                // and the 计算准备 inspector page.
             }
         }
         .padding(.horizontal, 10)
@@ -54,8 +57,10 @@ struct ViewportLegend: View {
         }
         if let flow, let maxMag = flow.stats.maxMag {
             let minMag = flow.stats.minMag ?? 0
-            parts.append("气流 \(UserFacingCopy.displayNumber(minMag)) 到 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点循环是示意流向")
-            parts.append("墙上「送风」「回风」标注求解进风口与回风口，空调外形只标位置")
+            // Keep the not-cooling caveat for VoiceOver; modeling disclosure
+            // lives in 计算过程 (hidden 2026-10-03), so the pointer line is
+            // removed and the legend audio stays short too.
+            parts.append("气流 \(UserFacingCopy.displayNumber(minMag)) 到 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，箭头已放大，圆点是示意流向，不是开机降温")
         }
         return parts.joined(separator: "，")
     }

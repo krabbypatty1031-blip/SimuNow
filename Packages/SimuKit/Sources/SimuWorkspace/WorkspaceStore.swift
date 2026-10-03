@@ -558,6 +558,7 @@ public final class WorkspaceStore {
             metrics: result.metrics,
             slice: lastL2Result == nil ? nil : lastFieldSlice,
             flow: lastL2Result == nil ? nil : lastFlowOverlay,
+            seatSamples: lastL2Result?.seatSamples,
             basis: basis,
             draft: project,
             dayCost: frozenDayCost(project: project),

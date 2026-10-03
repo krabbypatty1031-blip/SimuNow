@@ -16,6 +16,10 @@ public struct RoomWireframeView: View {
     /// External yaw so the comparison page can keep one camera for several
     /// candidates. nil keeps a private, self-contained camera.
     private let externalYaw: Binding<Double>?
+    /// Quality-passed L2 seat samples. When a sample matches a seat id the
+    /// seat label carries its air temperature; missing samples show the
+    /// plain seat name, never a fabricated number.
+    private let seatSamples: [SeatSample]?
     @State private var internalYaw: Double = -0.6
     @State private var dragStartYaw: Double?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -25,13 +29,15 @@ public struct RoomWireframeView: View {
         field: FieldSlice? = nil,
         flow: FlowOverlay? = nil,
         sharedPalette: SlicePalette? = nil,
-        yaw: Binding<Double>? = nil
+        yaw: Binding<Double>? = nil,
+        seatSamples: [SeatSample]? = nil
     ) {
         self.scene = scene
         self.field = field
         self.flow = flow
         self.sharedPalette = sharedPalette
         self.externalYaw = yaw
+        self.seatSamples = seatSamples
     }
 
     /// The live camera binding: external when provided, private otherwise.
@@ -84,6 +90,15 @@ public struct RoomWireframeView: View {
         }
         if let flow, let maxMag = flow.stats.maxMag {
             text += "，稳态气流箭头、流线和循环圆点，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点是示意流向，不是开机降温"
+        }
+        // Per-seat L2 temperatures reach VoiceOver users too; the drawn
+        // labels are graphics they cannot read.
+        let seatTemps = scene.seats.compactMap { seat -> String? in
+            guard let sample = seatSample(for: seat) else { return nil }
+            return "\(seat.displayName) \(UserFacingCopy.displayNumber(sample.tC)) 摄氏度"
+        }
+        if !seatTemps.isEmpty {
+            text += "，座位气温 " + seatTemps.joined(separator: "、")
         }
         return text
     }
@@ -157,15 +172,23 @@ public struct RoomWireframeView: View {
         }
 
         // Seat markers: sample points, drawn on top so they stay visible.
+        // An L2 sample for this seat id appends its air temperature.
         for seat in scene.seats {
             let center = Self.apply(projection.screenPoint(seat.position), transform: fit)
             let rect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
             context.fill(Path(ellipseIn: rect), with: .color(.primary))
             context.draw(
-                Text(seat.displayName).font(.caption2),
+                Text(RoomDisplayLayout.seatLabelText(seat: seat, sample: seatSample(for: seat)))
+                    .font(.caption2),
                 at: CGPoint(x: center.x + 10, y: center.y)
             )
         }
+    }
+
+    /// The quality-passed sample for one seat, matched by id; nil keeps the
+    /// plain seat name so no temperature is invented.
+    private func seatSample(for seat: SeatScene) -> SeatSample? {
+        seatSamples?.first(where: { $0.id == seat.id })
     }
 
     /// Every slice cell centre, projected (used for fitting the view).

@@ -57,6 +57,8 @@ public struct SlicePalette: Equatable, Sendable {
     /// Legend text states the physical range with the unit; the range is
     /// evidence, not decoration.
     public var legendText: String {
-        "坐姿高度 \(UserFacingCopy.displayRange(minC, maxC, unit: "°C")) · 蓝凉红热"
+        // The slice is the seat-height horizontal plane; name the measured
+        // quantity so "坐姿高度" never reads as the height having a temperature.
+        "坐姿高度气温 \(UserFacingCopy.displayRange(minC, maxC, unit: "°C")) · 蓝凉红热"
     }
 }

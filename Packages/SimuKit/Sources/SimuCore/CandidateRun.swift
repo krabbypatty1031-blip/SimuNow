@@ -16,6 +16,11 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
     public var slice: FieldSlice?
     /// Steady flow overlay from the same pinned run; absent when quality failed.
     public var flow: FlowOverlay?
+    /// Per-seat L2 samples frozen at pin time so the comparison viewport can
+    /// label each seat with its measured air temperature. Absent (also for
+    /// records decoded from older packages) when the pinned run had none;
+    /// seats then show only their names, never a fabricated number.
+    public var seatSamples: [SeatSample]?
     /// Frozen run-time basis (people, hours, setpoints, supply temperature).
     public var basis: ComparisonBasis
     /// Geometry snapshot at pin time; the comparison viewport draws this,
@@ -37,6 +42,7 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         metrics: [ResultMetric],
         slice: FieldSlice? = nil,
         flow: FlowOverlay? = nil,
+        seatSamples: [SeatSample]? = nil,
         basis: ComparisonBasis,
         draft: ProjectDraft,
         dayCost: RepresentativeDayCost = .omitted(reason: "无 L1，代表日电费省略"),
@@ -49,6 +55,7 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         self.metrics = metrics
         self.slice = slice
         self.flow = flow
+        self.seatSamples = seatSamples
         self.basis = basis
         self.draft = draft
         self.dayCost = dayCost

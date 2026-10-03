@@ -69,7 +69,9 @@ public enum SeatFeasibility: Sendable {
     public static let isoSpeedHighMps = 1.0
 
     public static let coverageLabel = "合适的座位"
-    public static let worstSeatLabel = "最不合适的座位"
+    /// Not "最不合适的座位": the seat may still pass every gate (farthest
+    /// from band center). The label must not claim a failure the gates did not.
+    public static let worstSeatLabel = "最需要留意的座位"
 
     private static let omitReason = "not evaluable: no quality-passed seat samples"
     private static let method = "l2_seat_gate"
@@ -133,6 +135,12 @@ public enum SeatFeasibility: Sendable {
             row("seat_eval_count", unit: "count", value: Double(evalCount), omitted: false, reason: sharedNote),
             row("worst_seat_id", unit: "id", value: nil, omitted: false, reason: worst.id),
             row("worst_seat_reason", unit: "text", value: nil, omitted: false, reason: worstReason),
+            // The worst seat's own numbers ride beside the gate text so the
+            // UI can say "偏热，约 27 °C" instead of naming model gates.
+            // Runs stored before these rows exist keep the gate-name fallback.
+            row("worst_seat_t_c", unit: "°C", value: worst.tC, omitted: false, reason: nil),
+            row("worst_seat_u_mag", unit: "m/s", value: worst.uMag, omitted: false, reason: nil),
+            row("worst_seat_pmv", unit: "index", value: worst.pmv, omitted: false, reason: nil),
             row("infeasibleReason", unit: "text", value: nil, omitted: infeasibleOmitted, reason: infeasibleReason),
         ]
     }
@@ -150,6 +158,15 @@ public enum SeatFeasibility: Sendable {
         return String(format: "%.0f 个中 %.0f 个合适", evalCount, pass)
     }
 
+    /// One actionable sentence by default: seat, direction, number.
+    ///
+    /// Temperature outranks speed outranks overall sensation, because the
+    /// setpoint and supply temperature are what a user changes first. The
+    /// PMV sentence only shows when air temperature itself is fine, so
+    /// temperature and "overall sensation" never read as the same complaint
+    /// twice. The near-zero-speed metrology note never joins this line;
+    /// it is a reading caveat, not a comfort failure, and lives in
+    /// `worstSeatEvidenceText` behind the disclosure.
     public static func worstSeatText(metrics: [ResultMetric]) -> String {
         guard let idMetric = metrics.first(where: { $0.name == "worst_seat_id" }),
               !idMetric.omitted,
@@ -158,10 +175,101 @@ public enum SeatFeasibility: Sendable {
         else {
             return "不可评价"
         }
-        if let why = metrics.first(where: { $0.name == "worst_seat_reason" })?.reason, !why.isEmpty {
-            return "\(displaySeatID(id))：\(UserFacingCopy.gateTitle(why))"
+        let name = displaySeatID(id)
+        let gates = worstGates(metrics)
+        let tC = metricValue(metrics, "worst_seat_t_c")
+        let uMag = metricValue(metrics, "worst_seat_u_mag")
+        let pmv = metricValue(metrics, "worst_seat_pmv")
+        if gates.contains("温度门") {
+            if let tC {
+                // The code knows which side of 24.5 °C the seat is on; the
+                // sentence must not hide behind "偏热或偏冷".
+                let direction = tC > bandCenterC ? "偏热" : "偏凉"
+                return "\(name) \(direction)，约 \(UserFacingCopy.displayNumber(tC)) °C"
+            }
+            // Runs stored before the number rows existed keep a readable name.
+            return "\(name)：偏热或偏冷"
         }
-        return displaySeatID(id)
+        if gates.contains("风速门") {
+            if let uMag {
+                return "\(name) 风偏大，约 \(UserFacingCopy.displayNumber(uMag)) m/s"
+            }
+            return "\(name)：风偏大"
+        }
+        if gates.contains("PMV门") {
+            if let pmv {
+                return pmv > 0 ? "\(name) 整体偏热" : "\(name) 整体偏凉"
+            }
+            return "\(name)：冷热不合适"
+        }
+        if gates.isEmpty, let tC {
+            return "\(name) 相对最偏离目标温度，约 \(UserFacingCopy.displayNumber(tC)) °C，但仍合适"
+        }
+        return "\(name) 相对最偏离目标温度，但仍合适"
+    }
+
+    /// Full evidence for the disclosure: each failed gate becomes a concrete
+    /// sentence with the same numbers the default line uses. Returns nil
+    /// when no seat was evaluable, so the caller can skip the row entirely.
+    public static func worstSeatEvidenceText(metrics: [ResultMetric]) -> String? {
+        guard let idMetric = metrics.first(where: { $0.name == "worst_seat_id" }),
+              !idMetric.omitted,
+              let id = idMetric.reason,
+              !id.isEmpty
+        else {
+            return nil
+        }
+        let gates = worstGates(metrics)
+        let tC = metricValue(metrics, "worst_seat_t_c")
+        let uMag = metricValue(metrics, "worst_seat_u_mag")
+        var parts: [String] = []
+        if gates.contains("温度门") {
+            if let tC {
+                parts.append("空气温度超出 23–26 °C（约 \(UserFacingCopy.displayNumber(tC)) °C）")
+            } else {
+                parts.append("空气温度超出 23–26 °C")
+            }
+        }
+        if gates.contains("风速门") {
+            if let uMag {
+                parts.append("风速超过 0.25 m/s（约 \(UserFacingCopy.displayNumber(uMag)) m/s）")
+            } else {
+                parts.append("风速超过 0.25 m/s")
+            }
+        }
+        if gates.contains("PMV门") {
+            parts.append("按衣着、湿度和周围表面温度估算，整体冷热感觉超出合适范围")
+        }
+        // Near-zero speeds make percentage errors meaningless. That is a
+        // reading note about the number, not a comfort failure, so it is
+        // disclosed here instead of cluttering the default sentence.
+        if (metrics.first(where: { $0.name == "worst_seat_reason" })?.reason ?? "").contains("低速绝对误差") {
+            parts.append("该座位附近风速很低，误差按绝对值看，不按百分比")
+        }
+        if parts.isEmpty {
+            parts.append("该座位在合适范围内，只是离目标温度 24.5 °C 最远")
+        }
+        return parts.joined(separator: "；")
+    }
+
+    /// Gate names exactly as stored, in display priority order. The
+    /// low-speed metrology suffix is stripped first: it rides after "；"
+    /// and is not a gate. Only known gate names count — the all-pass
+    /// fallback sentence ("偏离温度带中心 24.5 °C 最大") is not a gate.
+    private static let gateNames = ["温度门", "风速门", "PMV门"]
+
+    private static func worstGates(_ metrics: [ResultMetric]) -> [String] {
+        guard let stored = metrics.first(where: { $0.name == "worst_seat_reason" })?.reason,
+              !stored.isEmpty
+        else { return [] }
+        let gatesPart = stored.split(separator: "；").first.map(String.init) ?? stored
+        return gateNames.filter { gatesPart.contains($0) }
+    }
+
+    /// A numeric row's value, or nil for legacy runs and omitted rows.
+    private static func metricValue(_ metrics: [ResultMetric], _ name: String) -> Double? {
+        guard let metric = metrics.first(where: { $0.name == name }), !metric.omitted else { return nil }
+        return metric.value
     }
 
     /// S4 → 座位 4. Unknown prefixes stay as a generic 座位.
@@ -186,6 +294,9 @@ public enum SeatFeasibility: Sendable {
             ("seat_eval_count", "count"),
             ("worst_seat_id", "id"),
             ("worst_seat_reason", "text"),
+            ("worst_seat_t_c", "°C"),
+            ("worst_seat_u_mag", "m/s"),
+            ("worst_seat_pmv", "index"),
             ("infeasibleReason", "text"),
         ].map { name, unit in
             row(name, unit: unit, value: nil, omitted: true, reason: reason)

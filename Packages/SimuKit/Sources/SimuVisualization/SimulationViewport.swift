@@ -13,19 +13,25 @@ public struct SimulationViewport: View {
     private let flow: FlowOverlay?
     private let sharedPalette: SlicePalette?
     private let yaw: Binding<Double>?
+    /// Quality-passed L2 seat samples; when present each seat label carries
+    /// its measured air temperature. nil keeps the plain seat names - no
+    /// temperature is ever invented.
+    private let seatSamples: [SeatSample]?
 
     public init(
         draft: ProjectDraft?,
         field: FieldSlice? = nil,
         flow: FlowOverlay? = nil,
         sharedPalette: SlicePalette? = nil,
-        yaw: Binding<Double>? = nil
+        yaw: Binding<Double>? = nil,
+        seatSamples: [SeatSample]? = nil
     ) {
         self.draft = draft
         self.field = field
         self.flow = flow
         self.sharedPalette = sharedPalette
         self.yaw = yaw
+        self.seatSamples = seatSamples
     }
 
     public var body: some View {
@@ -34,9 +40,23 @@ public struct SimulationViewport: View {
             // RealityView is macOS 15 / iOS 18. Older systems keep the Canvas
             // wireframe so the deployment floor stays macOS 14 / iOS 17.
             if #available(macOS 15.0, iOS 18.0, *) {
-                RoomRealityView(scene: scene, field: field, flow: flow, sharedPalette: sharedPalette, yaw: yaw)
+                RoomRealityView(
+                    scene: scene,
+                    field: field,
+                    flow: flow,
+                    sharedPalette: sharedPalette,
+                    yaw: yaw,
+                    seatSamples: seatSamples
+                )
             } else {
-                RoomWireframeView(scene: scene, field: field, flow: flow, sharedPalette: sharedPalette, yaw: yaw)
+                RoomWireframeView(
+                    scene: scene,
+                    field: field,
+                    flow: flow,
+                    sharedPalette: sharedPalette,
+                    yaw: yaw,
+                    seatSamples: seatSamples
+                )
             }
         } else {
             EmptyStateView(

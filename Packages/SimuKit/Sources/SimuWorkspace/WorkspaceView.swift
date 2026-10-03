@@ -13,6 +13,11 @@ public struct WorkspaceView: View {
     @State private var inspectorPage = InspectorPage.list
     /// Shared camera yaw for the comparison page: one lens for all candidates.
     @State private var comparisonYaw: Double = -0.6
+    /// Temporarily hidden (user request 2026-10-03): both detail disclosures
+    /// cluttered the result cards. One switch gates every occurrence
+    /// (results card, candidate card, recommendation card) so they come back
+    /// together. The evidence functions stay; only the sections are hidden.
+    private static let showsDetailDisclosures = false
 
     public init(store: WorkspaceStore) {
         self._store = State(initialValue: store)
@@ -122,7 +127,8 @@ public struct WorkspaceView: View {
                 draft: store.project,
                 field: store.lastFieldSlice,
                 flow: store.lastFlowOverlay,
-                sharedPalette: nil
+                sharedPalette: nil,
+                seatSamples: store.lastL2Result?.seatSamples
             )
         }
         #else
@@ -135,7 +141,8 @@ public struct WorkspaceView: View {
                         draft: store.project,
                         field: store.lastFieldSlice,
                         flow: store.lastFlowOverlay,
-                        sharedPalette: nil
+                        sharedPalette: nil,
+                        seatSamples: store.lastL2Result?.seatSamples
                     )
                 }
                 NavigationLink("编辑房间") {
@@ -158,7 +165,9 @@ public struct WorkspaceView: View {
                     message: "布置好房间后，在这里估算这一天用电，并查看座位冷热。"
                 )
                 VStack(spacing: 8) {
-                    runActionButtons
+                    // Initial interface: the welcome panel keeps the actions
+                    // centered; the detail page switches them to leading.
+                    runActionButtons(alignment: .center)
                 }
                 .buttonStyle(.bordered)
             }
@@ -177,7 +186,8 @@ public struct WorkspaceView: View {
                         Text(message)
                             .font(.footnote)
                     }
-                    runActionButtons
+                    // Detail page: Form rows read from the leading edge.
+                    runActionButtons(alignment: .leading)
                     if store.candidateRuns.isEmpty {
                         Text("房间改过之后需要重新估算，才能加入对比。")
                             .font(.caption2)
@@ -197,50 +207,62 @@ public struct WorkspaceView: View {
                         LabeledContent(row.label, value: row.value)
                     }
                 }
-                DisclosureGroup("查看依据与限制") {
-                    LabeledContent(UserFacingCopy.metricTitle("q_cool_w"), value: store.metricText(named: "q_cool_w"))
-                    LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.metricText(named: "p_elec_w"))
-                    LabeledContent("改造报价", value: "待报价")
-                    Text("制冷需求不是用电功率。这一天费用 = 用电功率 ÷ 1000 × 占用小时 × 电价，不是全年电费。改造待报价，不出回收期。座位是检查点不是发热源。这是稳态，不是开机降温时间。合适的座位不是问卷满意率。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                DisclosureGroup("计算过程") {
-                    LabeledContent("出风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
-                    LabeledContent("设定温度", value: temperatureText(store.lastBoundary?.setpointC, unit: "°C"))
-                    LabeledContent("室外新风", value: flowText(store.lastBoundary?.outdoorAirM3s))
-                    LabeledContent("循环风", value: flowText(store.lastBoundary?.recirculatedAirM3s))
-                    if let slice = store.lastFieldSlice {
-                        LabeledContent("坐姿高度", value: UserFacingCopy.displayQuantity(slice.zM, unit: "m"))
-                        LabeledContent("温度范围", value: sliceRangeText(slice))
-                    } else {
-                        Text("还没有通过检查的温度图。未通过的数据不当有效结果。")
+                // Gated by showsDetailDisclosures (user request 2026-10-03):
+                // the two detail sections are hidden from the default card.
+                if Self.showsDetailDisclosures {
+                    DisclosureGroup("查看依据与限制") {
+                        LabeledContent(UserFacingCopy.metricTitle("q_cool_w"), value: store.metricText(named: "q_cool_w"))
+                        LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.metricText(named: "p_elec_w"))
+                        LabeledContent("改造报价", value: "待报价")
+                        // Worst-seat full evidence: the default line above only
+                        // carries one sentence, so gates and the low-speed
+                        // reading note are disclosed here.
+                        if let worstEvidence = SeatFeasibility.worstSeatEvidenceText(metrics: store.lastL2Result?.metrics ?? []) {
+                            Text(worstEvidence)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text("制冷需求不是用电功率。这一天费用 = 用电功率 ÷ 1000 × 占用小时 × 电价，不是全年电费。改造待报价，不出回收期。座位是检查点不是发热源。这是稳态，不是开机降温时间。合适的座位不是问卷满意率。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    if let flow = store.lastFlowOverlay, let maxMag = flow.stats.maxMag {
-                        LabeledContent("气流范围", value: flowRangeText(flow, maxMag: maxMag))
-                        Text("箭头和流线来自通过检查的稳态速度场。圆点沿流线循环是示意流向，箭头已放大，不是真实位移，也不是开机降温。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        // The solver's simplifications, disclosed next to the flow they produced:
-                        // windows are per-rectangle (P4-07), supply/return stay full-wall bands.
-                        Text("窗按实际墙面与宽度进入计算（每扇单独进网格）；送回风仍按整墙高度带进入计算，速度按风量缩放，「送风」「回风」标注指该带，墙上空调外形只标位置。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else if store.lastFieldSlice != nil {
-                        Text("这次结果还没有气流图。重新估算后才会画箭头和流线。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    if store.runEvents.isEmpty {
-                        Text("还没有进度。")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(Array(store.runEvents.enumerated()), id: \.offset) { _, event in
-                            let monitor = UserFacingCopy.monitorTitle(event.payload?.monitor)
-                            Text("\(UserFacingCopy.eventTitle(event.eventType.rawValue)) \(monitor)")
-                                .accessibilityLabel("进度 \(UserFacingCopy.eventTitle(event.eventType.rawValue))")
+                    DisclosureGroup("计算过程") {
+                        LabeledContent("出风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
+                        LabeledContent("设定温度", value: temperatureText(store.lastBoundary?.setpointC, unit: "°C"))
+                        LabeledContent("室外新风", value: flowText(store.lastBoundary?.outdoorAirM3s))
+                        LabeledContent("循环风", value: flowText(store.lastBoundary?.recirculatedAirM3s))
+                        if let slice = store.lastFieldSlice {
+                            LabeledContent("坐姿高度", value: UserFacingCopy.displayQuantity(slice.zM, unit: "m"))
+                            LabeledContent("温度范围", value: sliceRangeText(slice))
+                        } else {
+                            Text("还没有通过检查的温度图。未通过的数据不当有效结果。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let flow = store.lastFlowOverlay, let maxMag = flow.stats.maxMag {
+                            LabeledContent("气流范围", value: flowRangeText(flow, maxMag: maxMag))
+                            Text("箭头和流线来自通过检查的稳态速度场。圆点沿流线循环是示意流向，箭头已放大，不是真实位移，也不是开机降温。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            // The solver's simplifications, disclosed next to the flow they produced:
+                            // windows are per-rectangle (P4-07), supply/return stay full-wall bands.
+                            Text("窗按实际墙面与宽度进入计算（每扇单独进网格）；送回风仍按整墙高度带进入计算，速度按风量缩放，「送风」「回风」标注指该带，墙上空调外形只标位置。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        } else if store.lastFieldSlice != nil {
+                            Text("这次结果还没有气流图。重新估算后才会画箭头和流线。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        if store.runEvents.isEmpty {
+                            Text("还没有进度。")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(Array(store.runEvents.enumerated()), id: \.offset) { _, event in
+                                let monitor = UserFacingCopy.monitorTitle(event.payload?.monitor)
+                                Text("\(UserFacingCopy.eventTitle(event.eventType.rawValue)) \(monitor)")
+                                    .accessibilityLabel("进度 \(UserFacingCopy.eventTitle(event.eventType.rawValue))")
+                            }
                         }
                     }
                 }
@@ -249,25 +271,32 @@ public struct WorkspaceView: View {
         }
     }
 
+    /// The three primary actions. `alignment` matches the host surface:
+    /// centered in the empty-state welcome (initial interface), leading in
+    /// the detail-page Form rows (user request 2026-10-03). 取消 is a
+    /// recovery action and keeps its own line below.
     @ViewBuilder
-    private var runActionButtons: some View {
-        Button("估算这一天用电") {
-            Task { await store.submitL1() }
+    private func runActionButtons(alignment: Alignment) -> some View {
+        HStack {
+            Button("估算这一天用电") {
+                Task { await store.submitL1() }
+            }
+            .disabled(!store.canSubmitL1)
+            .accessibilityLabel("估算这一天用电")
+            #if os(macOS)
+            Button("查看座位冷热分布") {
+                Task { await store.submitL2() }
+            }
+            .disabled(!store.canSubmitL2)
+            .accessibilityLabel("查看座位冷热分布")
+            #endif
+            Button("加入对比") {
+                store.pinCurrentAsCandidate()
+            }
+            .disabled(!store.canPinCandidate)
+            .accessibilityLabel("把当前结果加入对比")
         }
-        .disabled(!store.canSubmitL1)
-        .accessibilityLabel("估算这一天用电")
-        #if os(macOS)
-        Button("查看座位冷热分布") {
-            Task { await store.submitL2() }
-        }
-        .disabled(!store.canSubmitL2)
-        .accessibilityLabel("查看座位冷热分布")
-        #endif
-        Button("加入对比") {
-            store.pinCurrentAsCandidate()
-        }
-        .disabled(!store.canPinCandidate)
-        .accessibilityLabel("把当前结果加入对比")
+        .frame(maxWidth: .infinity, alignment: alignment)
         Button("取消") {
             Task { await store.cancelActiveRun() }
         }
@@ -370,31 +399,43 @@ public struct WorkspaceView: View {
                 field: record.slice,
                 flow: record.flow,
                 sharedPalette: sharedComparisonPalette,
-                yaw: sharedYaw
+                yaw: sharedYaw,
+                seatSamples: record.seatSamples
             )
             .frame(height: 220)
-            DisclosureGroup("查看依据与限制") {
-                LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.candidateL1PowerText(record))
-                LabeledContent(UserFacingCopy.metricTitle("seat_u_mag_max"), value: candidateMetric(record, "seat_u_mag_max"))
-                LabeledContent(UserFacingCopy.metricTitle("seat_ppd_max"), value: candidateMetric(record, "seat_ppd_max"))
-                if store.candidateL1Freshness(record) == .stale {
-                    Text(UserFacingCopy.freshnessTitle(.stale))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            // Gated by showsDetailDisclosures (user request 2026-10-03):
+            // hidden together with the results-card detail sections.
+            if Self.showsDetailDisclosures {
+                DisclosureGroup("查看依据与限制") {
+                    LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.candidateL1PowerText(record))
+                    LabeledContent(UserFacingCopy.metricTitle("seat_u_mag_max"), value: candidateMetric(record, "seat_u_mag_max"))
+                    LabeledContent(UserFacingCopy.metricTitle("seat_ppd_max"), value: candidateMetric(record, "seat_ppd_max"))
+                    if store.candidateL1Freshness(record) == .stale {
+                        Text(UserFacingCopy.freshnessTitle(.stale))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let coverageNote = record.metrics.first(where: { $0.name == "seat_pass_ratio" })?.reason {
+                        Text(coverageNote)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    // Worst-seat full evidence behind the one-sentence default
+                    // line above (gates, numbers, low-speed reading note).
+                    if let worstEvidence = SeatFeasibility.worstSeatEvidenceText(metrics: record.metrics) {
+                        Text(worstEvidence)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let infeasible = record.metrics.first(where: { $0.name == "infeasibleReason" }),
+                       !infeasible.omitted,
+                       let text = infeasible.reason {
+                        Text(UserFacingCopy.gateTitle(text))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    LabeledContent("计算编号", value: String(record.identity.runID.uuidString.prefix(8)))
                 }
-                if let coverageNote = record.metrics.first(where: { $0.name == "seat_pass_ratio" })?.reason {
-                    Text(coverageNote)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                if let infeasible = record.metrics.first(where: { $0.name == "infeasibleReason" }),
-                   !infeasible.omitted,
-                   let text = infeasible.reason {
-                    Text(UserFacingCopy.gateTitle(text))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                LabeledContent("计算编号", value: String(record.identity.runID.uuidString.prefix(8)))
             }
         }
         .padding(12)
@@ -503,13 +544,17 @@ public struct WorkspaceView: View {
                 }
                 .accessibilityLabel("打开方案 \(citedSchemeName(runID))")
             }
-            DisclosureGroup("查看依据与限制") {
-                Text(card.detail)
-                    .font(.footnote)
-                if !card.assumptions.isEmpty {
-                    Text(card.assumptions.joined(separator: "\n"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            // Gated by showsDetailDisclosures (user request 2026-10-03):
+            // hidden together with the other detail sections.
+            if Self.showsDetailDisclosures {
+                DisclosureGroup("查看依据与限制") {
+                    Text(card.detail)
+                        .font(.footnote)
+                    if !card.assumptions.isEmpty {
+                        Text(card.assumptions.joined(separator: "\n"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }

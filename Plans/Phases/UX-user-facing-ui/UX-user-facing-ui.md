@@ -446,14 +446,14 @@ Show day energy and seat comfort first; hide solver events behind disclosure.
 **对比卡折叠「查看依据与限制」：**
 
 - 人数、时段、设定温度、出风温度是否相同（已有 `basisMismatchText`，改成「人数或使用时间不同，不能直接比」）
-- 电功率、风速、冷热指数、最不合适的座位
+- 电功率、风速、冷热指数、最需要留意的座位（含 `worstSeatEvidenceText` 依据句）
 - 计算编号（run 短号）——第二层或同一折叠底部，标签「计算编号」，不要 `inputHash`
 
 **覆盖文案：**
 
 ```swift
 public static let coverageLabel = "合适的座位"
-public static let worstSeatLabel = "最不合适的座位"
+public static let worstSeatLabel = "最需要留意的座位"
 
 // coverageText 有值时：
 // "4 个中 3 个合适"   // 不要先写 75%
@@ -462,15 +462,16 @@ public static let worstSeatLabel = "最不合适的座位"
 
 `SeatFeasibilityTests.comparisonLabelsAreModelCoverageNotSatisfactionRate` 改为断言新标签，并继续禁止「满意率」。`coverageText == "100%（4/4）"` 改为 `"4 个中 4 个合适"`。全失败 `"0%（0/3）"` 改为 `"3 个中 0 个合适"`。
 
-存储的 `worst_seat_reason` 仍可含「温度门」（证据稳定性）；**界面**用映射：
+存储的 `worst_seat_reason` 仍可含「温度门」（证据稳定性）；**界面默认行**不再是门名映射，而是一句带方向与数字的话（2026-10-03 用户认可方案）。方向与数字来自新增指标行 `worst_seat_t_c` / `worst_seat_u_mag` / `worst_seat_pmv`（Swift 与 Python 同步产出；schema `metrics` 不枚举 name；旧 run 无数字行走门名回退）：
 
-| 存储 | 显示 |
+| 情况 | 默认行 |
 |---|---|
-| 温度门 | 偏热或偏冷 |
-| 风速门 | 风偏大 |
-| PMV门 | 冷热不合适 |
+| 温度门失败（含与 PMV 门同挂） | 座位 4 偏热，约 27.00 °C |
+| 风速门失败（温度带内） | 座位 4 风偏大，约 0.40 m/s |
+| 仅 PMV 门失败 | 座位 4 整体偏热 / 整体偏凉 |
+| 全通过（仍点名最远座） | 座位 4 相对最偏离目标温度，约 23.10 °C，但仍合适 |
 
-该映射放 `UserFacingCopy.gateTitle(_:)`。`comparisonRows` 的 worst 值走映射后的句子：「靠窗座位 4：偏热或偏冷」。座位显示名若卡片没有 geometry 上下文，可先写「座位 4」，不要只丢 `S4`。
+优先级温度 > 风速 > PMV：温度与整体感觉同挂时默认只报温度，PMV 进折叠。「低速绝对误差」是读数说明不是不适原因，**不进默认行**，随 `worstSeatEvidenceText` 进「查看依据与限制」折叠（各门具体句 + 低速绝对值说明）。`gateTitle` 仍保留给 `infeasibleReason` 折叠行。座位显示名若卡片没有 geometry 上下文，可先写「座位 4」，不要只丢 `S4`。
 
 **建议卡：**
 

@@ -15,3 +15,5 @@
 
 - [x] 共用镜头与色标（页级 `comparisonYaw` 一个镜头转所有候选；`comparisonPaletteRange` 跨全部质量通过切片取联合 min/max → `sharedPalette` 传每个视口，不各自归一化伪装差异；`SimulationViewport(draft:field:sharedPalette:yaw:)` 透传）
 - [x] freshness 与 quality 独立（`candidateFreshness(record)` 对当前输入哈希判 current/stale，与 record 自身 quality 并排显示，互不覆盖；质量失败候选可固定并如实显示 failed + 无切片）
+
+**手测（2026-10-03 Debug）**：两列并排——降低送风口 24.21–24.50 °C（stale + passed）与默认口 24.43–24.73 °C（current + passed）；共用色标 23.0–25.2 °C；PMV 均不可评价。详情见 `Plans/Delivery/verification.md`。

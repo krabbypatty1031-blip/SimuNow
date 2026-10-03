@@ -91,6 +91,8 @@
 
 **实施补录（2026-10-03 15:16，P4 手测第七发现：sbpl 例外导致启动即崩）**：带 `temporary-exception.sbpl` 的新 build 在 Xcode 启动即停在 `libsystem_secinit` / `libsecinit_appsandbox` 的 `EXC_BREAKPOINT`——沙盒 profile 编译失败，进程在进入 `main` 前被 secinit 主动打断。根因：(c) 在本机 macOS 上不是合法可合并的 sandbox 片段，开发签名 App 会被拒绝；Continue 无效。备选回到第六段 (a)(b)：全局关 sandbox 违反「不以关 sandbox 为默认修复」；签名 helper 仍是 P7。选择：**只在 Debug 配置关掉文件沙盒**（`SimuNowMacDebug.entitlements` 不含 `app-sandbox`，保留 `disable-library-validation` 以便 EnergyPlus 加载 NREL 签名 dylib）；Release 仍用 `SimuNowMac.entitlements`（sandbox=true，去掉非法 sbpl）。`generate_project.py` 给 SimuNowMac Debug 覆盖 `CODE_SIGN_ENTITLEMENTS`。这是手测闭环的配置例外，不是把关 sandbox 写成产品默认。验证：`macReleaseEntitlementsKeepSandbox`（Release sandbox true 且无 sbpl）；`macDebugEntitlementsSkipSandboxForEngineExec`；Swift **120** 全绿；mac/ios BUILD SUCCEEDED。用户须在 Xcode 点 Stop 再 ⌘R（当前会话停在 secinit 断点）。
 
+**实施补录（2026-10-03 15:30，P4 手测 C–E 闭环）**：Debug 配置下办公室模板走通代表日 L1（3099.335 / 1033.112 W）、默认口 L2（质量 passed，座位 24.43–24.73 °C，切片 23.35–25.21 °C）、改送风口 **高度** z0/z1 2.48–2.66→2.10–2.28 m 后再 L2（24.21–24.50 °C）、两列对比（共用色标 23.0–25.2 °C，freshness 与 quality 独立，PMV 均 omitted + reason）。几何注意：P1 case 把送风口展成整墙条带（`l2_room.py` assumptions），沿墙平移 s0/s1 或换墙 xMin→yMin **不改** `blockMeshDict`，只有 z0/z1（或宽度缩放速度、房间尺寸）改进口带——手测 E 因此改高度而不是平移。任务页 `lastResult` 单槽：提交 L2 后代表日瓦数显示未知，磁盘 L1 run 仍在。Release 沙盒产品闭环仍未成立，生产 exec 仍是签名 helper。
+
 ## ADR-012：人员热源以「每人显热」为 L1/L2 对账基准，先披露后对齐（已接受）
 
 日期：2026-10-03（当日以 EnergyPlus 分项输出修正根因）。

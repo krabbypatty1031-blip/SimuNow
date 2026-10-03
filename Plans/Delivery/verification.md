@@ -1,7 +1,20 @@
 # 工程验证记录
 
-日期：2026-10-03（ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
-工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
+日期：2026-10-03（P4 App 手测 C–E / ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。手测 App 为 **SimuNowMac Debug**（`SimuNowMacDebug.entitlements` 不含 `app-sandbox`）；Release 仍沙盒，不能把本次 exec 当作沙盒产品闭环。
+
+## P4 App 手测（2026-10-03，办公室模板，引擎 `test/engines`）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| C 代表日 L1 | `succeeded` | 冷量 3099.335 W，电功率 1033.112 W，全年电量 omitted（一天不推全年）。送风 16 °C ≠ 设定 26 °C |
+| D 代表工况 L2（默认送风 z 2.48–2.66 m） | `succeeded` / quality `passed` | 座位 24.43–24.73 °C，最大风速 0.033 m/s，切片 z=1.1 m、576 有效、23.35–25.21 °C；PMV/PPD omitted + `not evaluable: missing mrtC, rhPct, clo, met`。App 数字与钉版 `Fixtures/task/result-l2.json` 及 run `38163E0D-…` 一致 |
+| E 改空间参数 | 送风口 **高度** z0/z1 2.48–2.66 → 2.10–2.28 m | 面积/风量/人数/时段/设定/送风温度不变（同口径）。沿墙平移 s0/s1（宽度不变）**不改** `blockMeshDict`：P1 case 把送风口展成整墙条带，沿墙位置不进网格；换墙面 xMin→yMin 同样落到 xmin 进口。高度才改进口带 |
+| E 再提交 L2 | `succeeded` / quality `passed` | 座位 **24.21–24.50 °C**（相对基准约 −0.22 K），最大风速 0.030 m/s，切片 23.05–24.96 °C。App 与同口径 CLI `run-l2`（`Artifacts/p4-e-step/run-lowered-supply`，约 20 s）逐位一致 |
+| E 方案对比 | 两列并排 | 降低口：24.21–24.50 °C，新鲜度「输入已改」，质量 passed；恢复默认口：24.43–24.73 °C，新鲜度「当前输入」，质量 passed。共用色标 **23.0–25.2 °C**（联合范围，不各自归一化；单列时降低口图例曾是 23.0–25.0）。两列 PMV 均不可评价带同一原因。无「口径不同」警示 |
+| 任务页 L1 指标 | 提交 L2 后显示「未知」 | `lastResult` 单槽被 L2 覆盖，L2 无 `q_cool_w`/`p_elec_w`；磁盘 L1 run `FD8C00D1-…` 仍在，未把旧瓦数写成 0 |
+
+不得当作产品功能：Release 沙盒 App 内 exec EnergyPlus/docker（本次 Debug 关 sandbox，生产路径仍是签名 helper，ADR-011）；「基准 + 两候选」三列（手测固定两列，足以证明并排与共用色标）；沿墙平移风口会改场；任务页同时保留 L1 瓦数与 L2 座位；PMV 有值或实测满意率；稳态切片表示降温时间。
 
 ## P4-06 验证（2026-10-03）
 
@@ -11,7 +24,7 @@
 | `Scripts/check.sh mac` | BUILD SUCCEEDED | `WorkspaceView` 对比页（口径警示/共用 yaw 镜头/sharedPalette/runID/哈希/状态/质量/新鲜度并排）、任务页「固定为对比候选」（stale disabled）、`RoomWireframeView` 外部 yaw 与 sharedPalette、`SimulationViewport` 透传 |
 | `Scripts/check.sh ios` | BUILD SUCCEEDED | 对比页共用 SimuWorkspace/SimuVisualization 视图；iOS 不接本地 OpenFOAM（L2 按钮仅 macOS） |
 
-不得当作产品功能：候选并排的**实际显示效果未手测**（UI 无测试 target，编译与单测不能代替手测）；「基准 + 两候选」需用户改空间参数 → 提交 → 固定三次产生，本仓库未预置候选数据；对比结论（哪个更舒适）不做自动推荐（P5 建议）。
+不得当作产品功能：对比结论（哪个更舒适）不做自动推荐（P5 建议）。并排显示已于 2026-10-03 Debug 手测记录（见上节）；UI 仍无测试 target，编译与单测不能代替该手测。仓库未预置候选数据。
 
 ## ADR-012 人员显热对齐验证（2026-10-03）
 
@@ -23,7 +36,7 @@
 | L1 逐位不变 | 逐行 diff 证据 | People 行 activity = 57+13=70 与对齐前逐位一致（SHF 字面 0.3 保留，引擎自行拆分）→ L1 IDF 与 P3 手测数字（`q_cool` 6334.87）无需重钉 |
 | `Scripts/check.sh mac` / `ios` | BUILD SUCCEEDED | 模板 JSON 数值变化不影响 App 编译；`generate_project.py` 无需改动（包内源码与资源） |
 
-不得当作产品功能：ADR-012 消除的是 L1/L2 人员显热口径错位（70 全额显热 vs 实测 57 显 + 13 潜），不代表座位温度有任何实测标定；切片与座位数字仍为钉版真实求解值，App 内重跑需沙盒手测（同 P4-05d 待办）。
+不得当作产品功能：ADR-012 消除的是 L1/L2 人员显热口径错位（70 全额显热 vs 实测 57 显 + 13 潜），不代表座位温度有任何实测标定；切片与座位数字仍为钉版真实求解值。App 内重跑已于 2026-10-03 Debug 手测记录（见上节）；Release 沙盒未验证。
 
 ## P4-05 全量验证（2026-10-03）
 
@@ -35,7 +48,7 @@
 | `Scripts/check.sh mac` | BUILD SUCCEEDED | `FieldSlice`/`SlicePalette`/`RoomWireframeView` 切片叠加与图例；`generate_project.py` Stage WorkerTree 扩为九个 P1 脚本 |
 | `Scripts/check.sh ios` | BUILD SUCCEEDED | `SimuVisualization` 无 macOS 专属 API；iOS 不接本地 OpenFOAM |
 
-不得当作产品功能：切片只随质量通过的 run 出现（quality_pass False 不写文件、视口无 field 不填色）；切片 inputHash 是 P1 房间输入哈希不是草稿快照哈希；切片密度（0.25 m 提示）不进座位数字（座位仍钉最近单元）。App 内 L2 提交接线（ADR-011）验证：`WorkspaceL2Tests` 3 项（未配置不可提交、成功后载切片并随编辑转 stale、失败时座位指标 omitted + 无切片不编造）、`L2ClientTests` 4 项（未配置抛错、wrapper 探测、缺 wrapper 不配置、field-slice 读取/缺文件 nil）、`WorkerStagingTests` 增 2 项（九脚本 staged、引擎落位 `test/engines`）、`Backend.tests.test_l2_staged`（subprocess 重建 staged 树全链路 `run-l2`：succeeded + quality passed + field-slice.json，17.7 s）；**沙盒 App 内 docker 可达性未手测**，未验证前不宣称 App 内 L2 闭环。
+不得当作产品功能：切片只随质量通过的 run 出现（quality_pass False 不写文件、视口无 field 不填色）；切片 inputHash 是 P1 房间输入哈希不是草稿快照哈希；切片密度（0.25 m 提示）不进座位数字（座位仍钉最近单元）。App 内 L2 提交接线（ADR-011）单测见上表。**Debug 手测**已于 2026-10-03 记录（办公室 L2 质量 passed + 切片）；Release 沙盒仍不能 exec 用户选定 EnergyPlus/docker（ADR-011 第七段），不宣称沙盒产品闭环。
 
 ## P4-04 全量验证（2026-10-03）
 

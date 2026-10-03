@@ -51,3 +51,7 @@
 
 - [x] P4-06a 基准 + 两候选同口径（`CandidateRun` 冻结快照（identity/metrics/slice/basis/draft），stale 拒绝固定；`basisMismatch` 口径守卫——人数/占用时段/设定/送风不同 → 警示「并排数值不是有效比较」，不静默并排）
 - [x] P4-06b 共用色标；stale / quality 分开（页级共用 yaw 镜头；`comparisonPaletteRange` 联合范围 `sharedPalette` 传每个候选视口；`candidateFreshness` 与 quality 并排独立显示；`CandidateRunTests` 4 项 + `WorkspaceComparisonTests` 5 项）
+
+## 手测（2026-10-03，SimuNowMac Debug）
+
+- [x] 办公室 L1 / 默认口 L2 / 改送风口高度再 L2 / 两列对比（数字与限制见 `Plans/Delivery/verification.md`「P4 App 手测」；Release 沙盒未验证）

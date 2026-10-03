@@ -49,7 +49,7 @@
 
 ## 下一步
 
-P4 阶段门已关闭（`p4-cfd-and-results`，未推远程）。下一阶段按计划是 P5（建议/费用/PDF），不要把本阶段 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。已知限制：任务页 `lastResult` 单槽（提交 L2 后 L1 瓦数显示未知）；P1 case 整墙送风带，沿墙平移 s0/s1 不改场。
+P4 阶段门已关闭，并已快进合并进 `dev`（未推远程）。下一阶段按计划是 P5（建议/费用/PDF），不要把本阶段 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。已知限制：任务页 `lastResult` 单槽（提交 L2 后 L1 瓦数显示未知）；P1 case 整墙送风带，沿墙平移 s0/s1 不改场。
 
 ## P4 阶段结论
 

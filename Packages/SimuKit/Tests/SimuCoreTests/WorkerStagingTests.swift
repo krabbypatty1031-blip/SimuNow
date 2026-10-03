@@ -72,15 +72,29 @@ private func repoRoot() -> URL {
     let runtime = fm.temporaryDirectory.appendingPathComponent("simunow-stage-engines-\(UUID().uuidString)", isDirectory: true)
     try WorkerTreeStaging.stageEngines(from: source, into: runtime)
     let staged = WorkerTreeStaging.enginesURL(in: runtime)
-    #expect(FileManager.default.isExecutableFile(atPath: LocalEngineProbe.energyPlusURL(in: staged).path))
+    // POSIX bits via stat, matching the in-app probe semantics (ADR-011 addendum).
+    #expect(LocalEngineProbe.hasExecuteBit(at: LocalEngineProbe.energyPlusURL(in: staged).path))
     #expect(!staged.path.lowercased().contains("/desktop/"))
 }
 
 #if os(macOS)
-@Test func pythonResolverReturnsAnExecutableWithoutLoginShell() {
-    let url = LocalProcessClient.resolvePythonExecutable()
-    #expect(FileManager.default.isExecutableFile(atPath: url.path))
-    #expect(url.lastPathComponent.contains("python"))
+@Test func pythonResolverReturnsAStartableInterpreterOrHonestNil() {
+    // Default resolution must only return an interpreter that actually
+    // started (`canStartInterpreter`), including CLT/Xcode real binaries now
+    // that the /usr/bin stub routes through xcrun, which App Sandbox refuses.
+    if let url = LocalProcessClient.resolvePythonExecutable() {
+        #expect(LocalEngineProbe.hasExecuteBit(at: url.path))
+        #expect(url.lastPathComponent.contains("python"))
+    }
+}
+
+@Test func pythonResolverReturnsNilWhenNoCandidateStarts() {
+    // Regression anchor (2026-10-03 hand test): when no candidate can start,
+    // the resolver must answer nil instead of falling back to the /usr/bin
+    // xcrun stub, which fails inside the App Sandbox with no evidence and
+    // turns every submit into a doomed failure.
+    let url = LocalProcessClient.resolvePythonExecutable(candidates: ["/nonexistent/python3"])
+    #expect(url == nil)
 }
 
 @MainActor

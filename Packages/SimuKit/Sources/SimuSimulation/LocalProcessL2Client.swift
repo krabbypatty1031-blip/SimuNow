@@ -16,14 +16,17 @@ public actor LocalProcessL2Client: L2TaskClient {
         // the staged worker tree and engines.
         _ = repositoryRoot.startAccessingSecurityScopedResource()
         _ = enginesRoot.startAccessingSecurityScopedResource()
-        self.isConfigured = Self.probeIsConfigured(
-            repositoryRoot: repositoryRoot,
-            enginesRoot: enginesRoot
-        )
-        self.inner = LocalProcessClient(
+        let inner = LocalProcessClient(
             repositoryRoot: repositoryRoot,
             runRoot: runRoot,
             extraEnvironment: ["SIMUNOW_ENGINES_ROOT": enginesRoot.path]
+        )
+        self.inner = inner
+        // A startable interpreter plus the staged worker and wrapper bits.
+        // Whether OpenFOAM truly runs stays the run's own evidence.
+        self.isConfigured = inner.isUsable && Self.probeIsConfigured(
+            repositoryRoot: repositoryRoot,
+            enginesRoot: enginesRoot
         )
     }
 

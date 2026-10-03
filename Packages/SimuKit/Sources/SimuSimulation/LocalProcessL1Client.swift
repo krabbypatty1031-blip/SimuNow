@@ -15,14 +15,17 @@ public actor LocalProcessL1Client: L1TaskClient {
         // Hold the grant for the actor lifetime so the child Process can read EnergyPlus.
         _ = repositoryRoot.startAccessingSecurityScopedResource()
         _ = enginesRoot.startAccessingSecurityScopedResource()
-        self.isConfigured = LocalEngineProbe.isConfigured(
-            repositoryRoot: repositoryRoot,
-            enginesRoot: enginesRoot
-        )
-        self.inner = LocalProcessClient(
+        let inner = LocalProcessClient(
             repositoryRoot: repositoryRoot,
             runRoot: runRoot,
             extraEnvironment: ["SIMUNOW_ENGINES_ROOT": enginesRoot.path]
+        )
+        self.inner = inner
+        // A startable interpreter plus present engine files. Whether the
+        // engine truly runs stays the run's own evidence.
+        self.isConfigured = inner.isUsable && LocalEngineProbe.isConfigured(
+            repositoryRoot: repositoryRoot,
+            enginesRoot: enginesRoot
         )
     }
 

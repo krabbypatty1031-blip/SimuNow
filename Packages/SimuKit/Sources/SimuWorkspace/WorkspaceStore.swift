@@ -544,7 +544,7 @@ public final class WorkspaceStore {
         } else {
             l1Client = UnconfiguredL1TaskClient()
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = "未配置：运行时须含 worker，引擎目录须含 EnergyPlus/energyplus"
+            engineStatus = "未配置：运行时须含 worker，引擎目录须含 EnergyPlus/energyplus，且需可用的 python3"
         }
     }
 

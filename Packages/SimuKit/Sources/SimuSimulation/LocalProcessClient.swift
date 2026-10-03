@@ -6,7 +6,9 @@ import SimuCore
 public actor LocalProcessClient: SimulationClient {
     private let repositoryRoot: URL
     private let runRoot: URL
-    private let pythonExecutable: URL
+    // nil = no interpreter could actually start on this machine; submit then
+    // refuses instead of running a doomed xcrun shim with no evidence.
+    private let pythonExecutable: URL?
     private let extraEnvironment: [String: String]
     private var running: [UUID: Process] = [:]
     private var cancelled: Set<UUID> = []
@@ -17,26 +19,46 @@ public actor LocalProcessClient: SimulationClient {
         runRoot: URL,
         pythonExecutable: URL? = nil,
         extraEnvironment: [String: String] = [:]
-    ) {
+        ) {
         self.repositoryRoot = repositoryRoot
         self.runRoot = runRoot
         self.pythonExecutable = pythonExecutable ?? Self.resolvePythonExecutable()
         self.extraEnvironment = extraEnvironment
     }
 
+    /// True when an interpreter actually started. Clients fold this into
+    /// isConfigured so a machine with no startable python3 reports
+    /// unconfigured up front, never a submit that is doomed from the start.
+    /// Reads only the immutable interpreter URL, so it is nonisolated.
+    nonisolated public var isUsable: Bool { pythonExecutable != nil }
+
     /// Probe fixed binaries only. Sandbox often blocks `zsh -lc`, and 3.9 is legal after future annotations.
-    public static func resolvePythonExecutable() -> URL {
-        let candidates = [
+    ///
+    /// The `/usr/bin/python3` stub routes through xcrun, which refuses to run
+    /// inside an App Sandbox ("xcrun: error: cannot be used within an App
+    /// Sandbox", 2026-10-03 in-app hand test), so the real interpreters that
+    /// ship with CLT and Xcode are probed first. X_OK probes are denied in
+    /// the sandbox for user-domain paths (ADR-011 addendum), so candidate
+    /// filtering reads POSIX execute bits via stat; `canStartInterpreter`
+    /// stays the only authority on whether an interpreter truly starts.
+    /// All candidates failing returns nil - the honest unconfigured answer.
+    public static func resolvePythonExecutable(candidates: [String]? = nil) -> URL? {
+        let paths = candidates ?? [
             "/opt/homebrew/bin/python3",
             "/usr/local/bin/python3",
+            "/Library/Developer/CommandLineTools/usr/bin/python3",
+            "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
             "/usr/bin/python3"
         ]
-        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
+        for path in paths where LocalEngineProbe.hasExecuteBit(at: path) {
             if canStartInterpreter(at: path) {
                 return URL(fileURLWithPath: path)
             }
         }
-        return URL(fileURLWithPath: "/usr/bin/python3")
+        // No candidate actually started. Never fall back to the xcrun stub:
+        // it fails inside the sandbox and would turn every submit into an
+        // evidence-free failure.
+        return nil
     }
 
     private static func canStartInterpreter(at path: String) -> Bool {
@@ -66,6 +88,11 @@ public actor LocalProcessClient: SimulationClient {
         timeoutSeconds: TimeInterval? = nil,
         workerCommand: String = "run-l1"
     ) async throws -> RunReceipt {
+        // No interpreter ever started on this machine; refuse instead of
+        // running the doomed xcrun stub with no evidence.
+        guard let pythonExecutable else {
+            throw SimulationClientError.engineNotConfigured
+        }
         try request.validate(snapshot: snapshot)
         if let cached = succeededByHash[request.identity.inputHash] {
             return cached

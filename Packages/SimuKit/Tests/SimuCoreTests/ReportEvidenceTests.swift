@@ -36,6 +36,19 @@ import PDFKit
     #expect(low.l1RunID == pair.low.l1Identity?.runID)
     #expect(low.seatBandLowC == SeatFeasibility.airLowC)
     #expect(low.seatBandHighC == SeatFeasibility.airHighC)
+    #expect(low.windowCount == 1)
+    #expect(low.windowAreaM2 == pair.low.draft.geometry?.openings.first(where: { $0.kind == .window })?.patchAreaM2)
+    #expect(low.coolingW == 3000)
+    #expect(low.electricPowerW == 1000)
+    #expect(low.indoorMeanC == 24.5)
+    #expect(low.indoorMinC == 24.0)
+    #expect(low.indoorMaxC == 25.0)
+    #expect(low.flowMinMps == 0.02)
+    #expect(low.flowMaxMps == 0.04)
+    #expect(low.annualEnergyKWh == CostAccounting.annualEnergyKWh(from: pair.low.dayCost.energyKWh))
+    #expect(low.annualCost == CostAccounting.annualCost(from: pair.low.dayCost.cost))
+    #expect(low.occupiedDaysPerYear == 365)
+    #expect(low.pricePerKWh == 1.2)
 
     let encoded = try JSONEncoder().encode(evidence)
     let text = String(decoding: encoded, as: UTF8.self)
@@ -70,18 +83,31 @@ import PDFKit
 }
 
 #if os(macOS)
-/// Tables and assumptions come from the evidence object. A nil narrator still writes a PDF.
-@Test func evidencePDFWithoutNarratorContainsTableAndAssumptions() throws {
+/// DeepSeek body plus a local appendix. Hashes stay behind 详细编号.
+@Test func evidencePDFKeepsAppendixAndHidesHashesFromTheBody() throws {
     let pair = try evidencePair()
     let evidence = ReportEvidence.build(from: [pair.low, pair.high])
+    let report = GeneratedReport(
+        title: "办公室送风对比",
+        summary: "这次对比了\(pair.low.name)和\(pair.high.name)。",
+        sections: [
+            ReportSection(
+                heading: ReportWriterSkill.comparisonHeading,
+                body: "方案一合适的座位 \(UserFacingCopy.displayNumber(1))。"
+            ),
+        ],
+        caveats: ["采用低送风口。"]
+    )
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("simunow-evidence-\(UUID().uuidString).pdf")
-    try EvidencePDFAssembler.write(evidence: evidence, narration: nil, to: url)
+    try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
-    #expect(text.contains("对比说明"))
+    #expect(text.contains("办公室送风对比"))
+    #expect(text.contains("DeepSeek"))
     #expect(text.contains(pair.low.name))
     #expect(text.contains(pair.high.name))
+    #expect(text.contains("计算依据"))
     #expect(text.contains("详细编号"))
     let body = String(text.split(separator: "详细编号", maxSplits: 1).first ?? "")
     #expect(!body.contains("inputHash"))
@@ -90,7 +116,10 @@ import PDFKit
     #expect(text.contains(pair.low.identity.runID.uuidString))
     #expect(text.contains(pair.high.identity.inputHash))
     #expect(text.contains(UserFacingCopy.qualityTitle(pair.low.quality)))
-    #expect(text.contains("比赛演示假设，非真实电价"))
+    #expect(text.contains("全年电费"))
+    #expect(text.contains("电价"))
+    #expect(!text.contains("比赛演示假设，非真实电价"))
+    #expect(!text.contains("不是问卷"))
     #expect(text.contains("23"))
     #expect(text.contains("26"))
     #expect(text.contains("周围表面温度"))
@@ -134,10 +163,16 @@ private func evidenceCandidate(
         quality: .passed,
         metrics: [
             ResultMetric(name: "seat_t_c_min", value: seatMinC, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: false),
+            ResultMetric(name: "seat_t_c_max", value: seatMinC + 0.3, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: false),
             ResultMetric(name: "seat_pass_ratio", value: passRatio, unit: "1", method: "l2_seat_gate", fidelity: .l2, omitted: false),
             ResultMetric(name: "seat_pass_count", value: passCount, unit: "count", method: "l2_seat_gate", fidelity: .l2, omitted: false),
             ResultMetric(name: "seat_eval_count", value: 8, unit: "count", method: "l2_seat_gate", fidelity: .l2, omitted: false),
+            ResultMetric(name: "seat_u_mag_max", value: 0.03, unit: "m/s", method: "steady_cfd", fidelity: .l2, omitted: false),
+            ResultMetric(name: "q_cool_w", value: watts * 3, unit: "W", method: "equivalent_ideal_loads", fidelity: .l1, omitted: false),
+            ResultMetric(name: "p_elec_w", value: watts, unit: "W", method: "equivalent_ideal_loads", fidelity: .l1, omitted: false),
         ],
+        slice: reportSlice(),
+        flow: reportFlow(),
         basis: CandidateRun.ComparisonBasis(
             occupantCount: draft.occupancy?.occupantCount.value ?? 0,
             occupiedStart: draft.occupancy?.schedule?.start ?? "08:00",
@@ -153,6 +188,40 @@ private func evidenceCandidate(
             tariff: draft.costAssumptions ?? .demo
         ),
         l1Identity: RunIdentity(scenarioID: draft.id, inputHash: "l1-\(name)")
+    )
+}
+
+private func reportSlice() -> FieldSlice {
+    FieldSlice(
+        zM: 1.1,
+        originM: .init(x: 0.125, y: 0.125),
+        spacingM: .init(x: 0.25, y: 0.25),
+        shape: .init(nx: 2, ny: 2),
+        values: [[24.0, 25.0], [24.2, 24.8]],
+        valid: [[true, true], [true, true]],
+        stats: .init(validCount: 4, minC: 24.0, maxC: 25.0),
+        inputHash: "slice-office"
+    )
+}
+
+private func reportFlow() -> FlowOverlay {
+    FlowOverlay(
+        zM: 1.1,
+        glyphs: [
+            .init(x: 1, y: 1, z: 1.1, ux: 0.02, uy: 0, uz: 0, mag: 0.02),
+            .init(x: 2, y: 2, z: 1.1, ux: 0.04, uy: 0, uz: 0, mag: 0.04),
+        ],
+        lines: [
+            .init(
+                id: "line-1",
+                points: [
+                    .init(x: 1, y: 1, z: 1.1, mag: 0.02),
+                    .init(x: 2, y: 2, z: 1.1, mag: 0.04),
+                ]
+            ),
+        ],
+        stats: .init(glyphCount: 2, lineCount: 1, minMag: 0.02, maxMag: 0.04),
+        inputHash: "flow-office"
     )
 }
 

@@ -12,7 +12,7 @@ import PDFKit
 @Test func emptyCandidatesKeepReportNilAndRefuseExport() {
     let store = WorkspaceStore()
     store.loadOfficeTemplate()
-    store.allowEnvironmentNarrator = false
+    store.allowEnvironmentGenerator = false
     #expect(store.reportEvidence == nil)
     #expect(!store.canExportEvidencePDF)
     #expect(store.reportStatusLine == nil)
@@ -40,7 +40,8 @@ import PDFKit
     let store = WorkspaceStore()
     store.project = office
     store.candidateRuns = [failed]
-    store.allowEnvironmentNarrator = false
+    store.allowEnvironmentGenerator = false
+    store.reportGenerator = StubReportGenerator()
 
     let evidence = try #require(store.reportEvidence)
     #expect(evidence.cards.count == 1)
@@ -58,15 +59,14 @@ import PDFKit
     #expect(store.reportMessage == WorkspaceStore.blockedExportStatus)
 }
 
-/// Office demo numbers: comfort defaults, demo tariff, two same-basis L2 pins.
-/// Missing narrator still writes the evidence PDF and names that limit.
+/// Office demo numbers stay on the cards. Missing DeepSeek hides export.
 @MainActor
-@Test func officeDemoExportsEvidencePDFWithoutNarrator() async throws {
+@Test func officeDemoWithoutDeepSeekHidesExport() async throws {
     let pair = try officeDemoPair()
     let store = WorkspaceStore()
     store.project = pair.high.draft
     store.candidateRuns = [pair.low, pair.high]
-    store.allowEnvironmentNarrator = false
+    store.allowEnvironmentGenerator = false
 
     #expect(pair.high.draft.occupancy?.comfort?.clo.value == 0.5)
     #expect(pair.high.draft.occupancy?.comfort?.met.value == 1.2)
@@ -74,12 +74,37 @@ import PDFKit
     #expect(pair.high.draft.costAssumptions?.reference == "比赛演示假设，非真实电价")
 
     let evidence = try #require(store.reportEvidence)
-    #expect(store.canExportEvidencePDF)
     #expect(evidence.containsExportableRecommendation)
     #expect(evidence.cards.contains { $0.kind == .comfort })
     #expect(evidence.cards.contains { $0.kind == .operation })
     #expect(evidence.cards.contains { $0.kind == .retrofit })
-    #expect(store.reportStatusLine == WorkspaceStore.evidenceOnlyNarratorStatus)
+    #expect(!store.canExportEvidencePDF)
+    #expect(store.reportStatusLine == WorkspaceStore.missingDeepSeekStatus)
+
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("simunow-nodeepseek-\(UUID().uuidString).pdf")
+    await #expect(throws: EvidencePDFError.generatorUnavailable) {
+        try await store.writeEvidencePDF(to: url)
+    }
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+    #expect(store.reportMessage == WorkspaceStore.missingDeepSeekStatus)
+}
+
+/// Office demo numbers: comfort defaults, demo tariff, two same-basis L2 pins.
+/// A configured generator writes a readable PDF plus the identity appendix.
+@MainActor
+@Test func officeDemoExportsDeepSeekReportWithAppendix() async throws {
+    let pair = try officeDemoPair()
+    let store = WorkspaceStore()
+    store.project = pair.high.draft
+    store.candidateRuns = [pair.low, pair.high]
+    store.allowEnvironmentGenerator = false
+    store.reportGenerator = StubReportGenerator()
+
+    let evidence = try #require(store.reportEvidence)
+    #expect(store.canExportEvidencePDF)
+    #expect(evidence.containsExportableRecommendation)
+    #expect(store.reportStatusLine == nil)
 
     #if os(macOS)
     let url = FileManager.default.temporaryDirectory
@@ -87,18 +112,70 @@ import PDFKit
     try await store.writeEvidencePDF(to: url)
     defer { try? FileManager.default.removeItem(at: url) }
     let text = try #require(PDFDocument(url: url)?.string)
+    #expect(text.contains("办公室送风对比"))
+    #expect(text.contains("DeepSeek"))
     #expect(text.contains(pair.low.identity.runID.uuidString))
     #expect(text.contains(pair.high.identity.runID.uuidString))
-    #expect(text.contains("比赛演示假设，非真实电价"))
+    #expect(text.contains("全年电费"))
+    #expect(text.contains("EnergyPlus"))
+    #expect(text.contains("OpenFOAM"))
+    #expect(!text.contains("比赛演示假设，非真实电价"))
     let ratio = try #require(evidence.candidates.first { $0.runID == pair.high.identity.runID }?.seatPassRatio)
     #expect(text.contains(UserFacingCopy.displayNumber(ratio)))
     let cost = try #require(pair.high.dayCost.cost)
     let currency = try #require(pair.high.dayCost.currency)
     #expect(text.contains(UserFacingCopy.displayNumber(cost)))
     #expect(text.contains(currency))
-    #expect(store.reportMessage == WorkspaceStore.evidenceOnlyNarratorStatus)
-    #expect(store.reportStatusLine == WorkspaceStore.evidenceOnlyNarratorStatus)
+    #expect(store.reportMessage == WorkspaceStore.exportedStatus)
+    #expect(store.reportStatusLine == WorkspaceStore.exportedStatus)
     #endif
+}
+
+private struct StubReportGenerator: ReportGenerator {
+    func generate(_ evidence: ReportEvidence) async -> GeneratedReport? {
+        let names = evidence.candidates.map(\.name).joined(separator: "、")
+        let first = evidence.candidates[0]
+        let ratio = first.seatPassRatio.map(UserFacingCopy.displayNumber) ?? "还没有"
+        let dayCostText: String
+        if let value = first.dayCost, let currency = first.currency {
+            dayCostText = "\(UserFacingCopy.displayNumber(value)) \(currency)"
+        } else {
+            dayCostText = "还没有"
+        }
+        let annualText: String
+        if let value = first.annualCost, let currency = first.currency {
+            annualText = "\(UserFacingCopy.displayNumber(value)) \(currency)"
+        } else {
+            annualText = dayCostText
+        }
+        let cooling = first.coolingW.map(UserFacingCopy.displayNumber) ?? "还没有"
+        let mean = first.indoorMeanC.map(UserFacingCopy.displayNumber)
+            ?? first.seatTMinC.map(UserFacingCopy.displayNumber)
+            ?? "还没有"
+        return GeneratedReport(
+            title: "办公室送风对比",
+            summary: "这次对比了\(names)。方案一全年电费 \(annualText)。",
+            sections: [
+                ReportSection(
+                    heading: ReportWriterSkill.energyPlusHeading,
+                    body: "EnergyPlus 制冷量 \(cooling) W，全年电费 \(annualText)。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.openFOAMHeading,
+                    body: "OpenFOAM 室内温度 \(mean) °C。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.comparisonHeading,
+                    body: "方案一合适的座位 \(ratio)，代表日电费 \(dayCostText)。"
+                ),
+                ReportSection(
+                    heading: ReportWriterSkill.adviceHeading,
+                    body: "建议采用方案一。"
+                ),
+            ],
+            caveats: ["采用低送风口。"]
+        )
+    }
 }
 
 private func officeDemoPair() throws -> (low: CandidateRun, high: CandidateRun) {

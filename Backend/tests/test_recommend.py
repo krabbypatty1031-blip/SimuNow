@@ -133,5 +133,8 @@ class RecommendTests(unittest.TestCase):
         self.assertEqual(evidence["candidates"][0]["seatPassRatio"], 1)
         self.assertEqual(evidence["candidates"][0]["dayCost"], 12.0)
         self.assertEqual(evidence["candidates"][0]["dayEnergyKWh"], 10.0)
+        self.assertEqual(evidence["candidates"][0]["occupiedDaysPerYear"], 365)
+        self.assertEqual(evidence["candidates"][0]["annualEnergyKWh"], 3650.0)
+        self.assertEqual(evidence["candidates"][0]["annualCost"], 4380.0)
         self.assertNotIn("payback", json.dumps(evidence))
         self.assertNotIn("37", json.dumps(evidence))

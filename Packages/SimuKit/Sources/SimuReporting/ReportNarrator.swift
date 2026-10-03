@@ -1,22 +1,49 @@
 import Foundation
 import SimuCore
 
-/// Optional prose layered on top of an evidence pack. Tables do not read these strings for numbers.
-public struct ReportNarration: Codable, Equatable, Sendable {
-    public var headline: String
-    public var cardProse: [String: String]
-    public var caveats: [String]
+/// One heading plus a paragraph. Headings are labels; bodies are guarded for numbers.
+public struct ReportSection: Codable, Equatable, Sendable {
+    public var heading: String
+    public var body: String
 
-    public init(headline: String, cardProse: [String: String], caveats: [String]) {
-        self.headline = headline
-        self.cardProse = cardProse
-        self.caveats = caveats
+    public init(heading: String, body: String) {
+        self.heading = heading
+        self.body = body
     }
 }
 
-/// Turns an evidence pack into narration. A nil result means export the tables alone.
-public protocol ReportNarrator: Sendable {
-    func narrate(_ evidence: ReportEvidence) async -> ReportNarration?
+/// User-facing report written by a language model from a frozen evidence pack.
+/// Tables and the identity appendix do not read these strings for numbers.
+public struct GeneratedReport: Codable, Equatable, Sendable {
+    public var title: String
+    public var summary: String
+    public var sections: [ReportSection]
+    public var caveats: [String]
+
+    public init(
+        title: String,
+        summary: String,
+        sections: [ReportSection] = [],
+        caveats: [String] = []
+    ) {
+        self.title = title
+        self.summary = summary
+        self.sections = sections
+        self.caveats = caveats
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        summary = try container.decode(String.self, forKey: .summary)
+        sections = try container.decodeIfPresent([ReportSection].self, forKey: .sections) ?? []
+        caveats = try container.decodeIfPresent([String].self, forKey: .caveats) ?? []
+    }
+}
+
+/// Turns an evidence pack into a readable report. A nil result means do not write a PDF.
+public protocol ReportGenerator: Sendable {
+    func generate(_ evidence: ReportEvidence) async -> GeneratedReport?
 }
 
 /// Drops any paragraph whose numbers are not already in the evidence pack.
@@ -24,11 +51,17 @@ public protocol ReportNarrator: Sendable {
 public enum NarrationGuard: Sendable {
     public static let rejection = "叙述未采用（含证据外数字）"
 
-    public static func filter(_ narration: ReportNarration, evidence: ReportEvidence) -> ReportNarration {
-        ReportNarration(
-            headline: sanitize(narration.headline, evidence: evidence),
-            cardProse: narration.cardProse.mapValues { sanitize($0, evidence: evidence) },
-            caveats: narration.caveats.map { sanitize($0, evidence: evidence) }
+    public static func filter(_ report: GeneratedReport, evidence: ReportEvidence) -> GeneratedReport {
+        GeneratedReport(
+            title: sanitize(report.title, evidence: evidence),
+            summary: sanitize(report.summary, evidence: evidence),
+            sections: report.sections.map { section in
+                ReportSection(
+                    heading: sanitize(section.heading, evidence: evidence),
+                    body: sanitize(section.body, evidence: evidence)
+                )
+            },
+            caveats: report.caveats.map { sanitize($0, evidence: evidence) }
         )
     }
 
@@ -53,7 +86,7 @@ public enum NarrationGuard: Sendable {
         return paragraph
     }
 
-    /// JSON numbers only. Digits inside run-ID strings are not measurements.
+    /// JSON numbers, plus the two-decimal display form the rest of the UI uses.
     private static func numericValues(in evidence: ReportEvidence) -> Set<Decimal> {
         guard let data = try? JSONEncoder().encode(evidence),
               let json = try? JSONSerialization.jsonObject(with: data) else {
@@ -71,7 +104,14 @@ public enum NarrationGuard: Sendable {
                 allowed.insert(value / 1000)
             }
         }
-        return allowed
+        var displayed: Set<Decimal> = []
+        for value in allowed {
+            let rounded = UserFacingCopy.displayNumber((value as NSDecimalNumber).doubleValue)
+            if let decimal = Decimal(string: rounded, locale: Locale(identifier: "en_US_POSIX")) {
+                displayed.insert(decimal)
+            }
+        }
+        return allowed.union(displayed)
     }
 
     private static func decimals(in json: Any) -> [Decimal] {

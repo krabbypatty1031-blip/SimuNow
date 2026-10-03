@@ -446,30 +446,37 @@ public final class WorkspaceStore {
     /// Report built from pinned runs only. Nil when nothing is pinned, so the
     /// page stays an empty state instead of quoting the live draft.
     public var highlightedRunID: UUID?
-    /// Optional. When nil, export still writes the evidence PDF.
-    public var reportNarrator: (any ReportNarrator)?
-    /// Production reads `SIMUNOW_REPORT_BASE_URL`. Tests turn this off so export never hits the network.
-    public var allowEnvironmentNarrator = true
+    /// Injected in tests. Production uses DeepSeek when a key is present.
+    public var reportGenerator: (any ReportGenerator)?
+    /// Tests turn this off so export never hits the network.
+    public var allowEnvironmentGenerator = true
     /// Last export or block note shown on the report page and inspector.
     public var reportMessage: String?
 
     /// Button copy stays this phrase. A missing API key must not rename it to 「生成报告」.
     public static let evidenceExportLabel = "导出对比说明"
-    public static let evidenceOnlyNarratorStatus = "未配置说明文字，仅导出对照表"
+    public static let missingDeepSeekStatus = "未配置 DeepSeek，不能生成对比说明"
+    public static let generateFailedStatus = "DeepSeek 未能生成说明，对照表未导出。"
+    public static let exportedStatus = "已导出对比说明"
     public static let blockedExportStatus = "有方案未通过检查、座位都不可评价，或使用条件不同，不能导出有效结论。"
 
-    /// Narrate when a narrator is injected or (in production) configured from the environment.
-    /// Missing key or a failed request still writes the evidence tables.
+    /// DeepSeek writes the readable body from the frozen evidence pack.
+    /// Missing key or a failed request does not invent a stand-in PDF.
     public func writeEvidencePDF(to url: URL) async throws {
-        guard canExportEvidencePDF, let evidence = reportEvidence else {
+        guard let evidence = reportEvidence, evidence.containsExportableRecommendation else {
             reportMessage = Self.blockedExportStatus
             throw EvidencePDFError.notExportable
         }
-        let narrator = resolvedReportNarrator()
-        let narration = await narrator?.narrate(evidence)
-        try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
-        // Narration is optional. A nil result is still a successful evidence PDF.
-        reportMessage = narration == nil ? Self.evidenceOnlyNarratorStatus : "已导出对比说明"
+        guard let generator = resolvedReportGenerator() else {
+            reportMessage = Self.missingDeepSeekStatus
+            throw EvidencePDFError.generatorUnavailable
+        }
+        guard let report = await generator.generate(evidence) else {
+            reportMessage = Self.generateFailedStatus
+            throw EvidencePDFError.generatorUnavailable
+        }
+        try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
+        reportMessage = Self.exportedStatus
     }
 
     public var reportEvidence: ReportEvidence? {
@@ -477,38 +484,33 @@ public final class WorkspaceStore {
         return ReportEvidence.build(from: candidateRuns)
     }
 
-    /// Quality-failed or mixed-basis packs can be read; they cannot be exported as a recommendation.
+    /// Quality-failed packs can be read. Export also needs DeepSeek.
     public var canExportEvidencePDF: Bool {
-        reportEvidence?.containsExportableRecommendation == true
+        reportEvidence?.containsExportableRecommendation == true && isReportGeneratorConfigured
     }
 
-    public var isReportNarratorConfigured: Bool {
-        if reportNarrator != nil { return true }
-        guard allowEnvironmentNarrator else { return false }
-        guard OpenAICompatibleNarrator.configuredFromEnvironment() != nil else { return false }
-        guard let key = OpenAICompatibleNarrator.keyFromEnvironmentOrKeychain(), !key.isEmpty else {
-            return false
-        }
-        return true
+    public var isReportGeneratorConfigured: Bool {
+        if reportGenerator != nil { return true }
+        guard allowEnvironmentGenerator else { return false }
+        return DeepSeekReportClient.configuredFromEnvironment() != nil
     }
 
     /// Empty pin list stays an empty state. Failed-only packs explain why export is hidden.
     public var reportStatusLine: String? {
-        guard reportEvidence != nil else { return nil }
-        if !canExportEvidencePDF {
+        guard let evidence = reportEvidence else { return nil }
+        if !evidence.containsExportableRecommendation {
             return reportMessage ?? Self.blockedExportStatus
         }
-        if let reportMessage { return reportMessage }
-        if !isReportNarratorConfigured {
-            return Self.evidenceOnlyNarratorStatus
+        if !isReportGeneratorConfigured {
+            return reportMessage ?? Self.missingDeepSeekStatus
         }
-        return nil
+        return reportMessage
     }
 
-    private func resolvedReportNarrator() -> (any ReportNarrator)? {
-        if let reportNarrator { return reportNarrator }
-        guard allowEnvironmentNarrator else { return nil }
-        return OpenAICompatibleNarrator.configuredFromEnvironment()
+    private func resolvedReportGenerator() -> (any ReportGenerator)? {
+        if let reportGenerator { return reportGenerator }
+        guard allowEnvironmentGenerator else { return nil }
+        return DeepSeekReportClient.configuredFromEnvironment()
     }
 
     /// Card run IDs jump back to the comparison page, which still shows the frozen record.

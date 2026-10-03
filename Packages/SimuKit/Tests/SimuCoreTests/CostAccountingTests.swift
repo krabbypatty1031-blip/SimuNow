@@ -117,6 +117,20 @@ import SimuWorkspace
     #expect(CostAccounting.savingsHKD(high, low, basisMismatch: nil) != 1500 * 0.1)
 }
 
+/// Report-layer yearly totals are the representative day scaled by 365 occupied days.
+@Test func annualTotalsScaleTheRepresentativeDay() {
+    let day = CostAccounting.representativeDay(
+        electricPowerW: 1033.112,
+        occupiedStart: "08:00",
+        occupiedEnd: "18:00",
+        tariff: .demo
+    )
+    #expect(String(format: "%.5f", CostAccounting.annualEnergyKWh(from: day.energyKWh) ?? -1) == "3770.85880")
+    #expect(String(format: "%.3f", CostAccounting.annualCost(from: day.cost) ?? -1) == "4524.905")
+    #expect(CostAccounting.annualEnergyKWh(from: nil) == nil)
+    #expect(CostAccounting.annualCost(from: nil) == nil)
+}
+
 @MainActor
 @Test func submitL2KeepsPreviousL1CoolingAndElectricity() async throws {
     let draft = try ProjectTemplates.bundled(named: "office").project

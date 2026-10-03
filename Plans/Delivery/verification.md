@@ -29,7 +29,15 @@
 | 办公室夹具数字 | 自动化锁定 | 模板 clo=0.5 / met=1.2 / RH 50% / MRT 26 °C；电价 1.2 HKD/kWh「比赛演示假设，非真实电价」。两候选用 P4 手测座位 24.21 / 24.43 °C 与 L1 1033.112 W → 代表日 **10.33112 kWh / 12.397 HKD**。PDF 含两个 run ID、达标比例、HKD、电价声明。状态行「未配置叙述器，仅证据表」 |
 | App Debug 点击 L1→L2→固定→导出 | 2026-10-03 已点通 | SimuNowMac Debug + `test/engines`。L1 `B0932281-…`：冷量 3099.335 W / 电功率 1033.112 W。默认口 L2 `057D25D4-…` quality passed，座位 24.43–24.73 °C，PMV 0.16 / PPD 5.95%。误把 z0 写成 2.2（口高 8 cm、风量 0.048）→ `A63B00F4-…` 能量 5.79%>5%，座位 omitted，未固定。改回 z0=2.10–2.28 后再 L2 `373BC329-…` 座位 24.21–24.50 °C，PMV 0.12 / PPD 5.63%。对比两列同口径、共用色标 23.0–25.2 °C。证据 PDF（本地 `test/engines/证据报告.pdf`，不入库）含两 L2 run ID、比例 1、10.3311 kWh / 12.397 HKD、电价声明、舒适四假设、三卡；无叙述器段落、无全年/回收期 |
 
-不得当作产品功能：Release 沙盒 App 内 exec 引擎；叙述器 API 连通；全年电费或回收期；达标比例=实测满意率；质量失败场进有效建议 PDF。
+## DeepSeek 对比说明（2026-10-03，ADR-019 / ADR-020）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` 报告项 | 通过 | 无密钥不写 PDF；质量失败仍 `notExportable`；夹具「节电 37%」拒用；官方 URL/模型钉死；假密钥不进 PDF。提示词要求 EnergyPlus/OpenFOAM/方案对比/全年电费。`runL1WithPinnedEnginesWritesCoolingAndElectricity` 依赖本地 `test/engines`，与本项无关 |
+| `Scripts/check.sh mac` / `ios` | BUILD SUCCEEDED | Release 沙盒仍开，仅加 `network.client`；iOS 仍不写 PDF |
+| DeepSeek 官方连通 | 未手测 | 未用真实 `DEEPSEEK_API_KEY` 打 `api.deepseek.com`。不得当作已交付 |
+
+不得当作产品功能：Release 沙盒 App 内 exec 引擎；DeepSeek 官方 API 连通；回收期；达标比例=实测满意率；质量失败场进有效建议 PDF。报告层全年电费是代表日×365，不是 EnergyPlus 年模拟。
 
 ### Debug 手测清单（2026-10-03 已点）
 

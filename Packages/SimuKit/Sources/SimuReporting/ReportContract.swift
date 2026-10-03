@@ -18,19 +18,24 @@ public protocol ReportExporter: Sendable {
     func export(_ request: ReportRequest, to destination: URL) async throws
 }
 
-/// Evidence tables plus an optional narrator. Network or key failure still writes the tables.
+/// DeepSeek writes the readable body. Network or key failure does not invent a stand-in PDF.
 public struct EvidenceReportExporter: ReportExporter {
-    public var narrator: (any ReportNarrator)?
+    public var generator: (any ReportGenerator)?
 
-    public init(narrator: (any ReportNarrator)? = nil) {
-        self.narrator = narrator
+    public init(generator: (any ReportGenerator)? = nil) {
+        self.generator = generator
     }
 
     public func export(_ request: ReportRequest, to destination: URL) async throws {
-        let narration = await narrator?.narrate(request.evidence)
+        guard let generator else {
+            throw EvidencePDFError.generatorUnavailable
+        }
+        guard let report = await generator.generate(request.evidence) else {
+            throw EvidencePDFError.generatorUnavailable
+        }
         try EvidencePDFAssembler.write(
             evidence: request.evidence,
-            narration: narration,
+            report: report,
             to: destination
         )
     }

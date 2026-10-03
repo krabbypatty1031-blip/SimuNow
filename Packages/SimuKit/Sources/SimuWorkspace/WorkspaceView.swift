@@ -110,12 +110,13 @@ public struct WorkspaceView: View {
 
     @ViewBuilder
     private var workspaceDetail: some View {
-        let incomplete = store.project?.hasCompletePhysicalModel != true
+        // The viewport draws the project's real geometry or its empty state;
+        // run availability stays a separate concern from the drawing.
         #if os(macOS)
         if store.project == nil {
             emptyProjectPane
         } else {
-            SimulationViewport(showsIncompleteModel: incomplete)
+            SimulationViewport(draft: store.project)
         }
         #else
         NavigationStack {
@@ -123,7 +124,7 @@ public struct WorkspaceView: View {
                 if store.project == nil {
                     emptyProjectPane
                 } else {
-                    SimulationViewport(showsIncompleteModel: incomplete)
+                    SimulationViewport(draft: store.project)
                 }
                 NavigationLink("编辑房间参数") {
                     RoomEditorForm(store: store)

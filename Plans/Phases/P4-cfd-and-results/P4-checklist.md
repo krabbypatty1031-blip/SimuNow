@@ -42,7 +42,7 @@
 
 ## P4-05 视口与场
 
-- [ ] P4-05a 房间盒子/开口/风口/座位几何，不是空状态
+- [x] P4-05a 房间盒子/开口/风口/座位几何，不是空状态（`RoomScene(draft:)` 无 geometry → nil → 空状态不画假房间；`RoomWireframeView` Canvas 线框 + 可拖拽 yaw；`IsometricProjection` 消费 `CoordinateMapping`（Z-up→Y-up→屏幕），无第二坐标约定；`SimuVisualizationTests` 7 项；Workspace 视口换新 API）
 - [ ] P4-05b 场文件带单位、Z-up、有效掩码
 - [ ] P4-05c 有结果后叠温度切片；无场不画假彩色
 

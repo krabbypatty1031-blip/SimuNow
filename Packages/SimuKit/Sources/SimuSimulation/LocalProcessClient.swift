@@ -42,6 +42,27 @@ public actor LocalProcessClient: SimulationClient {
     /// filtering reads POSIX execute bits via stat; `canStartInterpreter`
     /// stays the only authority on whether an interpreter truly starts.
     /// All candidates failing returns nil - the honest unconfigured answer.
+    /// Sandbox children inherit a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`).
+    /// Docker Desktop installs `docker` at `/usr/local/bin` (or Homebrew at
+    /// `/opt/homebrew/bin`); without those prefixes L2 fails as
+    /// `docker: command not found` after the wrapper itself starts.
+    public static func workerEnvironment(
+        repositoryRoot: URL,
+        base: [String: String],
+        extra: [String: String]
+    ) -> [String: String] {
+        var environment = base
+        environment["PYTHONPATH"] = repositoryRoot.appendingPathComponent("Backend/src").path
+        let current = environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        let parts = current.split(separator: ":").map(String.init)
+        let prefixes = ["/usr/local/bin", "/opt/homebrew/bin"].filter { !parts.contains($0) }
+        if !prefixes.isEmpty {
+            environment["PATH"] = (prefixes + [current]).joined(separator: ":")
+        }
+        extra.forEach { environment[$0.key] = $0.value }
+        return environment
+    }
+
     public static func resolvePythonExecutable(candidates: [String]? = nil) -> URL? {
         let paths = candidates ?? [
             "/opt/homebrew/bin/python3",
@@ -108,10 +129,11 @@ public actor LocalProcessClient: SimulationClient {
         let process = Process()
         process.executableURL = pythonExecutable
         process.currentDirectoryURL = repositoryRoot
-        var environment = ProcessInfo.processInfo.environment
-        environment["PYTHONPATH"] = repositoryRoot.appendingPathComponent("Backend/src").path
-        extraEnvironment.forEach { environment[$0.key] = $0.value }
-        process.environment = environment
+        process.environment = Self.workerEnvironment(
+            repositoryRoot: repositoryRoot,
+            base: ProcessInfo.processInfo.environment,
+            extra: extraEnvironment
+        )
         process.arguments = [
             "-m", "simunow_worker", workerCommand,
             "--request", runDir.appendingPathComponent("request.json").path,

@@ -80,6 +80,34 @@ private func repoRoot() -> URL {
     #expect(url == nil)
 }
 
+@Test func workerEnvironmentPutsDockerOnMinimalSandboxPath() {
+    // App Sandbox children inherit `/usr/bin:/bin:/usr/sbin:/sbin`. Docker
+    // Desktop installs `docker` at `/usr/local/bin`; without the prefix the
+    // L2 wrapper fails as `docker: command not found`.
+    let env = LocalProcessClient.workerEnvironment(
+        repositoryRoot: URL(fileURLWithPath: "/tmp/simunow-repo"),
+        base: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"],
+        extra: ["SIMUNOW_ENGINES_ROOT": "/tmp/engines"]
+    )
+    #expect(env["PATH"]?.hasPrefix("/usr/local/bin:/opt/homebrew/bin:") == true)
+    #expect(env["PYTHONPATH"] == "/tmp/simunow-repo/Backend/src")
+    #expect(env["SIMUNOW_ENGINES_ROOT"] == "/tmp/engines")
+}
+
+@Test func macEntitlementsKeepSandboxAndAllowProcessExec() throws {
+    // User-selected file R/W does not grant process-exec (2026-10-03 hand
+    // test: kernel deny process-exec* of user-selected EnergyPlus). The
+    // temporary exception widens exec without turning the file sandbox off.
+    let url = repoRoot().appendingPathComponent("Apps/SimuNowMac/SimuNowMac.entitlements")
+    let plist = try PropertyListSerialization.propertyList(
+        from: Data(contentsOf: url),
+        format: nil
+    ) as? [String: Any]
+    #expect(plist?["com.apple.security.app-sandbox"] as? Bool == true)
+    let lines = (plist?["com.apple.security.temporary-exception.sbpl"] as? [String]) ?? []
+    #expect(lines.contains { $0.contains("process-exec") })
+}
+
 @MainActor
 @Test func enginesOnlyWithStagedRepoEnablesSubmit() throws {
     let fm = FileManager.default

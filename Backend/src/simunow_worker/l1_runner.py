@@ -154,7 +154,21 @@ def run_l1_task(argv: list[str] | None = None) -> int:
     _emit(_event(request, 1, "progress", "solving", {"fraction": 0.2, "monitor": "energyplus"}))
     l1, wi = _import_p1()
     idf = wi.write_idf(room, run_dir / "room.idf")
-    proc = l1.run_energyplus(idf, run_dir / "energyplus", ep, weather)
+    try:
+        proc = l1.run_energyplus(idf, run_dir / "energyplus", ep, weather)
+    except OSError as exc:
+        # App Sandbox denies process-exec of a user-selected binary (2026-10-03
+        # hand test). Leave the IDF as evidence; do not invent watts.
+        result = evaluate_l1(
+            identity,
+            draft,
+            {"weatherPath": weather_rel, "weatherHash": weather_hash, "coolingLoadW": None},
+        )
+        result["state"] = "failed"
+        _write_result(run_dir, result)
+        _emit(_event(request, 2, "failed", "failed", {"message": f"EnergyPlus exec denied: {exc}"}))
+        sys.stderr.write("run-l1 failed: EnergyPlus exec denied; no invented watts\n")
+        return 1
     (run_dir / "logs").mkdir(exist_ok=True)
     (run_dir / "logs" / "energyplus.log").write_text((proc.stdout or "") + "\n" + (proc.stderr or ""), encoding="utf-8")
     parsed = l1.parse_l1_outputs(run_dir / "energyplus", room)

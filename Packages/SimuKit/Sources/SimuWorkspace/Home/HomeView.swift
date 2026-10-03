@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import SimuCore
+import SimuDesignSystem
 
 /// Entry screen: create from wizard/templates, open packages, migrate v1 drafts, recent list.
 public struct HomeView: View {
@@ -15,16 +16,29 @@ public struct HomeView: View {
     public var body: some View {
         NavigationStack {
             List {
-                Section("新建") {
-                    Button { showWizard = true } label: { Label("创建房间…", systemImage: "plus.rectangle") }
-                    Button { store.openProject(ProjectTemplates.office()) } label: { Label("办公室模板", systemImage: "briefcase") }
-                    Button { store.openProject(ProjectTemplates.classroom()) } label: { Label("教室模板", systemImage: "graduationcap") }
-                    Text("模板包含预设与假设参数；环境与天气保持未知，可在假设列表查看。")
+                Section {
+                    RoomPageIntro("先从一个房间开始", detail: "摆好空调和座位，再比较不同设置的用电。")
+                    Button { showWizard = true } label: { Label("按我的房间创建", systemImage: "plus.rectangle") }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.vertical, 6)
+                }
+                Section("也可以从现成布局开始") {
+                    templateButton("办公室", detail: "4 个工位 · 5 × 4 米", classroom: false) {
+                        store.openProject(ProjectTemplates.office())
+                    }
+                    templateButton("教室", detail: "12 个座位 · 8 × 6 米", classroom: true) {
+                        store.openProject(ProjectTemplates.classroom())
+                    }
+                    Text("模板数值需要核实；天气和温湿度请另行补充。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Section("打开") {
-                    Button { showOpenPanel = true } label: { Label("打开项目包 (.simunow)…", systemImage: "folder") }
-                    Button { showDraftImport = true } label: { Label("导入 v1 草稿…", systemImage: "arrow.up.doc") }
+                Section("继续已有项目") {
+                    Button { showOpenPanel = true } label: { Label("打开已保存的房间…", systemImage: "folder") }
+                    DisclosureGroup("导入旧版草稿") {
+                        Button { showDraftImport = true } label: { Label("选择草稿文件…", systemImage: "arrow.up.doc") }
+                        Text("支持 v1 JSON 草稿。导入后仍需补充房间信息。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 if !ProjectSession.recents.isEmpty {
                     Section("最近项目") {
@@ -34,9 +48,11 @@ public struct HomeView: View {
                             } label: {
                                 VStack(alignment: .leading) {
                                     Text(recent.name)
-                                    Text(recent.path).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(URL(fileURLWithPath: recent.path).lastPathComponent)
+                                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
+                            .help(recent.path)
                         }
                     }
                 }
@@ -65,13 +81,33 @@ public struct HomeView: View {
                 Button("好") { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
         }
+        .modifier(RoomTheme())
+    }
+
+    private func templateButton(_ title: String, detail: String, classroom: Bool,
+                                action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                RoomPlanMark(classroom: classroom)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.system(.headline, design: .rounded))
+                    Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "arrow.right").foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("从\(title)模板创建，\(detail)")
     }
 
     private func openRecent(_ recent: RecentProject) {
         do {
             try store.openPackage(at: URL(fileURLWithPath: recent.path))
         } catch {
-            errorMessage = "无法打开：\(error.localizedDescription)\n（沙盒环境下可能需要重新通过「打开项目包」选择文件。）"
+            errorMessage = "无法打开这个房间。请通过「打开已保存的房间」重新选择文件。\n\(error.localizedDescription)"
         }
     }
 
@@ -79,7 +115,7 @@ public struct HomeView: View {
         do {
             try action(result.get())
         } catch ProjectPackageError.unsupportedVersion(let version) {
-            errorMessage = "项目版本 \(version) 不受支持：v1 请使用「导入 v1 草稿」，更高版本需要更新 App。"
+            errorMessage = "无法读取版本 \(version)。旧版草稿请使用「导入旧版草稿」；新版项目请更新 App。"
         } catch {
             errorMessage = "无法打开：\(error.localizedDescription)"
         }

@@ -1,6 +1,7 @@
 import SwiftUI
 import SimuCore
 import SimuSimulation
+import SimuDesignSystem
 
 /// Scenario comparison page (P5): candidate generation, recommendation cards, same-basis
 /// comparison table and cost layering. L0-only: no spatial comfort, no annual extrapolation.
@@ -22,7 +23,12 @@ public struct ComparisonView: View {
         let cards = ComparisonModel.cards(rows: currentRows)
         let (_, members, excluded) = ComparisonModel.mainBasisGroup(rows: currentRows)
         List {
-            Section("方案管理") {
+            Section {
+                RoomPageIntro("哪种设置更合适？", detail: "复制一个方案，修改温度，再分别估算。")
+                Text("当前比较用电与制冷能力，尚不能判断各座位是否舒适。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("我的方案") {
                 ForEach(session.project.scenarios, id: \.id) { scenario in
                     HStack {
                         Button { session.currentScenarioID = scenario.id } label: {
@@ -35,10 +41,10 @@ public struct ComparisonView: View {
                         }
                         Spacer()
                         Button { session.duplicateScenario(scenario.id, name: scenario.name + " 候选") } label: {
-                            Image(systemName: "doc.on.doc")
+                            Label("复制", systemImage: "doc.on.doc")
                         }
                         .buttonStyle(.borderless)
-                        .help("复制为候选方案（实体身份保留，可独立改参数）")
+                        .help("复制一份，单独修改设置")
                     }
                     if let runStoreRow = currentRows.first(where: { $0.scenarioID == scenario.id }) {
                         LatestRunSummary(record: runStoreRow.record,
@@ -46,32 +52,48 @@ public struct ComparisonView: View {
                                             .map { $0.freshness(relativeTo: runStore.currentHash(for: scenario.id)) } ?? .stale)
                     }
                 }
-                HStack {
-                    Button("生成 ±1°C 设定温度候选") { addSetpointCandidates() }
-                        .disabled(session.currentScenario == nil)
-                    Text("风向/角度类候选需要 L2 CFD，当前不可评价").font(.caption2).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Button("试试调高 / 调低 1°C") { addSetpointCandidates() }
+                        .disabled(session.currentScenario?.inputs.controls.first?.setpoint.value == nil)
+                    Text("新增可用温度范围内的方案，不会改动当前设置。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
 
-            Section("建议卡") {
+            Section("结果怎么理解") {
                 ForEach(cards, id: \.title) { card in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(card.title).font(.callout.bold())
-                        Text(card.body).font(.caption).foregroundStyle(.secondary)
+                        Text(cardTitle(card)).font(.callout.bold())
+                        Text(cardSummary(card, rows: members)).font(.subheadline).foregroundStyle(.secondary)
+                        DisclosureGroup("查看依据与限制") {
+                            Text(card.body).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                        .font(.caption)
                     }
                     .padding(.vertical, 2)
                 }
             }
 
-            Section("对比（\(members.count) 个同口径有效方案）") {
+            Section("相同条件下的对比 · \(members.count) 个方案") {
                 if members.isEmpty {
-                    Text("没有可对比的有效结果：运行需完成、质量通过且未过期。")
+                    Text("先到「用电估算」计算每个方案。结果需通过检查，修改过设置的方案需重新估算。")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    comparisonTable(members: members)
+                    ForEach(members, id: \.scenarioID) { row in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(row.scenarioName).font(.headline)
+                            LabeledContent("一天预计用电", value: metricText(row, "estimatedElectricEnergy"))
+                            LabeledContent("一天预计费用", value: metricText(row, "dailyCost"))
+                            LabeledContent("制冷能力", value: adequacyText(row))
+                        }
+                        .font(.subheadline).padding(.vertical, 4)
+                    }
+                    DisclosureGroup("详细指标与计算编号") {
+                        ScrollView(.horizontal) { comparisonTable(members: members) }
+                    }
                 }
                 if !excluded.isEmpty {
-                    Text("口径不同（天气/人数/时段），未参与排序：\(excluded.map(\.scenarioName).joined(separator: "、"))")
+                    Text("天气、人数或时间不同，未一起排序：\(excluded.map(\.scenarioName).joined(separator: "、"))")
                         .font(.caption2).foregroundStyle(.orange)
                 }
                 let ineligible = currentRows.filter { $0.eligibility != .eligible }
@@ -87,9 +109,29 @@ public struct ComparisonView: View {
                 ForEach(session.project.scenarios, id: \.id) { scenario in
                     costBlock(scenario)
                 }
-                Text("代表日费用不外推全年；报价与电价缺失时显示待报价，不按 0 计。")
+                Text("费用只对应选定的一天；没有价格信息时不估算费用。")
                     .font(.caption2).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func cardTitle(_ card: ComparisonModel.Card) -> String {
+        switch card.kind {
+        case .operation: "用电怎么选"
+        case .capacity: "空调是否够用"
+        case .comfort: "座位舒适度"
+        }
+    }
+
+    private func cardSummary(_ card: ComparisonModel.Card, rows: [ComparisonModel.Row]) -> String {
+        switch card.kind {
+        case .operation:
+            if let id = card.runID, let row = rows.first(where: { $0.record?.identity.runID == id }) {
+                return "「\(row.scenarioName)」在可比方案中预计用电较少。"
+            }
+            return rows.isEmpty ? "先完成方案估算，再查看建议。" : "先核对制冷能力，再比较用电。"
+        case .capacity: return card.runID == nil ? "这些方案的预计峰值需求未超过空调制冷能力。" : "有方案制冷能力不足，请先核对空调规格。"
+        case .comfort: return "尚未评价；目前无法判断座位冷热和吹风感。"
         }
     }
 
@@ -133,7 +175,7 @@ public struct ComparisonView: View {
 
     private func metricText(_ row: ComparisonModel.Row, _ name: String) -> String {
         guard let metric = row.record?.result?.metric(named: name) else { return "—" }
-        if metric.isMissing { return "缺失" }
+        if metric.isMissing { return "暂无法估算" }
         if let flag = metric.boolValue { return flag ? "是" : "否" }
         guard let value = metric.doubleValue else { return "—" }
         return "\(ComparisonModel.format(value)) \(metric.unit)"
@@ -152,7 +194,7 @@ public struct ComparisonView: View {
                 Text("币种 \(currency)").font(.caption2).foregroundStyle(.secondary)
             }
             if cost.tariffs.isEmpty && cost.quotes.isEmpty {
-                Text("待报价/待电价").font(.caption2).foregroundStyle(.secondary)
+                Text("尚未提供电价和报价").font(.caption2).foregroundStyle(.secondary)
             }
             ForEach(cost.tariffs.indices, id: \.self) { index in
                 let tariff = cost.tariffs[index]

@@ -1,5 +1,6 @@
 import SwiftUI
 import SimuCore
+import SimuDesignSystem
 
 /// Multi-step room creation wizard. Produces an honest ProjectDocument:
 /// geometry + envelope filled from user input; HVAC/usage empty; environment explicitly unknown.
@@ -116,6 +117,11 @@ public struct RoomWizardView: View {
     public var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    RoomPageIntro(stepTitle, detail: stepDetail)
+                    ProgressView(value: Double(step + 1), total: 5)
+                        .accessibilityLabel("建房进度，第 \(step + 1) 步，共 5 步")
+                }
                 switch step {
                 case 0: basicsStep
                 case 1: dimensionsStep
@@ -124,22 +130,33 @@ public struct RoomWizardView: View {
                 default: summaryStep
                 }
             }
-            .navigationTitle("创建房间 (\(step + 1)/5)")
+            .formStyle(.grouped)
+            .navigationTitle("创建房间 · \(step + 1)/5")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItemGroup(placement: .confirmationAction) {
+                    if step > 0 { Button("上一步") { step -= 1 } }
                     if step < 4 {
                         Button("下一步") { step += 1 }.disabled(!canAdvance)
                     } else {
-                        Button("创建") { onFinish(draft.build()) ; dismiss() }
+                        Button("进入房间") { onFinish(draft.build()) ; dismiss() }
                     }
-                }
-                if step > 0 {
-                    ToolbarItem(placement: .secondaryAction) { Button("上一步") { step -= 1 } }
                 }
             }
         }
-        .frame(minWidth: 480, minHeight: 420)
+        .modifier(RoomTheme())
+        .frame(idealWidth: 520, minHeight: 420)
+        #if os(macOS)
+        .frame(minWidth: 560, minHeight: 500)
+        #endif
+    }
+
+    private var stepTitle: String {
+        ["这是什么房间？", "房间有多大？", "门窗在哪里？", "哪些墙面接触室外？", "确认房间信息"][step]
+    }
+
+    private var stepDetail: String {
+        ["起个名字，方便之后找到它。", "填入实际测量的尺寸，单位是米。", "可以先跳过；门窗位置从所在墙的起点量起。", "勾选接触室外的墙面，保温参数可在下面查看。", "先建好房间，再设置空调、座位和使用时间。"][step]
     }
 
     private var canAdvance: Bool {
@@ -155,7 +172,9 @@ public struct RoomWizardView: View {
         Section("项目") {
             TextField("名称", text: $draft.name)
             Picker("空间类型", selection: $draft.spaceType) {
-                ForEach(SpaceType.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(SpaceType.allCases, id: \.self) { type in
+                    Text(InputPresentation.spaceTitle(type)).tag(type)
+                }
             }
         }
     }
@@ -163,17 +182,21 @@ public struct RoomWizardView: View {
     private var dimensionsStep: some View {
         Group {
             Section("房间尺寸（米）") {
-                dimensionField("宽（X）", $draft.widthText)
-                dimensionField("深（Y）", $draft.depthText)
-                dimensionField("高（Z）", $draft.heightText)
+                dimensionField("左右宽度", $draft.widthText)
+                dimensionField("前后进深", $draft.depthText)
+                dimensionField("天花板高度", $draft.heightText)
                 if !draft.dimensionsValid { Text("尺寸必须为正的数值").foregroundStyle(.orange).font(.caption) }
             }
             Section("朝向") {
-                Toggle("已知北向角", isOn: $draft.northKnown)
+                Toggle("我知道房间朝向", isOn: $draft.northKnown)
                 if draft.northKnown {
-                    dimensionField("从 +Y 顺时针到真北（度）", $draft.northText)
+                    dimensionField("北向角（度）", $draft.northText)
+                    DisclosureGroup("角度怎么量？") {
+                        Text("以俯视图的远侧方向（+Y）为起点，顺时针转到真北。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 } else {
-                    Text("朝向将标记为未知，可在属性面板补充。").font(.caption).foregroundStyle(.secondary)
+                    Text("暂时不知道也可以先建房，计算前再补充。").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -181,7 +204,8 @@ public struct RoomWizardView: View {
 
     private var openingsStep: some View {
         Group {
-            Section("门窗（按所在表面与局部坐标）") {
+            Section("门与窗") {
+                RoomPlanMark(showWalls: true)
                 ForEach($draft.openings) { $opening in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -190,7 +214,7 @@ public struct RoomWizardView: View {
                                 Text("门").tag(OpeningKind.door)
                             }
                             .labelsHidden()
-                            Picker("表面", selection: $opening.face) {
+                            Picker("所在墙面", selection: $opening.face) {
                                 ForEach(SurfaceFace.allCases, id: \.self) { Text(faceTitle($0)).tag($0) }
                             }
                             .labelsHidden()
@@ -199,11 +223,15 @@ public struct RoomWizardView: View {
                             })
                             .buttonStyle(.borderless)
                         }
-                        HStack {
-                            dimensionField("U 偏移", $opening.offsetUText)
-                            dimensionField("V 偏移", $opening.offsetVText)
+                        VStack(spacing: 8) {
+                            dimensionField("沿墙位置（米）", $opening.offsetUText)
+                            dimensionField("离地高度（米）", $opening.offsetVText)
                             dimensionField("宽", $opening.widthText)
                             dimensionField("高", $opening.heightText)
+                        }
+                        DisclosureGroup("位置从哪里量？") {
+                            Text("左右墙从近侧量起，近侧和远侧墙从左侧量起。地板和天花板沿左右、前后方向量起；所有位置与尺寸均为米。")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         if let error = draft.openingError(opening) {
                             Text(error).foregroundStyle(.orange).font(.caption)
@@ -217,17 +245,22 @@ public struct RoomWizardView: View {
 
     private var envelopeStep: some View {
         Group {
-            Section("外表面（其余按绝热内表面处理）") {
+            Section("接触室外的墙面") {
+                RoomPlanMark(showWalls: true)
                 ForEach(SurfaceFace.allCases, id: \.self) { face in
                     Toggle(faceTitle(face), isOn: exteriorBinding(face))
                 }
+                Text("未勾选的表面暂按不传热处理。").font(.caption).foregroundStyle(.secondary)
             }
-            Section("构造参数（W/(m²·K) 等）") {
-                dimensionField("墙体 U 值", $draft.wallUText)
-                dimensionField("窗 U 值", $draft.windowUText)
-                dimensionField("窗 SHGC", $draft.shgcText)
-                Text("以上标记为「用户」来源；外表面边界条件保持未知，待能耗或天气适配提供。")
-                    .font(.caption).foregroundStyle(.secondary)
+            Section {
+                DisclosureGroup("保温与玻璃参数 · 专业设置") {
+                    dimensionField("墙体传热系数 U", $draft.wallUText)
+                    dimensionField("窗户传热系数 U", $draft.windowUText)
+                    dimensionField("玻璃太阳得热系数 SHGC", $draft.shgcText)
+                    Text("U 的单位为 W/(m²·K)，越小越隔热；SHGC 是 0–1 的比例。当前显示的初始值还需核实，保存后记为自己填写。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("墙面温度尚未填写，建房完成不代表已能计算。").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -237,8 +270,8 @@ public struct RoomWizardView: View {
             LabeledContent("名称", value: draft.name)
             LabeledContent("尺寸", value: "\(draft.widthText) × \(draft.depthText) × \(draft.heightText) m")
             LabeledContent("门窗", value: "\(draft.openings.count) 个")
-            LabeledContent("外表面", value: draft.exteriorFaces.map(faceTitle).joined(separator: "、"))
-            Text("创建后请在属性面板补充空调、座位、新风与环境参数；未知项会明确列出，不会自动填值。")
+            LabeledContent("接触室外", value: SurfaceFace.allCases.filter { draft.exteriorFaces.contains($0) }.map(faceTitle).joined(separator: "、"))
+            Text("还需填写：空调、座位、通风和天气。未填信息会保留为待补充。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -246,6 +279,8 @@ public struct RoomWizardView: View {
     private func dimensionField(_ label: String, _ text: Binding<String>) -> some View {
         LabeledContent(label) {
             TextField(label, text: text)
+                .labelsHidden()
+                .accessibilityLabel(label)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 100)
         }
@@ -253,8 +288,8 @@ public struct RoomWizardView: View {
 
     private func faceTitle(_ face: SurfaceFace) -> String {
         switch face {
-        case .xMin: "西墙 (xMin)"; case .xMax: "东墙 (xMax)"
-        case .yMin: "南墙 (yMin)"; case .yMax: "北墙 (yMax)"
+        case .xMin: "左墙"; case .xMax: "右墙"
+        case .yMin: "近侧墙"; case .yMax: "远侧墙"
         case .floor: "地板"; case .ceiling: "天花板"
         }
     }

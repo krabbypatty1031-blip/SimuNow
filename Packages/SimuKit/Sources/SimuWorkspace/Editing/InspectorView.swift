@@ -1,5 +1,6 @@
 import SwiftUI
 import SimuCore
+import SimuDesignSystem
 
 /// Property editor dispatched by the current selection. All edits go through ProjectSession.mutate.
 public struct InspectorView: View {
@@ -24,8 +25,11 @@ public struct InspectorView: View {
                 case .cost: costForm
                 }
             } else {
-                Text("在俯视图或侧边栏选择对象后编辑参数。")
-                    .foregroundStyle(.secondary)
+                Section {
+                    RoomPageIntro("想改哪里？", detail: "点选图中的空调、座位或家具，就能查看设置。")
+                    Text("温度和开机时间在左侧；天气与温湿度也可以单独设置。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 assumptionsSection
             }
         }
@@ -55,14 +59,17 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section {
                 TextField("名称", text: room.name)
-                ParameterRow("北向角", room.northAngle)
+                DisclosureGroup("房间朝向 · 计算前填写") {
+                    ParameterRow("北向角", room.northAngle)
+                    Text("从俯视图远侧方向（+Y）顺时针转到真北的角度。").font(.caption).foregroundStyle(.secondary)
+                }
             } header: { Text("房间") }
             if let payload = try? session.project.geometry.rooms[index].shape.resolved(as: RectangularRoom.self, registry: session.registry) {
                 let shape = shapeBinding(roomIndex: index, fallback: payload)
                 Section {
-                    ParameterRow("宽（X）", shape.dimensions.width)
-                    ParameterRow("深（Y）", shape.dimensions.depth)
-                    ParameterRow("高（Z）", shape.dimensions.height)
+                    ParameterRow("左右宽度", shape.dimensions.width)
+                    ParameterRow("前后进深", shape.dimensions.depth)
+                    ParameterRow("高度", shape.dimensions.height)
                 } header: { Text("尺寸") }
             }
         })
@@ -85,18 +92,18 @@ public struct InspectorView: View {
             guard let oi = room.openings.firstIndex(where: { $0.id == id }) else { continue }
             let opening = bind(\.geometry.rooms[ri].openings[oi])
             return AnyView(Group {
-                Section("开口") {
+                Section("门窗") {
                     Picker("类型", selection: opening.kind) {
                         Text("窗").tag(OpeningKind.window)
                         Text("门").tag(OpeningKind.door)
                     }
-                    ParameterRow("U 偏移", opening.offsetU)
-                    ParameterRow("V 偏移", opening.offsetV)
+                    ParameterRow("沿墙位置", opening.offsetU)
+                    ParameterRow("离地高度", opening.offsetV)
                     ParameterRow("宽", opening.width)
                     ParameterRow("高", opening.height)
                 }
                 Button(role: .destructive, action: { deleteOpening(roomIndex: ri, openingIndex: oi) }) {
-                    Label("删除开口", systemImage: "trash")
+                    Label("删除这扇门或窗", systemImage: "trash")
                 }
             })
         }
@@ -135,13 +142,13 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section("家具") {
                 TextField("名称", text: obstacle.name)
-                UnitNumberRow("X", unit: "m", value: doubleBinding(shape, \.origin.x))
-                UnitNumberRow("Y", unit: "m", value: doubleBinding(shape, \.origin.y))
+                UnitNumberRow("距左墙", unit: "m", value: doubleBinding(shape, \.origin.x))
+                UnitNumberRow("距近侧墙", unit: "m", value: doubleBinding(shape, \.origin.y))
             }
             Section("尺寸") {
-                ParameterRow("宽（X）", shape.dimensions.width)
-                ParameterRow("深（Y）", shape.dimensions.depth)
-                ParameterRow("高（Z）", shape.dimensions.height)
+                ParameterRow("左右宽度", shape.dimensions.width)
+                ParameterRow("前后进深", shape.dimensions.depth)
+                ParameterRow("高度", shape.dimensions.height)
             }
             Button(role: .destructive, action: {
                 session.mutate { $0.geometry.obstacles.remove(at: oi) }
@@ -159,7 +166,8 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section("空调") {
                 TextField("名称", text: device.name)
-                ParameterRow("送风温度", device.supplyTemperature)
+                ParameterRow("出风温度", device.supplyTemperature)
+                Text("这是吹出来的空气温度，不是遥控器的设定温度。").font(.caption).foregroundStyle(.secondary)
             }
             if let split = try? session.project.scenarios[si].inputs.hvac[di].definition.resolved(as: SingleSplit.self, registry: session.registry) {
                 let definition = Binding<SingleSplit>(get: {
@@ -172,14 +180,16 @@ public struct InspectorView: View {
                     }
                 })
                 Section("设备性能") {
-                    ParameterRow("制冷量", definition.coolingCapacity)
-                    ParameterRow("电功率", definition.electricalPower)
-                    ParameterRow("COP", definition.cop)
+                    ParameterRow("制冷能力", definition.coolingCapacity)
+                    ParameterRow("额定用电功率", definition.electricalPower)
+                    ParameterRow("能效比 COP", definition.cop)
+                    Text("这些数值可从空调铭牌或说明书查到；制冷能力和用电功率不同。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             } else {
                 Section("设备性能") { Text("未知设备类型，仅保留数据；安装对应支持后可编辑。").foregroundStyle(.secondary) }
             }
-            Section("风口") {
+            Section("出风与回风 · 详细设置") {
                 ForEach(session.project.scenarios[si].inputs.hvac[di].ports, id: \.id) { port in
                     Button("\(port.role == .supply ? "送风" : "回风")口") {
                         session.selection = .port(deviceID: id, portID: port.id)
@@ -195,17 +205,20 @@ public struct InspectorView: View {
               let pi = session.project.scenarios[si].inputs.hvac[di].ports.firstIndex(where: { $0.id == portID }) else { return AnyView(EmptyView()) }
         let port = bind(\.scenarios[si].inputs.hvac[di].ports[pi])
         return AnyView(Group {
-            Section("风口") {
+            Section("风量设置") {
                 ParameterRow("面积", port.area)
                 ParameterRow("风量", port.volumeFlow)
                 ParameterRow("风速", port.speed)
-                ParameterRow("密度", port.density)
+                DisclosureGroup("空气参数") { ParameterRow("空气密度", port.density) }
                 Text("面积 × 风速 = 风量；不一致会在校验中提示。").font(.caption).foregroundStyle(.secondary)
             }
-            Section("方向（单位向量）") {
-                UnitNumberRow("X", unit: "", value: doubleBinding(port, \.direction.x))
-                UnitNumberRow("Y", unit: "", value: doubleBinding(port, \.direction.y))
-                UnitNumberRow("Z", unit: "", value: doubleBinding(port, \.direction.z))
+            Section {
+                DisclosureGroup("出风方向 · 专业设置") {
+                    UnitNumberRow("左右方向 X", unit: "", value: doubleBinding(port, \.direction.x))
+                    UnitNumberRow("前后方向 Y", unit: "", value: doubleBinding(port, \.direction.y))
+                    UnitNumberRow("上下方向 Z", unit: "", value: doubleBinding(port, \.direction.z))
+                    Text("这里使用单位向量，三个分量的平方和需为 1。").font(.caption).foregroundStyle(.secondary)
+                }
             }
         })
     }
@@ -220,14 +233,17 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section("座位") {
                 TextField("名称", text: seat.name)
-                UnitNumberRow("X", unit: "m", value: doubleBinding(seat, \.position.x))
-                UnitNumberRow("Y", unit: "m", value: doubleBinding(seat, \.position.y))
+                UnitNumberRow("距左墙", unit: "m", value: doubleBinding(seat, \.position.x))
+                UnitNumberRow("距近侧墙", unit: "m", value: doubleBinding(seat, \.position.y))
             }
-            Section("采样点（\(sampleCount)）") {
+            Section {
+                DisclosureGroup("座位检查高度 · \(sampleCount) 个点") {
                 ForEach(0..<sampleCount, id: \.self) { sampleIndex in
                     HStack {
-                        Text("高度 z")
+                        Text("离地高度")
                         TextField("高度", value: seat.samples[sampleIndex].position.z, format: .number)
+                            .labelsHidden()
+                            .accessibilityLabel("检查点离地高度，单位米")
                             .frame(maxWidth: 80)
                         Text("m").foregroundStyle(.secondary)
                         Spacer()
@@ -236,13 +252,16 @@ public struct InspectorView: View {
                         }, label: { Image(systemName: "minus.circle") }).buttonStyle(.borderless)
                     }
                 }
-                Button("添加采样点") {
+                Button("添加检查高度") {
                     session.mutate { document in
                         let value = document.scenarios[si].inputs.usage.seats[i]
                         let z = (value.samples.map(\.position.z).max() ?? 0) + 0.5
                         document.scenarios[si].inputs.usage.seats[i].samples.append(
                             SamplePoint(id: UUID(), position: Position3D(x: value.position.x, y: value.position.y, z: z)))
                     }
+                }
+                Text("用于之后检查脚踝、身体和头部位置；当前估算不提供逐点舒适结果。")
+                    .font(.caption).foregroundStyle(.secondary)
                 }
             }
             Button(role: .destructive, action: { deleteSeat(seatIndex: i) }, label: { Label("删除座位", systemImage: "trash") })
@@ -266,10 +285,12 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section("人员") {
                 ParameterRow("活动强度", occupant.activity)
-                ParameterRow("衣着", occupant.clothing)
-                ParameterRow("显热", occupant.heat.sensible)
-                ParameterRow("对流比例", occupant.heat.convectiveFraction)
-                ParameterRow("潜热", occupant.heat.latent)
+                ParameterRow("衣着厚度", occupant.clothing)
+                DisclosureGroup("身体散热 · 专业设置") {
+                    ParameterRow("散热量", occupant.heat.sensible)
+                    ParameterRow("传给空气的比例", occupant.heat.convectiveFraction)
+                    ParameterRow("水汽带来的热量", occupant.heat.latent)
+                }
             }
             ScheduleEditor(schedule: occupant.schedule)
         })
@@ -280,16 +301,18 @@ public struct InspectorView: View {
               let i = session.project.scenarios[si].inputs.usage.equipment.firstIndex(where: { $0.id == id }) else { return AnyView(EmptyView()) }
         let equipment = bind(\.scenarios[si].inputs.usage.equipment[i])
         return AnyView(Group {
-            Section("设备热源") {
-                ParameterRow("显热", equipment.heat.sensible)
-                ParameterRow("对流比例", equipment.heat.convectiveFraction)
-                ParameterRow("潜热", equipment.heat.latent)
+            Section("电器散热") {
+                ParameterRow("散热量", equipment.heat.sensible)
+                DisclosureGroup("散热方式 · 专业设置") {
+                    ParameterRow("传给空气的比例", equipment.heat.convectiveFraction)
+                    ParameterRow("水汽带来的热量", equipment.heat.latent)
+                }
             }
             ScheduleEditor(schedule: equipment.schedule)
             Button(role: .destructive, action: {
                 session.mutate { $0.scenarios[si].inputs.usage.equipment.remove(at: i) }
                 session.selection = nil
-            }, label: { Label("删除设备热源", systemImage: "trash") })
+            }, label: { Label("删除电器", systemImage: "trash") })
         })
     }
 
@@ -300,9 +323,9 @@ public struct InspectorView: View {
               let i = session.project.scenarios[si].inputs.controls.firstIndex(where: { $0.id == id }) else { return AnyView(EmptyView()) }
         let control = bind(\.scenarios[si].inputs.controls[i])
         return AnyView(Group {
-            Section("控制") {
+            Section("遥控器温度") {
                 ParameterRow("设定温度", control.setpoint)
-                Text("设定温度不等于送风温度。").font(.caption).foregroundStyle(.secondary)
+                Text("这里填写遥控器上的温度。").font(.caption).foregroundStyle(.secondary)
             }
             ScheduleEditor(schedule: control.schedule)
         })
@@ -317,14 +340,16 @@ public struct InspectorView: View {
                 ParameterRow("室外湿度", environment.outdoorHumidity)
                 ParameterRow("室内湿度", environment.indoorHumidity)
             }
-            Section("代表日") {
+            Section("选一天来估算") {
                 TextField("日期 YYYY-MM-DD", text: optionalString(environment.representativeDate))
-                TextField("时区（IANA）", text: optionalString(environment.timeZone))
+                TextField("时区，如 Asia/Hong_Kong", text: optionalString(environment.timeZone))
             }
-            Section("天气文件") {
-                TextField("包内相对路径", text: weatherPath(environment))
-                TextField("SHA-256", text: weatherHash(environment))
-                Text("天气文件校验在能耗适配阶段执行；当前仅记录引用。").font(.caption).foregroundStyle(.secondary)
+            Section {
+                DisclosureGroup("天气文件 · 计算前配置") {
+                    TextField("项目内的文件位置", text: weatherPath(environment))
+                    TextField("文件校验码 SHA-256", text: weatherHash(environment))
+                    Text("当前只记录文件引用；需由熟悉项目文件的人配置。").font(.caption).foregroundStyle(.secondary)
+                }
             }
         })
     }
@@ -351,20 +376,28 @@ public struct InspectorView: View {
         guard let si = scenarioIndex else { return AnyView(EmptyView()) }
         let cost = bind(\.scenarios[si].evaluation.cost)
         return AnyView(Section("费用") {
-            TextField("币种（如 CNY）", text: optionalString(cost.currency))
-            Text("没有报价或电价时保持为空；缺失不会按零费用计算。").font(.caption).foregroundStyle(.secondary)
+            TextField("币种，如 HKD", text: optionalString(cost.currency))
+            Text("电价和报价由项目文件提供；这里只设置币种。未提供价格时无法估算费用。").font(.caption).foregroundStyle(.secondary)
         })
     }
 
     // MARK: - Assumptions
 
     private var assumptionsSection: some View {
-        Section("未知与假设") {
+        Section("参数说明") {
             let items = AssumptionCollector.items(in: session.project)
             if items.isEmpty {
-                Text("当前没有未知参数。").foregroundStyle(.secondary)
+                Text("没有待补充或假设参数。").foregroundStyle(.secondary)
             } else {
-                ForEach(items, id: \.self) { Text($0).font(.caption) }
+                DisclosureGroup("查看来源与假设 · \(items.count) 项") {
+                    ForEach(items, id: \.self) { item in
+                        let path = String(item.split(separator: "：", maxSplits: 1).first ?? "")
+                        DisclosureGroup(InputPresentation.fieldTitle(path)) {
+                            Text(item).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    }
+                }
+                Text("模板只是起点，实际数值请核实。").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -377,13 +410,19 @@ public struct ScheduleEditor: View {
     public init(schedule: Binding<DailySchedule>) { self._schedule = schedule }
 
     public var body: some View {
-        Section("时间表（代表日，分钟）") {
+        Section("每天什么时候使用") {
             ForEach(0..<schedule.intervals.count, id: \.self) { index in
-                HStack {
-                    TextField("起", value: $schedule.intervals[index].startMinute, format: .number).frame(maxWidth: 60)
-                    Text("–")
-                    TextField("止", value: $schedule.intervals[index].endMinute, format: .number).frame(maxWidth: 60)
-                    ParameterRow("比例", $schedule.intervals[index].fraction)
+                DisclosureGroup("\(clock(schedule.intervals[index].startMinute)) – \(clock(schedule.intervals[index].endMinute)) · \(usageTitle(schedule.intervals[index].fraction.value))") {
+                    LabeledContent("开始（从午夜起的分钟数）") {
+                        TextField("开始", value: $schedule.intervals[index].startMinute, format: .number)
+                            .labelsHidden().accessibilityLabel("开始，从午夜起的分钟数").frame(maxWidth: 70)
+                    }
+                    LabeledContent("结束（从午夜起的分钟数）") {
+                        TextField("结束", value: $schedule.intervals[index].endMinute, format: .number)
+                            .labelsHidden().accessibilityLabel("结束，从午夜起的分钟数").frame(maxWidth: 70)
+                    }
+                    ParameterRow("使用比例（0–1）", $schedule.intervals[index].fraction)
+                    Text("0 表示停用，1 表示全部使用；480 分钟是 08:00。").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Button("添加时段") {
@@ -393,7 +432,18 @@ public struct ScheduleEditor: View {
                     startMinute: last, endMinute: 1440,
                     fraction: .known(value: 0, source: .init(kind: .assumed, note: "Added interval; adjust fraction"))))
             }
-            Text("首个物理配置要求时段连续覆盖 0–1440，停用时段比例为 0。").font(.caption).foregroundStyle(.secondary)
+            Text("各时段需覆盖全天；不用的时段将比例设为 0。").font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    private func clock(_ minute: Int) -> String {
+        String(format: "%02d:%02d", minute / 60, minute % 60)
+    }
+
+    private func usageTitle(_ fraction: Double?) -> String {
+        guard let fraction else { return "使用比例待填" }
+        if fraction == 0 { return "停用" }
+        if fraction == 1 { return "全部使用" }
+        return "使用 \((fraction * 100).formatted())%"
     }
 }

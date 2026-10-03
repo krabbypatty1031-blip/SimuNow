@@ -2,6 +2,7 @@ import SwiftUI
 import SimuCore
 import SimuReporting
 import SimuSimulation
+import SimuDesignSystem
 #if os(macOS)
 import AppKit
 #endif
@@ -33,9 +34,9 @@ public struct ReportView: View {
                 preview(content)
             } else {
                 ContentUnavailableView {
-                    Label("结果不可用于报告", systemImage: "doc.text")
+                    Label("先完成一次估算", systemImage: "doc.text")
                 } description: {
-                    Text("报告只收录已完成、质量通过且未过期（输入哈希一致）的运行。请先在「计算任务」页运行 L0 估算。")
+                    Text("到「用电估算」完成计算。结果通过检查，且设置没有改变后，就能导出报告。")
                 }
             }
         }
@@ -47,17 +48,19 @@ public struct ReportView: View {
     private func preview(_ content: ReportContent) -> some View {
         List {
             Section {
-                Text("报告将包含 \(content.entries.count) 个有效方案、\(content.cards.count) 张建议卡、假设与限制清单。")
-                    .font(.caption)
-                Text("范围：L0 平均估算（非 CFD）；代表日不推全年；缺失不填 0；位置级舒适未评价。")
-                    .font(.caption2).foregroundStyle(.secondary)
+                RoomPageIntro("把方案留存下来", detail: "报告包含 \(content.entries.count) 个方案、建议和参数说明。")
+                Text("这是选定一天的平均估算，不能用来判断各座位舒适度。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Section("收录的运行") {
+            Section("将收录的方案") {
                 ForEach(content.entries, id: \.runID) { entry in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.scenarioName).font(.callout)
-                        Text("run \(String(entry.runID.prefix(8))) · 哈希 \(String(entry.inputHash.prefix(12)))… · \(entry.quality)")
-                            .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                        DisclosureGroup("计算记录") {
+                            Text("编号 \(String(entry.runID.prefix(8))) · 哈希 \(String(entry.inputHash.prefix(12)))… · \(entry.quality)")
+                                .font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                        .font(.caption)
                     }
                 }
             }

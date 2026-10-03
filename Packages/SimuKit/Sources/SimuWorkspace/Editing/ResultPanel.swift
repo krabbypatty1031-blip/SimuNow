@@ -20,10 +20,10 @@ public struct LatestRunSummary: View {
         case (let record?, let result?) where record.status == .completed:
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
-                    Text("L0 平均估算").font(.caption2)
+                    Text("房间平均估算").font(.caption2)
                         .padding(.horizontal, 3).background(.quaternary).clipShape(RoundedRectangle(cornerRadius: 3))
                     if result.quality.state == .failed {
-                        Text("质量失败").font(.caption2).foregroundStyle(.red)
+                        Text("结果未通过检查").font(.caption2).foregroundStyle(.red)
                     }
                     if freshness == .stale {
                         Text("待重算").font(.caption2).foregroundStyle(.orange)
@@ -42,10 +42,10 @@ public struct LatestRunSummary: View {
             parts.append("平均室温 \(value.formatted())°C")
         }
         if let value = result.metric(named: "dailyCoolingEnergy")?.doubleValue {
-            parts.append("日冷量 \(value.formatted()) kWh")
+            parts.append("一天制冷需求 \(value.formatted()) kWh")
         }
         if let value = result.metric(named: "estimatedElectricEnergy")?.doubleValue {
-            parts.append("电耗 \(value.formatted()) kWh")
+            parts.append("预计用电 \(value.formatted()) kWh")
         }
         if let metric = result.metric(named: "dailyCost"), let value = metric.doubleValue {
             parts.append("费用 \(value.formatted()) \(metric.unit)")

@@ -24,6 +24,7 @@ public struct WorkspaceView: View {
                 HomeView(store: store)
             }
         }
+        .modifier(RoomTheme())
         .alert("保存失败", isPresented: .constant(saveError != nil)) {
             Button("好") { saveError = nil }
         } message: { Text(saveError ?? "") }
@@ -45,13 +46,15 @@ public struct WorkspaceView: View {
                     }
                 }
                 if let room = session.project.geometry.rooms.first {
-                    Section("几何") {
+                    Section("我的房间") {
                         treeRow("房间：\(room.name)", selection: .room(room.id), session: session)
                         ForEach(room.openings, id: \.id) { opening in
                             treeRow("\(opening.kind == .window ? "窗" : "门")", selection: .opening(opening.id), session: session)
                         }
-                        ForEach(session.project.geometry.obstacles, id: \.id) { obstacle in
-                            treeRow(obstacle.name, selection: .obstacle(obstacle.id), session: session)
+                        DisclosureGroup("家具 · \(session.project.geometry.obstacles.count)") {
+                            ForEach(session.project.geometry.obstacles, id: \.id) { obstacle in
+                                treeRow(obstacle.name, selection: .obstacle(obstacle.id), session: session)
+                            }
                         }
                     }
                 }
@@ -60,20 +63,24 @@ public struct WorkspaceView: View {
                         ForEach(scenario.inputs.hvac, id: \.id) { device in
                             treeRow(device.name, selection: .device(device.id), session: session)
                         }
-                        ForEach(scenario.inputs.usage.seats, id: \.id) { seat in
-                            treeRow(seat.name, selection: .seat(seat.id), session: session)
+                        DisclosureGroup("座位 · \(scenario.inputs.usage.seats.count)") {
+                            ForEach(scenario.inputs.usage.seats, id: \.id) { seat in
+                                treeRow(seat.name, selection: .seat(seat.id), session: session)
+                            }
                         }
-                        ForEach(scenario.inputs.usage.occupants, id: \.id) { occupant in
-                            treeRow("人员", selection: .occupant(occupant.id), session: session)
-                        }
-                        ForEach(scenario.inputs.usage.equipment, id: \.id) { item in
-                            treeRow("设备热源", selection: .equipment(item.id), session: session)
+                        DisclosureGroup("人员与电器") {
+                            ForEach(Array(scenario.inputs.usage.occupants.enumerated()), id: \.element.id) { index, occupant in
+                                treeRow("人员 \(index + 1)", selection: .occupant(occupant.id), session: session)
+                            }
+                            ForEach(Array(scenario.inputs.usage.equipment.enumerated()), id: \.element.id) { index, item in
+                                treeRow("电器 \(index + 1)", selection: .equipment(item.id), session: session)
+                            }
                         }
                         ForEach(scenario.inputs.controls, id: \.id) { control in
-                            treeRow("控制", selection: .control(control.id), session: session)
+                            treeRow("温度与开机时间", selection: .control(control.id), session: session)
                         }
-                        treeRow("环境", selection: .environment, session: session)
-                        treeRow("费用", selection: .cost, session: session)
+                        treeRow("天气与温湿度", selection: .environment, session: session)
+                        treeRow("电价与报价", selection: .cost, session: session)
                     }
                 }
             }
@@ -91,7 +98,7 @@ public struct WorkspaceView: View {
                     }
                     ToolbarItem(placement: .secondaryAction) {
                         Button { showValidation = true } label: {
-                            Label("校验", systemImage: session.validation.passes(.projectIntegrity) ? "checklist" : "exclamationmark.triangle")
+                            Label("检查待填信息", systemImage: session.validation.passes(.inputPreparation) ? "checklist" : "exclamationmark.triangle")
                         }
                     }
                     ToolbarItem(placement: .secondaryAction) {
@@ -107,10 +114,10 @@ public struct WorkspaceView: View {
         .sheet(isPresented: $showValidation) {
             NavigationStack {
                 ValidationIssueListView(session: session)
-                    .navigationTitle("校验")
+                    .navigationTitle("待填信息")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showValidation = false } } }
             }
-            .frame(minWidth: 520, minHeight: 400)
+            .frame(idealWidth: 520, minHeight: 400)
         }
         .confirmationDialog("有未保存的修改", isPresented: $showCloseConfirm) {
             Button("保存并关闭") { save(session) ; store.closeProject() }
@@ -164,22 +171,53 @@ public struct WorkspaceView: View {
                 Spacer()
             }
             .padding(.horizontal, 8).padding(.top, 6)
+            Text(viewMode == .plan ? "点选对象修改设置；拖动可调整位置。" : "这里查看房间外观，不显示温度或气流结果。")
+                .font(.caption).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12).padding(.top, 8)
+            if viewMode == .plan {
+                HStack(spacing: 14) {
+                    Label("空调", systemImage: "rectangle.fill").foregroundStyle(.blue)
+                    Label("座位", systemImage: "circle.fill").foregroundStyle(.green)
+                    Label("家具", systemImage: "rectangle.fill").foregroundStyle(.secondary)
+                }
+                .font(.caption2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12).padding(.top, 6)
+            }
             if viewMode == .preview {
                 previewPane(session)
             } else {
                 TopDownRoomView(session: session)
-                HStack {
-                    Button("添加座位") { session.selection = session.addSeat() }
-                    Button("添加家具") { session.selection = session.addObstacle() }
-                    Button("添加空调") { session.selection = session.addDefaultDevice() }
-                    Spacer()
-                    Text(session.validation.passes(.inputPreparation) ? "输入就绪" : "输入未完成")
-                        .font(.caption)
-                        .foregroundStyle(session.validation.passes(.inputPreparation) ? .green : .orange)
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        editorButtons(session)
+                        Spacer()
+                        readinessButton(session)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack { editorButtons(session) }
+                        readinessButton(session)
+                    }
                 }
                 .padding(8)
             }
         }
+    }
+
+    @ViewBuilder
+    private func editorButtons(_ session: ProjectSession) -> some View {
+        Button("添加座位") { session.selection = session.addSeat() }
+        Button("添加家具") { session.selection = session.addObstacle() }
+        Button("添加空调") { session.selection = session.addDefaultDevice() }
+    }
+
+    private func readinessButton(_ session: ProjectSession) -> some View {
+        Button { showValidation = true } label: {
+            Label(session.validation.passes(.inputPreparation) ? "可以估算" : "还有信息待填",
+                  systemImage: session.validation.passes(.inputPreparation) ? "checkmark.circle" : "exclamationmark.circle")
+        }
+        .buttonStyle(.borderless).font(.caption)
     }
 
     /// Read-only 3D geometry preview (RealityView on macOS 14+; iOS 17 shows the fallback note).
@@ -194,12 +232,12 @@ public struct WorkspaceView: View {
                                                 registry: session.registry) {
             RoomPreview3D(layout: layout)
         } else {
-            ContentUnavailableView("几何未完成", systemImage: "cube.transparent",
-                                   description: Text("房间几何未完成或不支持；完成尺寸后可预览。"))
+            ContentUnavailableView("先填写房间尺寸", systemImage: "cube.transparent",
+                                   description: Text("尺寸齐全后，可以查看房间外观。"))
         }
         #else
-        ContentUnavailableView("3D 预览在 macOS 提供", systemImage: "cube.transparent",
-                               description: Text("iOS 渲染层（RealityView 需 iOS 18+）在后续阶段决定；当前请在 Mac 上查看。"))
+        ContentUnavailableView("请在 Mac 上查看 3D", systemImage: "cube.transparent",
+                               description: Text("手机和平板上可以使用俯视图布置房间。"))
         #endif
     }
 

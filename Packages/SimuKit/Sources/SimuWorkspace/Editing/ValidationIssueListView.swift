@@ -10,30 +10,31 @@ public struct ValidationIssueListView: View {
     public var body: some View {
         List {
             Section {
-                statusRow("项目完整性", passes: session.validation.passes(.projectIntegrity))
-                statusRow("计算输入就绪", passes: session.validation.passes(.inputPreparation))
+                statusRow("房间设置是否有效", passes: session.validation.passes(.projectIntegrity))
+                statusRow("是否可以开始估算", passes: session.validation.passes(.inputPreparation))
             }
             let issues = session.validation.issues
             if issues.isEmpty {
-                Section { Text("没有校验问题。").foregroundStyle(.secondary) }
+                Section { Text("信息已齐，可以开始估算。").foregroundStyle(.secondary) }
             } else {
-                Section("问题（\(issues.count)）") {
+                Section("待补充或核对 · \(issues.count) 项") {
                     ForEach(Array(issues.enumerated()), id: \.offset) { _, issue in
-                        Button {
-                            if let id = issue.entityID { session.selection = session.selection(forEntityID: id) }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(issue.code).font(.caption.monospaced())
-                                    Spacer()
-                                    Text(issue.blocks == [.projectIntegrity, .inputPreparation] ? "完整性" : "输入")
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(InputPresentation.fieldTitle(issue.path)).font(.headline)
+                            Text(InputPresentation.action(for: issue)).font(.subheadline).foregroundStyle(.secondary)
+                            if let id = issue.entityID, let selection = session.selection(forEntityID: id) {
+                                Button("在设置中选中") { session.selection = selection }
+                                    .font(.caption)
+                                Text("关闭此列表后，在右侧查看已选对象。").font(.caption2).foregroundStyle(.secondary)
+                            }
+                            DisclosureGroup("查看详细原因") {
                                 Text(issue.message).font(.caption)
-                                Text(issue.path).font(.caption2.monospaced()).foregroundStyle(.secondary)
+                                Text("\(issue.code)\n\(issue.path)")
+                                    .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
                             }
                         }
-                        .disabled(issue.entityID == nil)
+                        .padding(.vertical, 4)
                     }
                 }
             }

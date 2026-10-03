@@ -16,42 +16,51 @@ public struct ParameterRow<Q: QuantityTag>: View {
 
     public var body: some View {
         switch parameter {
-        case .known(let value, let source, _):
+        case .known(_, let source, _):
             LabeledContent(label) {
                 HStack(spacing: 4) {
                     TextField("数值", value: knownValueBinding, format: .number)
+                        .labelsHidden()
+                        .accessibilityLabel("\(label)，单位 \(Q.unit)")
                         .multilineTextAlignment(.trailing)
                         .frame(maxWidth: 120)
-                    Text(Q.unit).foregroundStyle(.secondary)
+                    Text(InputPresentation.unitTitle(Q.unit)).foregroundStyle(.secondary)
                 }
             }
-            SourceEditor(label: "来源", source: sourceBinding)
-            Button("标记为未知") { parameter = .unknown(reason: "") ; draft = "" ; entering = false }
-                .font(.caption)
+            DisclosureGroup("数值来源 · \(InputPresentation.sourceTitle(source.kind))") {
+                SourceEditor(label: "来自哪里", source: sourceBinding)
+                Button("暂不填写这个数值") { parameter = .unknown(reason: "") ; draft = "" ; entering = false }
+                    .font(.caption)
+            }
+            .font(.caption).foregroundStyle(.secondary)
         case .unknown(let reason):
             LabeledContent(label) {
                 if entering {
                     HStack(spacing: 4) {
                         TextField("输入数值", text: $draft)
+                            .labelsHidden()
+                            .accessibilityLabel("\(label)，单位 \(Q.unit)")
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 120)
-                        Text(Q.unit).foregroundStyle(.secondary)
+                        Text(InputPresentation.unitTitle(Q.unit)).foregroundStyle(.secondary)
                         Button("确定") { commitDraft() }.disabled(Double(draft.trimmingCharacters(in: .whitespaces)) == nil)
                         Button("取消") { entering = false ; draft = "" }
                     }
                 } else {
                     HStack {
-                        Text("未知").foregroundStyle(.secondary)
+                        Text("待填写").foregroundStyle(.secondary)
                         Button("填写…") { entering = true ; draft = "" }
                     }
                 }
             }
             if !entering {
-                TextField("未知原因（必填）", text: reasonBinding)
-                    .font(.caption)
-                if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("需要说明原因").font(.caption2).foregroundStyle(.orange)
+                DisclosureGroup("为什么还没填写") {
+                    TextField("例如：尚未测量（必填）", text: reasonBinding).font(.caption)
+                    if reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("请说明原因，便于之后补齐。").font(.caption2).foregroundStyle(.orange)
+                    }
                 }
+                .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -98,17 +107,17 @@ public struct SourceEditor: View {
     public var body: some View {
         Picker(label, selection: $source.kind) {
             Text("实测").tag(ParameterSource.measured)
-            Text("厂商").tag(ParameterSource.manufacturer)
-            Text("预设").tag(ParameterSource.preset)
+            Text("设备说明书").tag(ParameterSource.manufacturer)
+            Text("模板预设").tag(ParameterSource.preset)
             Text("扫描").tag(ParameterSource.scan)
-            Text("用户").tag(ParameterSource.user)
-            Text("假设").tag(ParameterSource.assumed)
+            Text("自己填写").tag(ParameterSource.user)
+            Text("暂用假设").tag(ParameterSource.assumed)
         }
         .pickerStyle(.menu)
         .font(.caption)
         switch source.kind {
         case .measured, .manufacturer, .preset:
-            TextField("引用（必填）", text: referenceBinding).font(.caption)
+            TextField("资料名称或出处（必填）", text: referenceBinding).font(.caption)
         case .assumed:
             TextField("假设说明（必填）", text: noteBinding).font(.caption)
         case .scan, .user:
@@ -136,6 +145,8 @@ public struct UnitNumberRow: View {
         LabeledContent(label) {
             HStack(spacing: 4) {
                 TextField("数值", value: $value, format: .number)
+                    .labelsHidden()
+                    .accessibilityLabel("\(label)，单位 \(unit)")
                     .multilineTextAlignment(.trailing)
                     .frame(maxWidth: 120)
                 Text(unit).foregroundStyle(.secondary)

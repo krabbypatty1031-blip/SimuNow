@@ -1,6 +1,7 @@
 import SwiftUI
 import SimuCore
 import SimuSimulation
+import SimuDesignSystem
 
 /// Runs page: submit L0 runs, watch progress, inspect quality/assumptions, cancel.
 /// L0 is a lumped average estimate — the page labels it everywhere and never shows point results.
@@ -19,14 +20,24 @@ public struct RunsView: View {
     public var body: some View {
         Group {
             if let reason = runStore.client.unavailableReason {
-                ContentUnavailableView {
-                    Label("执行器不可用", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(reason)
-                } actions: {
-                    Text("诊断命令：PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor")
-                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 16) {
+                    ContentUnavailableView {
+                        Label("这台设备还不能估算", systemImage: "desktopcomputer")
+                    } description: {
+                        #if os(macOS)
+                        Text("本地计算工具尚未连接，请由项目维护者完成配置。房间信息仍可编辑和保存。")
+                        #else
+                        Text("请在 Mac 上运行估算。手机和平板上可以布置房间、查看已有结果。")
+                        #endif
+                    }
+                    DisclosureGroup("计算工具配置详情") {
+                        Text(reason).font(.caption).textSelection(.enabled)
+                        Text("诊断命令：PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor")
+                            .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                    .padding(.horizontal, 20)
                 }
+                .frame(maxWidth: 560)
             } else {
                 runList
             }
@@ -35,39 +46,42 @@ public struct RunsView: View {
         .sheet(isPresented: $showValidation) {
             NavigationStack {
                 ValidationIssueListView(session: session)
-                    .navigationTitle("校验")
+                    .navigationTitle("待填信息")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showValidation = false } } }
             }
-            .frame(minWidth: 520, minHeight: 400)
+            .frame(idealWidth: 520, minHeight: 400)
         }
     }
 
     private var runList: some View {
         List {
             Section {
+                RoomPageIntro("看看这一天会用多少电", detail: "当前方案：\(session.currentScenario?.name ?? "尚未选择")")
                 HStack {
-                    Button("运行 L0 平均估算（当前方案）") {
+                    Button("估算当前方案") {
                         Task { await runStore.submitL0(project: session.project, scenarioID: session.currentScenarioID,
                                                        validator: session.validator, registry: session.registry) }
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(!inputReady)
                     if !inputReady {
-                        Button("查看校验问题") { showValidation = true }
+                        Button("查看待填信息") { showValidation = true }
                             .font(.caption)
                     }
                     Spacer()
                 }
-                Text("L0 是集总平均估算：总量与平均值，不是逐点 CFD 结果。修改方案输入后旧结果标记「待重算」，不会被覆盖。")
+                Text("快速估算整个房间的平均情况，不提供各座位温度或气流。")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = runStore.lastError {
-                    Text(error).font(.caption).foregroundStyle(.orange)
+                    Text("这次估算未能开始。").font(.caption).foregroundStyle(.orange)
+                    DisclosureGroup("查看原因") { Text(error).font(.caption).textSelection(.enabled) }
                 }
             }
             ForEach(session.project.scenarios, id: \.id) { scenario in
                 Section(header: scenarioHeader(scenario)) {
                     let runs = runStore.records(for: scenario.id)
                     if runs.isEmpty {
-                        Text("尚无运行记录").font(.caption).foregroundStyle(.secondary)
+                        Text("尚未估算。选好方案后，点击「估算当前方案」。").font(.caption).foregroundStyle(.secondary)
                     } else {
                         ForEach(runs) { record in
                             RunRow(record: record, freshness: record.freshness(relativeTo: runStore.currentHash(for: scenario.id)),
@@ -100,8 +114,8 @@ struct RunRow: View {
         } label: {
             HStack(spacing: 8) {
                 statusIcon
-                Text(String(record.identity.runID.uuidString.prefix(8))).font(.caption.monospaced())
-                Text("L0 平均估算").font(.caption2)
+                Text(record.status.title).font(.subheadline)
+                Text("房间平均估算").font(.caption2)
                     .padding(.horizontal, 4).padding(.vertical, 1)
                     .background(.quaternary).clipShape(RoundedRectangle(cornerRadius: 3))
                 qualityBadge
@@ -133,7 +147,7 @@ struct RunRow: View {
     @ViewBuilder
     private var qualityBadge: some View {
         if let quality = record.result?.quality {
-            Text(quality.state == .passed ? "质量通过" : quality.state == .failed ? "质量失败" : "未评估")
+            Text(quality.state == .passed ? "检查通过" : quality.state == .failed ? "检查未通过" : "尚未检查")
                 .font(.caption2)
                 .foregroundStyle(quality.state == .passed ? .green : quality.state == .failed ? .red : .secondary)
         }
@@ -154,8 +168,10 @@ struct RunRow: View {
                     MetricTable(metrics: result.metrics)
                 }
                 if !result.assumptions.isEmpty {
-                    Text("假设").font(.caption.bold())
-                    ForEach(result.assumptions, id: \.self) { Text($0).font(.caption2).foregroundStyle(.secondary) }
+                    DisclosureGroup("估算用了哪些假设") {
+                        ForEach(result.assumptions, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+                    }
+                    .font(.caption)
                 }
                 if let error = result.error {
                     Text("错误（\(error.kind)）：\(error.message)").font(.caption).foregroundStyle(.red)
@@ -164,15 +180,18 @@ struct RunRow: View {
             if let message = record.errorMessage {
                 Text(message).font(.caption).foregroundStyle(.red)
             }
-            if !record.events.isEmpty {
-                Text("事件（最近 \(record.events.count) 条）").font(.caption.bold())
-                ForEach(record.events, id: \.sequence) { event in
-                    Text("#\(event.sequence) \(event.timestamp) \(event.eventType.rawValue)\(event.stage.map { " · \($0)" } ?? "")")
-                        .font(.caption2.monospaced()).foregroundStyle(.secondary)
+            DisclosureGroup("计算编号与技术记录") {
+                Text("L0 · \(record.identity.runID.uuidString)").font(.caption2.monospaced()).textSelection(.enabled)
+                if !record.events.isEmpty {
+                    ForEach(record.events, id: \.sequence) { event in
+                        Text("#\(event.sequence) \(event.timestamp) \(event.eventType.rawValue)\(event.stage.map { " · \($0)" } ?? "")")
+                            .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    }
                 }
+                Text("运行目录：\(record.runDirectory.path)").font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
-            Text("运行目录：\(record.runDirectory.path)").font(.caption2.monospaced()).foregroundStyle(.secondary)
-                .textSelection(.enabled)
+            .font(.caption)
         }
         .padding(.vertical, 4)
     }
@@ -187,15 +206,20 @@ public struct MetricTable: View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(metrics, id: \.name) { metric in
                 HStack {
-                    Text(RunsMetricTitles.title(for: metric.name)).font(.caption)
+                    Text(InputPresentation.metricTitle(metric.name)).font(.caption)
                     Spacer()
                     if metric.isMissing {
-                        Text("缺失：\(metric.missingReason ?? "未知原因")").font(.caption).foregroundStyle(.secondary)
+                        Text("暂无法估算").font(.caption).foregroundStyle(.secondary)
                     } else if let flag = metric.boolValue {
                         Text(flag ? "是" : "否").font(.caption)
                     } else if let value = metric.doubleValue {
                         Text("\(value.formatted()) \(metric.unit)").font(.caption.monospacedDigit())
                     }
+                }
+                if metric.isMissing {
+                    DisclosureGroup("为什么没有这个结果") {
+                        Text(metric.missingReason ?? "计算没有提供这个数值。").font(.caption2).foregroundStyle(.secondary)
+                    }.font(.caption2)
                 }
             }
         }

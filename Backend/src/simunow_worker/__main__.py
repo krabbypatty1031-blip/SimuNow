@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 from . import __version__
+from .models.task import has_execute_bit
 
 # Stdout is the JSON contract. Workflow logs stay on stderr so a caller can parse doctor.
 logger = logging.getLogger("simunow.worker")
@@ -57,7 +58,9 @@ def _probe_l1(root: Path | None) -> dict:
     if root is None:
         return _missing("l1 engines root missing")
     binary = root / "EnergyPlus" / "energyplus"
-    if not binary.is_file() or not os.access(binary, os.X_OK):
+    # Execute bits via stat: os.access X_OK is denied in the App sandbox for
+    # staged paths (2026-10-03 hand test); --version stays the real check.
+    if not binary.is_file() or not has_execute_bit(binary):
         logger.warning("l1 binary missing or not executable")
         return _missing("l1 binary missing")
     logger.info("probing l1 energyplus --version")

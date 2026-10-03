@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 IDENTITY_KEYS = ("runID", "scenarioID", "inputHash")
 EVENT_TYPES = {"accepted", "progress", "log", "quality", "completed", "failed", "cancelled"}
@@ -38,6 +39,22 @@ def is_safe_snapshot_path(path: str) -> bool:
     if "/downloads/" in lowered or "/desktop/" in lowered:
         return False
     return True
+
+
+def has_execute_bit(path: Path) -> bool:
+    """POSIX execute bits via stat, never os.access(X_OK).
+
+    App Sandbox denies access(X_OK) for staged container paths and
+    user-selected engine directories alike while `test -x` passes in a shell
+    (2026-10-03 in-app hand test). stat needs only read access, which the
+    sandbox grants, and it follows symlinks, so the staged
+    `energyplus -> energyplus-25.2.0` layout works. Whether the engine
+    truly runs stays the run's own evidence, never this probe's claim.
+    """
+    try:
+        return bool(path.stat().st_mode & 0o111)
+    except OSError:
+        return False
 
 
 def validate_request(request: dict, snapshot: bytes) -> None:

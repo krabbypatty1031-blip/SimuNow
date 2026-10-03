@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .models.l2_accounting import evaluate_l2, quality_detail
 from .models.l2_room import project_to_l2_room
-from .models.task import validate_request
+from .models.task import has_execute_bit, validate_request
 from .task_runner import _emit, _event
 
 
@@ -51,7 +51,9 @@ def _engines_root() -> Path | None:
 
 def _openfoam_wrapper(root: Path) -> Path | None:
     script = root / "openfoam.sh"
-    if script.is_file() and os.access(script, os.X_OK):
+    # Execute bits via stat: os.access X_OK is denied in the App sandbox for
+    # staged paths (2026-10-03 hand test); the run stays the engine's evidence.
+    if has_execute_bit(script):
         return script
     return None
 

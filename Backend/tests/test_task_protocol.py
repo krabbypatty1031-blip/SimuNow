@@ -1,11 +1,45 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from simunow_worker.models.task import EventStream, TaskProtocolError, parse_result, sha256_hex, validate_request
+from simunow_worker.models.task import (
+    EventStream,
+    TaskProtocolError,
+    has_execute_bit,
+    parse_result,
+    sha256_hex,
+    validate_request,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "Fixtures" / "task"
+
+
+class ExecuteBitProbeTests(unittest.TestCase):
+    def test_has_execute_bit_reads_stat_bits_not_access(self):
+        """Regression anchor (2026-10-03 hand test): App Sandbox denies
+        access(X_OK) for staged paths while test -x passes in a shell, so
+        presence probes must read POSIX bits from stat instead."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            exe = root / "engine.sh"
+            exe.write_text("#!/bin/sh\nexit 0\n")
+            exe.chmod(0o755)
+            self.assertTrue(has_execute_bit(exe))
+
+            plain = root / "notes.txt"
+            plain.write_text("plain text")
+            plain.chmod(0o644)
+            self.assertFalse(has_execute_bit(plain))
+
+            # stat follows symlinks: the staged layout is
+            # energyplus -> energyplus-25.2.0 inside the same directory.
+            link = root / "energyplus"
+            link.symlink_to(exe)
+            self.assertTrue(has_execute_bit(link))
+
+            self.assertFalse(has_execute_bit(root / "missing"))
 
 
 class TaskProtocolTests(unittest.TestCase):

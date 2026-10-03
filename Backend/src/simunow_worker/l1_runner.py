@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .models.l1_accounting import evaluate_l1
 from .models.l1_room import project_to_l1_room
-from .models.task import TaskProtocolError, is_safe_snapshot_path, sha256_hex, validate_request
+from .models.task import TaskProtocolError, has_execute_bit, is_safe_snapshot_path, sha256_hex, validate_request
 from .task_runner import _emit, _event
 
 EPW_NAME = "CHN_Hong.Kong.SAR.450070_CityUHK.epw"
@@ -49,7 +49,9 @@ def _engines_root() -> Path | None:
 
 def _energyplus(root: Path) -> Path | None:
     binary = root / "EnergyPlus" / "energyplus"
-    if binary.is_file() and os.access(binary, os.X_OK):
+    # Execute bits via stat: os.access X_OK is denied in the App sandbox for
+    # staged paths (2026-10-03 hand test); the run stays the engine's evidence.
+    if has_execute_bit(binary):
         return binary
     return None
 

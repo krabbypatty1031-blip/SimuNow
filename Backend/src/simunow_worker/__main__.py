@@ -148,7 +148,7 @@ def build_report() -> dict:
 def main():
     _configure_logging()
     parser = argparse.ArgumentParser(prog="simunow-worker")
-    parser.add_argument("command", choices=["doctor", "stub-task", "run-l1"])
+    parser.add_argument("command", choices=["doctor", "stub-task", "run-l1", "run-l2"])
     args, rest = parser.parse_known_args()
     if args.command == "stub-task":
         from .task_runner import run_stub
@@ -158,6 +158,10 @@ def main():
         from .l1_runner import run_l1_task
 
         raise SystemExit(run_l1_task(rest))
+    if args.command == "run-l2":
+        from .l2_runner import run_l2_task
+
+        raise SystemExit(run_l2_task(rest))
     # ensure_ascii stays off so the repair hint is readable Chinese, not \\u escapes.
     print(json.dumps(build_report(), ensure_ascii=False))
 

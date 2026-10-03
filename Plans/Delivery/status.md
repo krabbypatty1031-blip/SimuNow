@@ -1,6 +1,6 @@
 # 实施状态
 
-日期：2026-10-03。当前阶段：**P3 产品门（App 提交代表日 L1）已落地**。Mac 可改人数/占用时段并提交不可变 L1；未配置引擎时按钮不可点。OpenFOAM / 场 / 舒适仍属 P4/P5。Mac App 不能当产品 CFD 或定量推荐。
+日期：2026-10-03。当前阶段：**P4 进行中（几何与 case）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；缺引擎时 `run-l2` 失败且座位温度 omitted。尚未求解、采样、舒适或视口。Mac App 不能当产品 CFD。
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
@@ -34,13 +34,14 @@
 | P3-10 结果与安全 | 电耗/边界；stale；失败不坏稿 | `WorkspaceL1Tests`；年电量显示未知 |
 | P3-11 沙盒 App L1 | 包内 WorkerTree + 系统 Python + 用户引擎 | `WorkerStagingTests`；`/usr/bin/python3` doctor；App 资源跑通 `q_cool_w>0`；sandbox 仍 true |
 | P3 手测 | 沙盒 Mac 提交办公室代表日 L1 成功 | 冷量 3099.335 W；电功率 1033.112 W = 冷量/COP；全年未知；送风 16 ≠ 设定 26；回风 RET1；新风 0.02 / 回风 0.088 m³/s；新鲜度「当前输入」 |
-| L0/L3 与场显示接入 | 待开发 | P4 起 |
+| P4-01 几何与 case | 草稿→L2 房间；可写 case；缺引擎不编造温度 | `L2RoomMappingTests`；Python `test_l2_room` / `test_l2_runner`；office 送风 16≠26；人数≠座位；`run-l2` failed + `seat_t_c` omitted |
+| L0/L3 与场显示接入 | 进行中 | P4-02 起质量；视口仍空 |
 | 场渲染/舒适/成本/报告 | 待开发 | P4/P5 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P3 产品闭环已手测并合入 `dev`（仓库无 `dest` 分支，按 P2 同一条集成线）。下一步是 P4 场显示与 OpenFOAM，不是把这一页当成 CFD 或全年节能。未推远程。
+P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。下一步 P4-02 质量门禁，然后才是求解与视口。未推远程。
 
 ## P3 阶段结论
 

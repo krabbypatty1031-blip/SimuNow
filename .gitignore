@@ -16,6 +16,7 @@ __pycache__/
 !/test/p1/write_idf.py
 !/test/p1/run_l1.py
 !/test/p1/room_input.py
+!/test/p1/write_openfoam_room.py
 .env
 Artifacts/
 *.simunow/

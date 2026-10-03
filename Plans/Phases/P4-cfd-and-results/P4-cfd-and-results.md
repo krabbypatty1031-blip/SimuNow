@@ -29,3 +29,18 @@ Mac 参数变化能驱动真实 CFD，展示位置级指标与场。前置 P1 �
 
 真实修改风向后结果变化可解释；检查失败禁止有效推荐；采样和显示密度分开。
 复杂体积渲染先退到后处理生成的切片/折线几何；数值质量失败则修复工况或几何，不能只修颜色。
+
+## 子任务索引
+
+可验收拆分（writing-plans + inline 执行）。状态只在本目录勾选，事实结论仍只写 `Plans/Delivery/status.md`。
+
+| 父项 | 子任务文件 | 证明什么 |
+|---|---|---|
+| P4-01 | [P4-01-l2-case.md](P4-01-l2-case.md) | 草稿→L2 房间；可写 case；改变量改哈希 |
+| P4-02 | [P4-02-quality.md](P4-02-quality.md) | 质量失败不能当有效场 |
+| P4-03 | [P4-03-sampling.md](P4-03-sampling.md) | 座位在流体域，实体内不是室温 |
+| P4-04 | [P4-04-comfort.md](P4-04-comfort.md) | 舒适缺输入不伪造 |
+| P4-05 | [P4-05-viewport.md](P4-05-viewport.md) | 房间几何 + 真切片，无假彩色 |
+| P4-06 | [P4-06-candidates.md](P4-06-candidates.md) | 三方案同口径、同色标 |
+
+总清单：[P4-checklist.md](P4-checklist.md)。未勾选不得把 P4 标为完成。费用、建议、PDF 属 P5。未配置引擎时不得出现空的「开始计算」。

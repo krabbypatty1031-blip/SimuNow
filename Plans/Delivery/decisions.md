@@ -68,6 +68,15 @@
 影响：`comfortInputs`（mrtC/rhPct/clo/met）为 `evaluate_l2` 上下文新键，runner 暂不传（无来源）→ 指标 `seat_pmv_min/max`、`seat_ppd_max` omitted + `reason` 列出缺失项；契约 metrics 行加可选 `reason`、座位行加可选 `pmv`/`ppd`（schema + Swift + 透传同步）；部分座位超适用域时聚合只覆盖可评座位并在 `reason` 披露排除口径。P5 若给草稿加舒适假设，runner 补传该键即可。
 验证：`Backend/tests/test_comfort.py`（算法锚点、Table 2、单调性、六项守卫 + pa/PMV 域、缺/部分/超域座位、evaluate_l2 三态）；钉版 run 重生成 `Fixtures/task/result-l2.json`（座位值与旧 fixture 逐位一致 + 三条舒适 omitted 带 reason）；Python 70 + Swift 94 全绿；mac/ios BUILD SUCCEEDED。
 
+## ADR-011：App 内 L2 走 staged 树与 test/engines 引擎路径，docker 可达性运行时自证（已接受）
+
+日期：2026-10-03。
+背景：P4 Goal 要求 Mac 改一个空间参数后提交代表工况 L2。App 沙盒内跑 OpenFOAM 的现实约束：仓库 `test/engines/openfoam.sh` 是 docker 包装（镜像 `simunow/openfoam:2512`），沙盒 App 访问 `/var/run/docker.sock` 与全局 docker CLI 未必可用。
+备选：(a) 沙盒内直装 OpenFOAM——版本锁定与打包成本高，P1 验证后再议；(b) 全局关闭 sandbox——违反部署基线；(c) staged 树 + 文件探测 isConfigured，docker 可达性交给运行时，失败即 failed 不编造。
+选择：(c)。staged 树扩展为九个 P1 脚本（L1 三件 + L2 六件：`run_room`/`write_openfoam_room`/`quality`/`sample_seats`/`foam_io`/`field_slice`）；`stageEngines` 落位 `runtime/test/engines`（与 `run_room.py` 硬路径 `repo/test/engines/openfoam.sh` 一致）并拷贝 `openfoam.sh`（源缺失时仅 L1 可用）；`LocalProcessL2Client`（macOS）以 `SIMUNOW_ENGINES_ROOT` 指 staged 引擎目录、`workerCommand="run-l2"`、超时 900 s；iOS 保持 `UnconfiguredL2TaskClient`。沙盒内 docker 不可达时 run 失败、座位/舒适指标 omitted，不降级为估算。
+影响：`enginesURL(in:)` 语义从 `runtime/engines` 改为 `runtime/test/engines`（L1 probe 仍按 enginesRoot 下 `EnergyPlus/energyplus` 相对解析，行为不变）；`Scripts/generate_project.py` Stage WorkerTree 同步九脚本；App 内首跑 L2 的沙盒 docker 可达性待手测记录，未验证前不宣称 App 内闭环。
+验证：`WorkerStagingTests`（六 L2 脚本 staged、engines 落位 test/engines）；`L2ClientTests`（未配置拒绝、wrapper 探测、field-slice 读取/缺文件 nil）；`Backend/tests/test_l2_staged.py` 以 subprocess 重建 staged 树全链路跑 `run-l2`（succeeded + quality passed + field-slice.json 落位，17.7 s）；Python 76 + Swift 113 全绿。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。

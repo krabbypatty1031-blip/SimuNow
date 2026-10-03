@@ -116,7 +116,8 @@ public struct WorkspaceView: View {
         if store.project == nil {
             emptyProjectPane
         } else {
-            SimulationViewport(draft: store.project)
+            // The slice only exists for a quality-passed L2 run; nil draws no fake color.
+            SimulationViewport(draft: store.project, field: store.lastFieldSlice)
         }
         #else
         NavigationStack {
@@ -124,7 +125,7 @@ public struct WorkspaceView: View {
                 if store.project == nil {
                     emptyProjectPane
                 } else {
-                    SimulationViewport(draft: store.project)
+                    SimulationViewport(draft: store.project, field: store.lastFieldSlice)
                 }
                 NavigationLink("编辑房间参数") {
                     RoomEditorForm(store: store)
@@ -142,15 +143,16 @@ public struct WorkspaceView: View {
             EmptyStateView(
                 "暂无计算任务",
                 symbol: "waveform.path",
-                message: "配置引擎并提交代表日 L1 后，这里显示进度、电耗与边界。不是气流场。"
+                message: "配置引擎并提交代表日 L1 或代表工况 L2 后，这里显示进度、指标与质量状态。L2 是稳态气流场，不是全年 8760 小时。"
             )
         } else {
             Form {
                 Section("任务") {
                     LabeledContent("状态", value: store.activeRun?.state.rawValue ?? "无")
+                    LabeledContent("质量", value: store.lastResult?.quality.rawValue ?? "未评价")
                     LabeledContent("新鲜度", value: freshnessText)
                     if store.isSubmitting {
-                        Text("正在求解代表日 L1…")
+                        Text("正在求解…")
                             .font(.footnote)
                     }
                     if let message = store.runMessage {
@@ -165,6 +167,38 @@ public struct WorkspaceView: View {
                     Text("制冷量不是电功率。一天不能推全年。围护仍是引擎默认构造。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+                Section("L2 座位指标（稳态气流场）") {
+                    LabeledContent("座位最低温", value: store.metricText(named: "seat_t_c_min"))
+                    LabeledContent("座位最高温", value: store.metricText(named: "seat_t_c_max"))
+                    LabeledContent("座位最大风速", value: store.metricText(named: "seat_u_mag_max"))
+                    LabeledContent("座位 PMV 最低", value: store.metricText(named: "seat_pmv_min"))
+                    LabeledContent("座位 PPD 最高", value: store.metricText(named: "seat_ppd_max"))
+                    if let reason = store.lastResult?.metric(named: "seat_pmv_min")?.reason {
+                        Text(reason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("座位 PMV 不可评价原因")
+                    }
+                    Text("座位是采样点不是热源；PMV 是模型判据不是实测满意率；稳态场不表示降温时间。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let slice = store.lastFieldSlice {
+                    Section("温度切片") {
+                        LabeledContent("高度", value: String(format: "%.2f m", slice.zM))
+                        LabeledContent("范围", value: sliceRangeText(slice))
+                        LabeledContent("有效格点", value: "\(slice.stats.validCount)")
+                        Text("切片只随质量通过的场出现；格值取最近求解单元，显示密度不进座位数字。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section("温度切片") {
+                        Text("无质量通过的场，暂无切片。未通过的数据不当有效结果。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Section("L2 边界（未跑 OpenFOAM）") {
                     LabeledContent("送风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
@@ -198,6 +232,14 @@ public struct WorkspaceView: View {
         case .stale: "输入已改，待重算"
         case nil: "无结果"
         }
+    }
+
+    /// Same physical range text as the viewport legend; nil stats stay unknown.
+    private func sliceRangeText(_ slice: FieldSlice) -> String {
+        guard let minC = slice.stats.minC, let maxC = slice.stats.maxC else {
+            return "未知"
+        }
+        return String(format: "%.1f – %.1f °C", minC, maxC)
     }
 
     private func temperatureText(_ value: Double?, unit: String) -> String {

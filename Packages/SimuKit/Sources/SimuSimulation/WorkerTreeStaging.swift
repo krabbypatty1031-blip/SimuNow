@@ -30,7 +30,19 @@ public enum WorkerTreeStaging {
         )
     }
 
-    /// Copy only the Python worker and P1 IDF helpers. Does not copy EnergyPlus.
+    /// P1 helpers the L2 pipeline imports by module name. The staged tree must
+    /// carry all of them or `run-l2` fails on import after staging.
+    public static let l2PipelineScripts = [
+        "run_room.py",
+        "write_openfoam_room.py",
+        "quality.py",
+        "sample_seats.py",
+        "foam_io.py",
+        "field_slice.py"
+    ]
+
+    /// Copy only the Python worker and P1 helpers (L1 IDF writer + L2 CFD
+    /// pipeline). Does not copy EnergyPlus or OpenFOAM.
     public static func stageWorker(from sourceRoot: URL, into runtimeRoot: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: runtimeRoot, withIntermediateDirectories: true)
@@ -40,7 +52,7 @@ public enum WorkerTreeStaging {
         )
         let p1Dest = runtimeRoot.appendingPathComponent("test/p1", isDirectory: true)
         try fm.createDirectory(at: p1Dest, withIntermediateDirectories: true)
-        for name in ["write_idf.py", "run_l1.py", "room_input.py"] {
+        for name in ["write_idf.py", "run_l1.py", "room_input.py"] + l2PipelineScripts {
             let src = sourceRoot.appendingPathComponent("test/p1/\(name)")
             guard fm.fileExists(atPath: src.path) else {
                 throw StagingError.missingWorkerFile(name)
@@ -53,9 +65,14 @@ public enum WorkerTreeStaging {
         }
     }
 
-    /// Copy weather always; copy EnergyPlus when the destination binary is missing.
+    /// Copy weather always; copy EnergyPlus when the destination binary is
+    /// missing; copy the OpenFOAM wrapper when the source has one, so an L2
+    /// user who installed OpenFOAM can run from the staged tree. Sources
+    /// without openfoam.sh still stage for L1.
     public static func stageEngines(from enginesRoot: URL, into runtimeRoot: URL) throws {
-        let dest = runtimeRoot.appendingPathComponent("engines", isDirectory: true)
+        // run_room.py resolves the wrapper as <repo>/test/engines/openfoam.sh,
+        // so the staged copy must sit beside the staged test/p1 helpers.
+        let dest = runtimeRoot.appendingPathComponent("test/engines", isDirectory: true)
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
         try replaceDirectory(
             from: enginesRoot.appendingPathComponent("weather"),
@@ -68,10 +85,16 @@ public enum WorkerTreeStaging {
                 to: dest.appendingPathComponent("EnergyPlus")
             )
         }
+        let wrapper = enginesRoot.appendingPathComponent("openfoam.sh")
+        let stagedWrapper = dest.appendingPathComponent("openfoam.sh")
+        if FileManager.default.isExecutableFile(atPath: wrapper.path) {
+            try? FileManager.default.removeItem(at: stagedWrapper)
+            try FileManager.default.copyItem(at: wrapper, to: stagedWrapper)
+        }
     }
 
     public static func enginesURL(in runtimeRoot: URL) -> URL {
-        runtimeRoot.appendingPathComponent("engines", isDirectory: true)
+        runtimeRoot.appendingPathComponent("test/engines", isDirectory: true)
     }
 
     private static func replaceDirectory(from source: URL, to dest: URL) throws {

@@ -64,6 +64,8 @@ def generate():
                 'cp -R "${SRCROOT}/Backend/src/simunow_worker" '
                 '"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/Backend/src/simunow_worker"\n'
                 'cp "${SRCROOT}/test/p1/write_idf.py" "${SRCROOT}/test/p1/run_l1.py" "${SRCROOT}/test/p1/room_input.py" '
+                '"${SRCROOT}/test/p1/run_room.py" "${SRCROOT}/test/p1/write_openfoam_room.py" "${SRCROOT}/test/p1/quality.py" '
+                '"${SRCROOT}/test/p1/sample_seats.py" "${SRCROOT}/test/p1/foam_io.py" "${SRCROOT}/test/p1/field_slice.py" '
                 '"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WorkerTree/test/p1/"\n'
             )
             escaped = script.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")

@@ -165,24 +165,24 @@ public struct RoomEditorForm: View {
                 }
                 .accessibilityLabel("应用代表日占用时段")
             }
-            Section("代表日 L1") {
+            Section("计算引擎") {
                 Text(store.engineStatus)
                     .font(.footnote)
                     .accessibilityLabel(store.engineStatus)
                 #if os(macOS)
-                Text("worker 从 App 复制到容器。只需选择引擎目录，不要把路径写进项目。")
+                Text("worker 从 App 复制到容器。只需选择引擎目录（含 EnergyPlus 与 openfoam.sh），不要把路径写进项目。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("选择引擎目录") {
                     store.chooseEnginesRoot()
                 }
-                .accessibilityLabel("选择 EnergyPlus 引擎目录")
+                .accessibilityLabel("选择 EnergyPlus 与 openfoam.sh 引擎目录")
                 Button("选择工作副本（备用）") {
                     store.chooseRepositoryRoot()
                 }
                 .accessibilityLabel("选择含 worker 的工作副本，仅当 App 资源缺失时")
                 #else
-                Text("iOS 本阶段不运行本地 EnergyPlus。")
+                Text("iOS 本阶段不运行本地 EnergyPlus 或 OpenFOAM。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 #endif
@@ -191,11 +191,18 @@ public struct RoomEditorForm: View {
                 }
                 .disabled(!store.canSubmitL1)
                 .accessibilityLabel("提交代表日 L1")
+                #if os(macOS)
+                Button("提交代表工况 L2") {
+                    Task { await store.submitL2() }
+                }
+                .disabled(!store.canSubmitL2)
+                .accessibilityLabel("提交代表工况 L2，稳态气流场，不是全年 8760 小时")
+                #endif
                 Button("取消任务") {
                     Task { await store.cancelActiveRun() }
                 }
                 .disabled(store.activeRun == nil || !store.isSubmitting)
-                .accessibilityLabel("取消代表日 L1")
+                .accessibilityLabel("取消当前任务")
                 if let message = store.runMessage {
                     Text(message)
                         .font(.footnote)
@@ -308,6 +315,11 @@ public struct RoomEditorForm: View {
             return "尚未载入"
         }
         if store.isPhysicalModelComplete {
+            #if os(macOS)
+            if store.l2Client.isConfigured {
+                return "物理分区齐全，可提交代表日 L1 与代表工况 L2"
+            }
+            #endif
             return store.l1Client.isConfigured ? "物理分区齐全，可提交代表日 L1" : "物理分区齐全（引擎未配置）"
         }
         return "模型不完整"

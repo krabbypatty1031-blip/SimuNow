@@ -45,6 +45,7 @@
 - [x] P4-05a 房间盒子/开口/风口/座位几何，不是空状态（`RoomScene(draft:)` 无 geometry → nil → 空状态不画假房间；`RoomWireframeView` Canvas 线框 + 可拖拽 yaw；`IsometricProjection` 消费 `CoordinateMapping`（Z-up→Y-up→屏幕），无第二坐标约定；`SimuVisualizationTests` 7 项；Workspace 视口换新 API）
 - [x] P4-05b 场文件带单位、Z-up、有效掩码（`test/p1/field_slice.py` 写 `field-slice.json`：kind temperature_slice、unit C、coordinateSystem rightHandedZUp、axisOrder ["y","x"]、sampleMethod nearest_cell、valid 掩码与 stats 只算有效格；`Protocols/Schemas/field-slice.schema.json` 钉死 wire claim；Swift `FieldSlice` 严格解码拒绝变体；脚本进库（.gitignore 白名单））
 - [x] P4-05c 有结果后叠温度切片；无场不画假彩色（quality_pass False → 不写文件 → 视口无 field；`SlicePalette` 不外推 clamp、invalid 格中性灰；`RoomWireframeView` 画切片 + 底部渐变图例带物理范围；`SimulationViewport(draft:field:)`；钉版 `Fixtures/task/field-slice-l2.json` 24×24 全有效 23.938–25.876 °C，`test_l2_runner` 576 格点独立复算）
+- [x] P4-05d App 内提交代表工况 L2（ADR-011：staged 树九个 P1 脚本 + 引擎落位 `runtime/test/engines` 并拷 `openfoam.sh`；`L2TaskClient`/`LocalProcessL2Client`（`run-l2`、`SIMUNOW_ENGINES_ROOT`、超时 900 s、`loadFieldSlice` 质量门控）；`WorkspaceStore.submitL2()`/`canSubmitL2`/`lastFieldSlice`（质量失败 → 指标 omitted + 无切片不编造）；按钮文案「提交代表工况 L2」未配置不可点；iOS 保持未配置客户端；视口传 `store.lastFieldSlice`）
 
 ## P4-06 候选对比
 

@@ -20,8 +20,13 @@ public final class WorkspaceStore {
     public var lockedAssumptions: [String] = []
     public let simulationClient: any SimulationClient
     public var l1Client: any L1TaskClient
+    /// In-app L2 client; unconfigured until the user picks an engine tree.
+    public var l2Client: any L2TaskClient
     public var activeRun: RunReceipt?
     public var lastResult: SimulationResult?
+    /// Seat-height temperature slice from the latest quality-passed L2 run.
+    /// Quality-failed runs produce nil, never a fabricated field.
+    public var lastFieldSlice: FieldSlice?
     public var lastBoundary: L2Boundary?
     public var runEvents: [SimulationEvent] = []
     public var runMessage: String?
@@ -32,10 +37,12 @@ public final class WorkspaceStore {
 
     public init(
         simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
-        l1Client: (any L1TaskClient)? = nil
+        l1Client: (any L1TaskClient)? = nil,
+        l2Client: (any L2TaskClient)? = nil
     ) {
         self.simulationClient = simulationClient
         self.l1Client = l1Client ?? UnconfiguredL1TaskClient()
+        self.l2Client = l2Client ?? UnconfiguredL2TaskClient()
         if l1Client != nil {
             engineStatus = self.l1Client.isConfigured ? "已配置代表日 L1" : "未配置本地 EnergyPlus"
         }
@@ -43,6 +50,11 @@ public final class WorkspaceStore {
 
     public var canSubmitL1: Bool {
         l1Client.isConfigured && isPhysicalModelComplete && !isSubmitting
+    }
+
+    /// L2 needs a complete physical model, a configured engine and no run in flight.
+    public var canSubmitL2: Bool {
+        l2Client.isConfigured && isPhysicalModelComplete && !isSubmitting
     }
 
     public var resultFreshness: ResultFreshness? {
@@ -319,9 +331,50 @@ public final class WorkspaceStore {
         isSubmitting = false
     }
 
+    /// Submit an immutable representative-case L2. Quality-failed runs keep
+    /// seat metrics omitted and load no slice; nothing is invented.
+    public func submitL2() async {
+        guard let project else {
+            runMessage = "没有可提交的项目。"
+            return
+        }
+        guard canSubmitL2 else {
+            runMessage = l2Client.isConfigured ? "模型不完整或已有任务在运行。" : "计算引擎尚未配置。请选择工作副本与含 openfoam.sh 的引擎目录。"
+            return
+        }
+        isSubmitting = true
+        runMessage = nil
+        let snapshot = encodeSnapshot(project)
+        let digest = InputSnapshotHash.sha256Hex(snapshot)
+        let request = SimulationRequest(
+            identity: RunIdentity(runID: UUID(), scenarioID: project.id, inputHash: digest),
+            fidelity: .l2,
+            snapshotPath: "input.json",
+            snapshotHash: digest
+        )
+        activeRun = RunReceipt(identity: request.identity, state: .queued)
+        selection = .runs
+        do {
+            let receipt = try await l2Client.submitL2(request, snapshot: snapshot)
+            activeRun = receipt
+            runEvents = (try? await l2Client.loadEvents(runID: receipt.identity.runID)) ?? []
+            lastResult = try await l2Client.loadResult(runID: receipt.identity.runID)
+            // The slice only exists for a quality-passed field; nil is honest.
+            lastFieldSlice = try await l2Client.loadFieldSlice(runID: receipt.identity.runID)
+            if receipt.state == .failed {
+                runMessage = "代表工况 L2 失败。座位温度未写成 0。"
+            }
+        } catch {
+            runMessage = error.localizedDescription
+        }
+        isSubmitting = false
+    }
+
     public func cancelActiveRun() async {
         guard let runID = activeRun?.identity.runID else { return }
+        // Cancel both channels; the one holding the run terminates it.
         try? await l1Client.cancel(runID: runID)
+        try? await l2Client.cancel(runID: runID)
     }
 
     #if os(macOS)
@@ -377,6 +430,7 @@ public final class WorkspaceStore {
             }
         } catch {
             l1Client = UnconfiguredL1TaskClient()
+            l2Client = UnconfiguredL2TaskClient()
             engineStatus = error.localizedDescription
         }
     }
@@ -394,10 +448,21 @@ public final class WorkspaceStore {
             runRoot: runRoot
         )
         l1Client = client
-        if client.isConfigured {
-            engineStatus = "已配置 EnergyPlus 代表日 L1，不是 CFD"
+        // L2 shares the staged tree; it additionally needs openfoam.sh.
+        let l2 = LocalProcessL2Client(
+            repositoryRoot: repositoryRoot,
+            enginesRoot: enginesRoot,
+            runRoot: runRoot
+        )
+        l2Client = l2
+        if client.isConfigured && l2.isConfigured {
+            engineStatus = "已配置代表日 L1 与代表工况 L2（不是全年 8760h）"
+        } else if client.isConfigured {
+            l2Client = UnconfiguredL2TaskClient()
+            engineStatus = "已配置 EnergyPlus 代表日 L1，不是 CFD；L2 还需要含 openfoam.sh 的引擎目录"
         } else {
             l1Client = UnconfiguredL1TaskClient()
+            l2Client = UnconfiguredL2TaskClient()
             engineStatus = "未配置：运行时须含 worker，引擎目录须含 EnergyPlus/energyplus"
         }
     }
@@ -426,6 +491,7 @@ public final class WorkspaceStore {
     private func resetRunState() {
         activeRun = nil
         lastResult = nil
+        lastFieldSlice = nil
         lastBoundary = nil
         runEvents = []
         runMessage = nil

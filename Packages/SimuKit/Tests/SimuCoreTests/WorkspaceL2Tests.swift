@@ -1,0 +1,144 @@
+import Foundation
+import Testing
+import SimuCore
+import SimuSimulation
+import SimuWorkspace
+
+/// Canned L2 client so the store logic can be tested without OpenFOAM.
+/// The recorded snapshot and fidelity prove the store passes the right wire form.
+actor RecordingL2Client: L2TaskClient {
+    nonisolated let isConfigured: Bool
+    var nextState: RunState = .succeeded
+    var cannedResult: SimulationResult?
+    var cannedSlice: FieldSlice?
+    var cancelled = Set<UUID>()
+    var lastSnapshot: Data?
+    var servedIdentity: RunIdentity?
+
+    init(isConfigured: Bool = true) {
+        self.isConfigured = isConfigured
+    }
+
+    func submitL2(_ request: SimulationRequest, snapshot: Data) async throws -> RunReceipt {
+        lastSnapshot = snapshot
+        servedIdentity = request.identity
+        if cancelled.contains(request.identity.runID) {
+            return RunReceipt(identity: request.identity, state: .cancelled)
+        }
+        return RunReceipt(identity: request.identity, state: nextState)
+    }
+
+    func cancel(runID: UUID) async throws {
+        cancelled.insert(runID)
+    }
+
+    func loadResult(runID: UUID) async throws -> SimulationResult? {
+        guard var result = cannedResult else { return nil }
+        if let servedIdentity {
+            result.identity = servedIdentity
+        }
+        return result
+    }
+
+    func loadFieldSlice(runID: UUID) async throws -> FieldSlice? {
+        cannedSlice
+    }
+
+    func loadEvents(runID: UUID) async throws -> [SimulationEvent] {
+        []
+    }
+
+    func prepare(result: SimulationResult, state: RunState = .succeeded, slice: FieldSlice? = nil) {
+        cannedResult = result
+        nextState = state
+        cannedSlice = slice
+    }
+}
+
+@MainActor
+@Test func unconfiguredStoreCannotSubmitL2() async {
+    let store = WorkspaceStore()
+    store.loadOfficeTemplate()
+    #expect(store.isPhysicalModelComplete)
+    #expect(!store.canSubmitL2)
+    await store.submitL2()
+    #expect(store.activeRun == nil)
+    #expect(store.lastResult == nil)
+    #expect(store.lastFieldSlice == nil)
+    #expect(store.project?.occupancy?.occupantCount.value == 8)
+}
+
+@MainActor
+@Test func configuredStoreSubmitsL2LoadsSliceAndMarksStaleAfterEdit() async throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let result = SimulationResult(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        state: .succeeded,
+        quality: .passed,
+        metrics: [
+            ResultMetric(name: "seat_t_c_min", value: 25.08, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: false),
+            ResultMetric(
+                name: "seat_pmv_min",
+                value: nil,
+                unit: "PMV",
+                method: "iso7730_pmv",
+                fidelity: .l2,
+                omitted: true,
+                reason: "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+            )
+        ],
+        supplyTemperatureC: 16,
+        setpointC: 26
+    )
+    let slice = FieldSlice(
+        zM: 1.1,
+        originM: FieldSlice.SliceOrigin(x: 0.1, y: 0.1),
+        spacingM: FieldSlice.SliceOrigin(x: 0.25, y: 0.25),
+        shape: FieldSlice.SliceShape(nx: 2, ny: 2),
+        values: [[25.0, 25.1], [25.2, 25.3]],
+        valid: [[true, true], [true, true]],
+        stats: FieldSlice.SliceStats(validCount: 4, minC: 25.0, maxC: 25.3),
+        inputHash: "pending"
+    )
+    let client = RecordingL2Client()
+    await client.prepare(result: result, slice: slice)
+    let store = WorkspaceStore(l2Client: client)
+    store.loadOfficeTemplate()
+    #expect(store.canSubmitL2)
+    await store.submitL2()
+    #expect(store.activeRun?.state == .succeeded)
+    #expect(store.lastResult?.metric(named: "seat_t_c_min")?.value == 25.08)
+    #expect(store.lastResult?.metric(named: "seat_pmv_min")?.omitted == true)
+    #expect(store.lastFieldSlice?.zM == 1.1)
+    #expect(store.lastFieldSlice?.stats.maxC == 25.3)
+    #expect(store.resultFreshness == .current)
+    store.applyOccupantCount(10)
+    #expect(store.resultFreshness == .stale)
+}
+
+@MainActor
+@Test func failedL2RunKeepsSeatMetricsOmittedAndLoadsNoSlice() async throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    var failed = SimulationResult(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        state: .failed,
+        quality: .notEvaluated,
+        metrics: [
+            ResultMetric(name: "seat_t_c_min", value: nil, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: true)
+        ],
+        supplyTemperatureC: 16,
+        setpointC: 26
+    )
+    failed.state = .failed
+    let client = RecordingL2Client()
+    await client.prepare(result: failed, state: .failed)
+    let store = WorkspaceStore(l2Client: client)
+    store.loadOfficeTemplate()
+    await store.submitL2()
+    #expect(store.activeRun?.state == .failed)
+    #expect(store.lastResult?.metric(named: "seat_t_c_min")?.omitted == true)
+    #expect(store.lastResult?.metric(named: "seat_t_c_min")?.value == nil)
+    // Quality failed runs write no slice; the store must not display one.
+    #expect(store.lastFieldSlice == nil)
+    #expect(store.project?.occupancy?.occupantCount.value == 8)
+}

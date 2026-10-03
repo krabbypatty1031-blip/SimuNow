@@ -22,6 +22,41 @@ private func repoRoot() -> URL {
     #expect(WorkerTreeStaging.isP1Present(in: dest))
 }
 
+/// The L2 pipeline needs the full P1 helper set, not just the L1 IDF writer.
+/// Missing helpers would make in-app L2 fail after staging, so assert them here.
+@Test func stagingCopiesL2PipelineHelpers() throws {
+    let dest = FileManager.default.temporaryDirectory
+        .appendingPathComponent("simunow-stage-l2-\(UUID().uuidString)", isDirectory: true)
+    try WorkerTreeStaging.stageWorker(from: repoRoot(), into: dest)
+    for name in WorkerTreeStaging.l2PipelineScripts {
+        #expect(
+            FileManager.default.fileExists(
+                atPath: dest.appendingPathComponent("test/p1/\(name)").path
+            ),
+            "staged tree is missing \(name)"
+        )
+    }
+}
+
+/// run_room.py resolves the OpenFOAM wrapper as <repo>/test/engines/openfoam.sh,
+/// so staged engines must land at runtime/test/engines, not runtime/engines.
+@Test func stagedEnginesLandBesideP1Helpers() throws {
+    let fm = FileManager.default
+    let source = fm.temporaryDirectory.appendingPathComponent("simunow-tiny-engines-\(UUID().uuidString)", isDirectory: true)
+    try fm.createDirectory(at: source.appendingPathComponent("EnergyPlus", isDirectory: true), withIntermediateDirectories: true)
+    try fm.createDirectory(at: source.appendingPathComponent("weather", isDirectory: true), withIntermediateDirectories: true)
+    let binary = source.appendingPathComponent("EnergyPlus/energyplus")
+    try Data("#!/bin/sh\nexit 0\n".utf8).write(to: binary)
+    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+    try Data("epw".utf8).write(to: source.appendingPathComponent("weather/x.epw"))
+
+    let runtime = fm.temporaryDirectory.appendingPathComponent("simunow-stage-engines-\(UUID().uuidString)", isDirectory: true)
+    try WorkerTreeStaging.stageEngines(from: source, into: runtime)
+    let staged = WorkerTreeStaging.enginesURL(in: runtime)
+    #expect(staged.path.hasSuffix("test/engines"))
+    #expect(FileManager.default.isExecutableFile(atPath: LocalEngineProbe.energyPlusURL(in: staged).path))
+}
+
 @Test func stagingCopiesTinyEngineTreeWithoutDesktopPath() throws {
     let fm = FileManager.default
     let source = fm.temporaryDirectory.appendingPathComponent("simunow-tiny-engines-\(UUID().uuidString)", isDirectory: true)

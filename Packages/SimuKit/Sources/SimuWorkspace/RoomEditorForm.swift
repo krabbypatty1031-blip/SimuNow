@@ -386,14 +386,14 @@ public struct RoomEditorForm: View {
                 missingItem
             }
         case .furniturePlan:
-            Section("俯视图拖拽布置") {
+            Section(copy.dragFurnitureInPlanRow) {
                 if store.project?.geometry == nil {
-                    Text("先填写房间尺寸后再布置家具。")
+                    Text(copy.planNoRoomYet)
                         .foregroundStyle(.secondary)
                 } else {
                     FurniturePlanView(store: store)
                 }
-                Text("松手时只放在房间内、不压其他家具、座位、送回风带和窗户的位置；不合法的位置会被拒绝并说明原因。")
+                Text(copy.planLegalDropNote)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

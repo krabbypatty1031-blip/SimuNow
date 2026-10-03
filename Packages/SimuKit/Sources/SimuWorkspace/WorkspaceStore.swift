@@ -43,6 +43,8 @@ public final class WorkspaceStore {
     /// Why the last furniture placement was refused; nil after a legal drop.
     /// Placement rules are user-facing, so the wording is room language.
     public var furniturePlacementMessage: String?
+    /// Last refusal, so a language toggle can re-speak the same reason.
+    private var lastFurnitureRejection: FurniturePlacement.Rejection?
     public var isSubmitting = false
     public var engineStatus = UserFacingCopy.english.engineStatusNeedFolder
     public var pendingRepositoryRoot: URL?
@@ -119,6 +121,9 @@ public final class WorkspaceStore {
         }
         #endif
         engineStatus = l1Client.isConfigured ? copy.engineStatusReadyL1 : copy.engineStatusNeedFolder
+        if let rejection = lastFurnitureRejection {
+            furniturePlacementMessage = copy.furniturePlacementRejection(rejection)
+        }
     }
 
     public var canSubmitL1: Bool {
@@ -239,9 +244,11 @@ public final class WorkspaceStore {
         }
         let box = ObstacleBox(id: id, origin: origin, size: size, kind: kind)
         if let rejection = FurniturePlacement.rejection(for: box, in: current, ignoring: id) {
+            lastFurnitureRejection = rejection
             furniturePlacementMessage = copy.furniturePlacementRejection(rejection)
             return
         }
+        lastFurnitureRejection = nil
         furniturePlacementMessage = nil
         var draft = current
         fieldIssues = draft.applyObstacle(id: id, origin: origin, size: size, kind: kind)
@@ -937,7 +944,7 @@ public final class WorkspaceStore {
     /// when it has one, so a later draft edit does not rewrite the old day.
     public func frozenDayCost(project: ProjectDraft) -> RepresentativeDayCost {
         guard let l1 = lastL1Result else {
-            return .omitted(reason: "无 L1，代表日电费省略")
+            return .omitted(reason: copy.omitDayCostNoEnergyResult)
         }
         let metric = l1.metric(named: "p_elec_w")
         let watts = metric?.omitted == false ? metric?.value : nil
@@ -962,7 +969,7 @@ public final class WorkspaceStore {
     }
 
     public var liveDayCost: RepresentativeDayCost {
-        guard let project else { return .omitted(reason: "无项目") }
+        guard let project else { return .omitted(reason: copy.omitDayCostNoProject) }
         return frozenDayCost(project: project)
     }
 

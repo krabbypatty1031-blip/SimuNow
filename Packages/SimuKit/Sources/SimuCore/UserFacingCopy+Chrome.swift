@@ -44,6 +44,10 @@ extension UserFacingCopy {
     public var estimating: String { t("Estimating…", zh: "正在估算…") }
     public var dayEnergy: String { t("Estimated electricity for this day", zh: "这一天预计用电") }
     public var dayCost: String { t("Estimated cost for this day", zh: "这一天预计费用") }
+    public var omitDayCostNoEnergyResult: String {
+        t("No representative-day energy result, so the day's cost is omitted", zh: "还没有这一天的用电结果，费用省略")
+    }
+    public var omitDayCostNoProject: String { t("No project is open", zh: "还没有打开项目") }
     public var retrofitQuote: String { t("Retrofit quote", zh: "改造报价") }
     public var awaitingQuote: String { t("Awaiting quote", zh: "待报价") }
     public var evidenceAndLimits: String { t("Evidence and limits", zh: "查看依据与限制") }
@@ -276,6 +280,14 @@ extension UserFacingCopy {
 
     public var planNumericEditorHintSuffix: String {
         t(". Use the numeric editor for exact placement.", zh: "。用数值编辑器可精确放置。")
+    }
+
+    /// Footer under the plan canvas: the same legal-drop rule the store applies.
+    public var planLegalDropNote: String {
+        t(
+            "A drop lands only inside the room, clear of other furniture, seats, supply/return bands and windows; an illegal spot is refused with the reason.",
+            zh: "松手时只放在房间内、不压其他家具、座位、送回风带和窗户的位置；不合法的位置会被拒绝并说明原因。"
+        )
     }
 
 

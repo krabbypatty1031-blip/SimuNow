@@ -149,6 +149,11 @@ import PDFKit
     #expect(prompt.contains(ReportWriterSkill.energyHeading))
     #expect(prompt.contains(ReportWriterSkill.comfortHeading))
     #expect(prompt.contains(ReportWriterSkill.adviceHeading))
+    // ADR-021 follow-up: the model counsels the client, it does not
+    // recite the evidence table. Opinion first, figures as support.
+    #expect(prompt.contains("顾问"))
+    #expect(prompt.contains("先说你的观点"))
+    #expect(prompt.contains("这意味着什么") || prompt.contains("对他们的生活意味着什么"))
     #expect(prompt.contains("全年电费"))
     #expect(!prompt.contains("不得推算全年电费"))
     #expect(!prompt.contains("不是全年电费"))

@@ -41,6 +41,10 @@ import SimuWorkspace
     #expect(UserFacingCopy.runStateTitle(.solving) == "正在估算")
     #expect(UserFacingCopy.qualityTitle(.passed) == "已通过检查")
     #expect(UserFacingCopy.qualityTitle(.failed) == "未通过检查")
+    // Short value for card cells whose label already says "质量检查".
+    #expect(UserFacingCopy.qualityShortTitle(.passed) == "已通过")
+    #expect(UserFacingCopy.qualityShortTitle(.failed) == "未通过")
+    #expect(UserFacingCopy.qualityShortTitle(.notEvaluated) == "尚未检查")
     #expect(UserFacingCopy.freshnessTitle(.stale) == "房间改过了，请重新估算")
     #expect(UserFacingCopy.omittedAssumptionTitle("omitted: envelope_u_value") == "墙的保温尚未填写，不会按 0 计算")
 }
@@ -79,6 +83,9 @@ import SimuWorkspace
     #expect(UserFacingCopy.displayNumber(24) == "24.00")
     #expect(UserFacingCopy.displayNumber(0.75) == "0.75")
     #expect(UserFacingCopy.displayQuantity(26, unit: "°C") == "26.00 °C")
+    // Contract units stay "C"; the display layer spells them "°C" so the
+    // card never reads a bare "C" next to a temperature.
+    #expect(UserFacingCopy.displayQuantity(25.16, unit: "C") == "25.16 °C")
     #expect(UserFacingCopy.displayRange(23.348, 25.207, unit: "°C") == "23.35 – 25.21 °C")
 }
 

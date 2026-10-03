@@ -7,18 +7,20 @@ description: >-
   reports that present EnergyPlus and OpenFOAM results.
 ---
 
-# LLM 对比报告
+# LLM 对比报告（顾问式）
 
-用户可见的对比说明由 DeepSeek 根据冻结证据 JSON 写成中文报告（ADR-021：不再有代码分类的「说明卡」，方案整理交给 AI）。运行时提示词只放在 `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`，不要另写一份会漂移的副本。
+用户可见的对比说明由 DeepSeek 根据冻结证据 JSON 写成中文建议报告（ADR-021：不再有代码分类的「说明卡」，方案整理交给 AI）。运行时提示词只放在 `Packages/SimuKit/Sources/SimuReporting/ReportWriterSkill.swift`，不要另写一份会漂移的副本。
 
 ## 必须达成的效果
 
-1. 先讲清楚用户做了什么：照抄 `pairDiff.inputChanges` 的 sentence；`basisMismatchReason` 非空时如实写。
-2. 用电对比：各方案能耗与全年电费，差值照抄 `pairDiff` 里 dimension 为 energy 的 delta。
-3. 座位舒适对比：座位温度、合适比例、风速的差值（comfort 与 flow 的 delta）。
-4. 建议下一步：只给可调项方向（窗户、出风口、设定温度、出风温度、出风速度风量、人数座位），不编预测数字。
+写给客户看的建议报告：每一节先给观点和结论，再用证据数字支撑，像顾问面对面交谈。不是数据罗列。
 
-把证据 JSON 里的数字当作真实结果直接陈述。不要另加「演示 / 非真实 / 不是全年 / 不是问卷 / 仅供参考」之类说明。
+1. 先讲清用户做了什么：照抄 `pairDiff.inputChanges` 的 sentence；`basisMismatchReason` 非空时如实告诉用户差在哪；结尾给总判断（证据范围内哪个更值得选 / 差不多）。
+2. 用电对比：先回答「电费上有没有值得在意的差别」；差值为零直说不用纠结；有差别讲一年电费单差多少、值不值得驱动选择。
+3. 座位舒适对比：讲体感。差值很小告诉用户坐下来感觉不出；有座位不合适指出哪个座位、哪个方案能改善。
+4. 建议下一步：顾问给看法——最值得先试什么、为什么；差距很小直说别在这两个方案间纠结。caveats 限可调项方向（窗户、出风口、设定温度、出风温度、出风速度风量、人数座位），不编预测数字。
+
+观点、比较结论、方向性判断（哪个更值得选、某项不值得调、差值小到感觉不出）是模型该写的顾问职责；但数字和具体事实不能超出证据。把证据 JSON 里的数字当作真实结果直接陈述。不要另加「演示 / 非真实 / 不是全年 / 不是问卷 / 仅供参考」之类说明。
 
 ## 数字从哪来
 

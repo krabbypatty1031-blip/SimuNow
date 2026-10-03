@@ -13,11 +13,95 @@ public struct WorkspaceView: View {
     @State private var inspectorPage = InspectorPage.list
     /// Shared camera yaw for the comparison page: one lens for all candidates.
     @State private var comparisonYaw: Double = -0.6
+    /// Consult assistant sheet. One flag for both platforms.
+    @State private var isChatPresented = false
     /// Temporarily hidden (user request 2026-10-03): both detail disclosures
     /// cluttered the result cards. One switch gates every occurrence
     /// (results card, candidate card, recommendation card) so they come back
     /// together. The evidence functions stay; only the sections are hidden.
     private static let showsDetailDisclosures = false
+
+    // MARK: Card data cells (readability pass 2026-10-03)
+    // The old rows stacked two LabeledContent side by side in one HStack at
+    // footnote size: labels and values ran together like a paragraph. These
+    // cells put a small grey label above a body-weight value so two of them
+    // side by side read as a dashboard, not a paragraph.
+
+    /// Card data cell: small grey label on top, body-weight value below.
+    /// Numbers use monospaced digits so values align across cells.
+    private struct MetricCell: View {
+        let label: String
+        let value: String
+        /// Marks a number whose room changed after the estimate (L1 watts).
+        var stale = false
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(value)
+                        .font(.body)
+                        .monospacedDigit()
+                    if stale {
+                        PendingBadge()
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Small pill marking one number whose room changed after the estimate.
+    /// The long sentence is said once per card; the badge marks each stale
+    /// number. Stale numbers stay marked — never presented as the current draft.
+    private struct PendingBadge: View {
+        var body: some View {
+            Text("待更新")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(.quaternary, in: Capsule())
+                .accessibilityLabel("房间已改，这个数字待重新估算")
+        }
+    }
+
+    /// Form rows cannot nest a badge inside `LabeledContent("…", value:)`,
+    /// so value-form rows use this trailing-closure value instead.
+    @ViewBuilder
+    private func staleMarkedValue(_ text: String, stale: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .monospacedDigit()
+            if stale {
+                PendingBadge()
+            }
+        }
+    }
+
+    /// One natural sentence per card instead of the old question-shaped row
+    /// (是否按当前房间 / 房间改过了，请重新估算 repeated per number).
+    @ViewBuilder
+    private func freshnessLine(_ freshness: ResultFreshness?) -> some View {
+        switch freshness {
+        case .stale:
+            Text("房间改过了，上面的数字待重新估算")
+                .font(.footnote)
+                .foregroundStyle(.orange)
+        case .current:
+            Text("数字按当前房间")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case nil:
+            Text(UserFacingCopy.freshnessTitle(nil))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
 
     public init(store: WorkspaceStore) {
         self._store = State(initialValue: store)
@@ -65,6 +149,14 @@ public struct WorkspaceView: View {
                             .accessibilityLabel("从教室模板创建项目")
                         }
                         .accessibilityLabel("从模板创建项目")
+                        // Consult assistant (ADR-022): free-text questions about
+                        // how to use the app and what the numbers mean.
+                        Button {
+                            isChatPresented = true
+                        } label: {
+                            Label("咨询", systemImage: "bubble")
+                        }
+                        .accessibilityLabel("咨询：问怎么用或数字含义")
                     }
                 }
         }
@@ -74,6 +166,9 @@ public struct WorkspaceView: View {
             allowsMultipleSelection: false
         ) { result in
             handleImportedURL(result)
+        }
+        .sheet(isPresented: $isChatPresented) {
+            ChatPanel(store: store)
         }
         .fileImporter(
             isPresented: $isSavingPackage,
@@ -176,8 +271,12 @@ public struct WorkspaceView: View {
             Form {
                 Section {
                     LabeledContent("进度", value: store.activeRun.map { UserFacingCopy.runStateTitle($0.state) } ?? "已完成")
-                    LabeledContent("检查", value: UserFacingCopy.qualityTitle((store.lastL2Result ?? store.lastL1Result)?.quality ?? .notEvaluated))
-                    LabeledContent("是否按当前房间", value: UserFacingCopy.freshnessTitle(store.resultFreshness))
+                    // Short value: the label already says "质量检查", so the
+                    // row no longer reads "检查: 已通过检查" (label/value echo).
+                    LabeledContent("质量检查", value: UserFacingCopy.qualityShortTitle((store.lastL2Result ?? store.lastL1Result)?.quality ?? .notEvaluated))
+                    // One natural sentence per card; stale numbers carry the
+                    // "待更新" badge instead of repeating the long sentence.
+                    freshnessLine(store.resultFreshness)
                     if store.isSubmitting {
                         Text("正在估算…")
                             .font(.footnote)
@@ -199,8 +298,14 @@ public struct WorkspaceView: View {
                     }
                 }
                 Section {
-                    LabeledContent("这一天预计用电", value: store.dayEnergyText())
-                    LabeledContent("这一天预计费用", value: store.dayCostText())
+                    // L1 numbers: trailing-closure values carry the badge when
+                    // the L1 result predates the current draft.
+                    LabeledContent("这一天预计用电") {
+                        staleMarkedValue(store.dayEnergyText(), stale: store.l1Freshness == .stale)
+                    }
+                    LabeledContent("这一天预计费用") {
+                        staleMarkedValue(store.dayCostText(), stale: store.l1Freshness == .stale)
+                    }
                     LabeledContent(UserFacingCopy.metricTitle("seat_t_c_min"), value: store.metricText(named: "seat_t_c_min"))
                     LabeledContent(UserFacingCopy.metricTitle("seat_t_c_max"), value: store.metricText(named: "seat_t_c_max"))
                     ForEach(SeatFeasibility.comparisonRows(metrics: store.lastL2Result?.metrics ?? []), id: \.label) { row in
@@ -211,8 +316,12 @@ public struct WorkspaceView: View {
                 // the two detail sections are hidden from the default card.
                 if Self.showsDetailDisclosures {
                     DisclosureGroup("查看依据与限制") {
-                        LabeledContent(UserFacingCopy.metricTitle("q_cool_w"), value: store.metricText(named: "q_cool_w"))
-                        LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.metricText(named: "p_elec_w"))
+                        LabeledContent(UserFacingCopy.metricTitle("q_cool_w")) {
+                            staleMarkedValue(store.metricText(named: "q_cool_w"), stale: store.l1Freshness == .stale)
+                        }
+                        LabeledContent(UserFacingCopy.metricTitle("p_elec_w")) {
+                            staleMarkedValue(store.metricText(named: "p_elec_w"), stale: store.l1Freshness == .stale)
+                        }
                         LabeledContent("改造报价", value: "待报价")
                         // Worst-seat full evidence: the default line above only
                         // carries one sentence, so gates and the low-speed
@@ -373,27 +482,41 @@ public struct WorkspaceView: View {
                 }
                 .accessibilityLabel("移除方案 \(record.name)")
             }
-            HStack(spacing: 12) {
-                LabeledContent("检查", value: UserFacingCopy.qualityTitle(record.quality))
-                LabeledContent("是否按当前房间", value: UserFacingCopy.freshnessTitle(store.candidateFreshness(record)))
+            // Readability pass 2026-10-03: dashboard cells (grey label above,
+            // body-weight value below) instead of two LabeledContent squeezed
+            // into one HStack where labels and values ran together.
+            HStack(spacing: 16) {
+                MetricCell(label: "质量检查", value: UserFacingCopy.qualityShortTitle(record.quality))
+                MetricCell(
+                    label: "数字是否按当前房间",
+                    value: store.candidateFreshness(record) == .stale ? "待重新估算" : "按当前房间"
+                )
             }
-            .font(.footnote)
-            HStack(spacing: 12) {
-                LabeledContent("这一天预计用电", value: store.candidateL1EnergyText(record))
-                LabeledContent("这一天预计费用", value: store.candidateL1CostText(record))
+            HStack(spacing: 16) {
+                // L1 numbers: the room may have changed after the L1 estimate,
+                // so a stale L1 watt keeps the "待更新" badge, not a repeated sentence.
+                MetricCell(
+                    label: "这一天预计用电",
+                    value: store.candidateL1EnergyText(record),
+                    stale: store.candidateL1Freshness(record) == .stale
+                )
+                MetricCell(
+                    label: "这一天预计费用",
+                    value: store.candidateL1CostText(record),
+                    stale: store.candidateL1Freshness(record) == .stale
+                )
             }
-            .font(.footnote)
-            HStack(spacing: 12) {
-                LabeledContent(UserFacingCopy.metricTitle("seat_t_c_min"), value: candidateMetric(record, "seat_t_c_min"))
-                LabeledContent(UserFacingCopy.metricTitle("seat_t_c_max"), value: candidateMetric(record, "seat_t_c_max"))
+            HStack(spacing: 16) {
+                MetricCell(label: UserFacingCopy.metricTitle("seat_t_c_min"), value: candidateMetric(record, "seat_t_c_min"))
+                MetricCell(label: UserFacingCopy.metricTitle("seat_t_c_max"), value: candidateMetric(record, "seat_t_c_max"))
             }
-            .font(.footnote)
-            HStack(spacing: 12) {
+            // Full-width cells: the worst-seat sentence wraps naturally instead
+            // of being clipped into a side-by-side LabeledContent column.
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(SeatFeasibility.comparisonRows(metrics: record.metrics), id: \.label) { row in
-                    LabeledContent(row.label, value: row.value)
+                    MetricCell(label: row.label, value: row.value)
                 }
             }
-            .font(.footnote)
             SimulationViewport(
                 draft: record.draft,
                 field: record.slice,

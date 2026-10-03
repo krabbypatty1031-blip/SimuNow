@@ -231,6 +231,20 @@
 影响：删 `Recommendation.swift` 与分类器；`ReportEvidence.cards` → `pairDiff: CandidatePairDiff?`（firstName/secondName/inputChanges/resultDeltas/basisMismatchReason）；`citedRunIDs` 改 candidates+l1RunID；四节标题换为「你的两个方案 / 用电对比 / 座位舒适对比 / 建议下一步」；PDF 附录 cards 循环改「两个方案的差异」段；`WorkspaceView` 报告详情改 pairDiffSection；Python `recommend.py` 同步 pair_diff（覆盖面为该通道扁平字段子集，schema optional 允许）；schema required 里 "cards" → "pairDiff"；App 内数字表格保留，无密钥不写 PDF 维持 ADR-019。
 验证（2026-10-03）：`Scripts/check.sh test` 187 全绿（含 pairDiff 断言：出风高度句、energy/comfort delta、basisMismatchReason nil、单方案 pairDiff nil、PDF「两个方案的差异」）；`mac` / `ios` BUILD SUCCEEDED；Python 测试见运行记录。
 
+## ADR-022：App 内咨询助手——顾问式对话，上下文冻结、守卫照拦（已接受）
+
+日期：2026-10-04。
+背景：用户要求 agent chatbot：在 App 里和 AI 对话，咨询项目功能（怎么加窗、怎么跑计算）与数值解释（指标含义、单位、计算口径）。
+备选：(a) 不做、数字都看界面；(b) 自由对话无上下文——AI 不知当前方案，会编数字；(c) 顾问式对话：上下文 = 当前草稿人话摘要 + 冻结证据包快照，自由文本回复过轻守卫。
+选择：(c)。裁决依据：
+1. **上下文冻结**：`ChatContext`（draftSummary + ReportEvidence 快照）在每次发送时组装，AI 永远看不到可变 project 对象，引用的都是用户自己的数字；
+2. **守卫分层**（2026-10-04 实测修订）：`ChatGuard` 白名单 = 证据数字（复用 `NarrationGuard.numericValues`）∪ 草稿摘要数字 ∪ 用户消息数字 ∪ 舒适模型公认常数（0.5、58.15、70）∪ 口径常数（365、23、26、100）。初版对证据外数字**整条拒绝**，实测两次误杀概念问题（「全年电费怎么算」答出 ×365；「COP 是什么」答出行业常见范围）——概念性数字不可枚举，改为**透明标注**：出现证据外数字不删内容，回答末尾追加固定提示行「注：…不是你方案的计算结果…」；报告守卫维持整条拒绝不变（报告是正式产物，对话是答疑）。prompt 同步要求行业一般情况用程度词（一般/常见/较高）不写具体数字范围；
+3. **只解释不操作**：prompt 限定两类职责（App 用法按真实按钮名讲流程 + 数值含义按证据解释），明确「不操作任何东西」；
+4. **永不沉默**：无密钥/请求失败/守卫拒绝都有固定spoken回复（`chatMissingKeyText` / `chatFailedText` / `ChatGuard.rejection`），对话不以空白结束。
+
+影响：新增 `ChatTurn`（SimuCore）、`ChatContext`/`ChatAssistant` 协议/`ChatWriterSkill` prompt/`ChatGuard`/`DeepSeekChatClient`（SimuReporting，复用报告客户端的密钥解析与官方 URL，自由文本模式不用 json_object）、`ChatContextBuilder` + store 的 `sendChat`/`clearChat`（SimuWorkspace）、`ChatPanel` 对话面板 + 工具栏「咨询」按钮 sheet（两端通用，iOS 17/macOS 14 起可用 API）；`NarrationGuard.numericValues/numberTokens` private→internal 供同模块复用。UI 无 UI 测试 target，流程经 store 单测覆盖（stub assistant + guard 替换 + 无密钥 spoken note）。
+验证（2026-10-04）：`Scripts/check.sh test` 191 全绿（新增 4 例：请求携带 skill+上下文+历史、无密钥不联网、守卫四分支、store 流程含 guard 替换）；`mac`/`ios` BUILD SUCCEEDED。DeepSeek 实文手测待用户配置密钥后验证。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。

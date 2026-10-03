@@ -87,7 +87,9 @@ public enum NarrationGuard: Sendable {
     }
 
     /// JSON numbers, plus the two-decimal display form the rest of the UI uses.
-    private static func numericValues(in evidence: ReportEvidence) -> Set<Decimal> {
+    /// Internal so `ChatGuard` (same module) reuses the exact same notion of
+    /// "a number the evidence already carries".
+    static func numericValues(in evidence: ReportEvidence) -> Set<Decimal> {
         guard let data = try? JSONEncoder().encode(evidence),
             let json = try? JSONSerialization.jsonObject(with: data) else {
             return []
@@ -125,7 +127,7 @@ public enum NarrationGuard: Sendable {
     }
 
     /// Digits inside a sentence, as Decimals. Only used on code-generated text.
-    private static func numberTokens(in sentence: String) -> [Decimal] {
+    static func numberTokens(in sentence: String) -> [Decimal] {
         guard let expression = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#) else {
             return []
         }

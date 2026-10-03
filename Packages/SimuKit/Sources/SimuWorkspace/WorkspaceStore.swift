@@ -519,6 +519,92 @@ public final class WorkspaceStore {
         selection = .scenarios
     }
 
+    // MARK: - Consult assistant (ADR-022)
+
+    /// The whole consult conversation, newest last. Rendered by `ChatPanel`.
+    public var chatTurns: [ChatTurn] = []
+    /// Injected in tests. Production uses DeepSeek when a key is present.
+    public var chatAssistant: (any ChatAssistant)?
+    /// Tests turn this off so consult never touches the network.
+    public var allowEnvironmentChatAssistant = true
+    /// True while a reply is in flight, so the panel shows a thinking note.
+    public var isChatThinking = false
+    /// The half-typed reply the panel renders during the typewriter reveal.
+    /// Non-nil means "an assistant reply is arriving, character by character".
+    public var chatStreamingText: String?
+    /// Milliseconds between revealed characters. 0 skips the animation
+    /// (tests set this so the flow completes in one runloop tick).
+    public var chatTypingIntervalMs = 14
+    /// Fixed replies so the user is never left without a spoken answer.
+    public static let chatMissingKeyText = "还没有配置 DeepSeek 密钥，暂时不能对话。其余功能不受影响：数字都在对比页和检查器里。"
+    public static let chatFailedText = "这次没有拿到可用回答，请再问一次。"
+    public static let chatEmptyText = "先打开一个项目，或问一些使用上的问题也可以。"
+
+    public var isChatAssistantConfigured: Bool {
+        if chatAssistant != nil { return true }
+        guard allowEnvironmentChatAssistant else { return false }
+        return DeepSeekChatClient.configuredFromEnvironment() != nil
+    }
+
+    private func resolvedChatAssistant() -> (any ChatAssistant)? {
+        if let chatAssistant { return chatAssistant }
+        guard allowEnvironmentChatAssistant else { return nil }
+        return DeepSeekChatClient.configuredFromEnvironment()
+    }
+
+    /// One consult round: freeze the user's words, snapshot the context,
+    /// ask, screen, then reveal the answer character by character the way
+    /// a live assistant types. A failed ask still gets a spoken fallback so
+    /// the conversation never ends in silence.
+    public func sendChat(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        chatTurns.append(ChatTurn(role: .user, text: trimmed))
+        let context = ChatContext(
+            draftSummary: ChatContextBuilder.draftSummary(for: project),
+            evidence: reportEvidence
+        )
+        guard let assistant = resolvedChatAssistant() else {
+            chatStreamingText = nil
+            chatTurns.append(ChatTurn(role: .assistant, text: Self.chatMissingKeyText))
+            return
+        }
+        isChatThinking = true
+        chatStreamingText = ""
+        let reply = await assistant.respond(to: chatTurns, context: context)
+        // Screen locally too: a stubbed or future client must not bypass
+        // the same free-text guard the DeepSeek client applies.
+        let screened = reply.map { ChatGuard.screen($0, history: chatTurns, context: context) }
+        let final = (screened ?? nil).flatMap { $0.isEmpty ? nil : $0 } ?? Self.chatFailedText
+        // Typewriter reveal: the reply appears character by character, the
+        // way a live assistant types. `clearChat` mid-reveal empties the
+        // streaming text; the guard on each tick stops the loop then.
+        for character in final {
+            guard chatStreamingText != nil else { return }
+            chatStreamingText = (chatStreamingText ?? "") + String(character)
+            if chatTypingIntervalMs > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(chatTypingIntervalMs) * 1_000_000)
+            }
+        }
+        // A breath on the finished line before it becomes a spoken turn.
+        if chatTypingIntervalMs > 0 {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+        }
+        guard chatStreamingText != nil else { return }
+        chatStreamingText = nil
+        isChatThinking = false
+        chatTurns.append(ChatTurn(role: .assistant, text: final))
+    }
+
+    /// Start over without losing the project. Kept explicit: consult logs
+    /// are never written anywhere, so clearing is the whole story. Mid-reveal
+    /// this also stops the typewriter (the reveal loop watches for nil).
+    public func clearChat() {
+        chatTurns = []
+        chatStreamingText = nil
+        isChatThinking = false
+    }
+
     /// The run pin freezes: the current L2 when one exists, otherwise the
     /// current finished L1. Pinning never clears the other slot.
     public var pinnableResult: SimulationResult? { lastL2Result ?? lastL1Result }
@@ -681,11 +767,11 @@ public final class WorkspaceStore {
     }
 
     /// Stale L1 watts stay visible on the card but are not described as the current draft.
+    /// The stale marker moved to the view layer (a small "待更新" badge next to
+    /// the number) so the long sentence is said once per card, not per number.
+    /// The guard stays: `candidateL1Freshness` is the truth the badge reads.
     private func annotatedL1(_ record: CandidateRun, text: String, hasValue: Bool) -> String {
         guard hasValue, text != "未知" else { return text }
-        if candidateL1Freshness(record) == .stale {
-            return "\(text)（\(UserFacingCopy.freshnessTitle(.stale))）"
-        }
         return text
     }
 
@@ -835,9 +921,9 @@ public final class WorkspaceStore {
 
     public func metricText(named name: String) -> String {
         if Self.l1MetricNames.contains(name) {
-            return formatMetric(lastL1Result, name: name, markStale: l1Freshness == .stale)
+            return formatMetric(lastL1Result, name: name)
         }
-        return formatMetric(lastL2Result, name: name, markStale: false)
+        return formatMetric(lastL2Result, name: name)
     }
 
     public func dayEnergyText() -> String {
@@ -849,24 +935,22 @@ public final class WorkspaceStore {
     }
 
     /// Stale L1 numbers stay visible but are not described as the current draft.
+    /// The stale marker moved to the view layer (a small "待更新" badge next to
+    /// the number) so the long sentence is said once per card, not per number.
+    /// The guard stays: `l1Freshness` is the truth the badge reads.
     private func annotated(_ text: String, hasResult: Bool, hasValue: Bool) -> String {
         if !hasResult { return "无结果" }
         if !hasValue || text == "未知" { return "未知" }
-        if l1Freshness == .stale {
-            return "\(text)（\(UserFacingCopy.freshnessTitle(.stale))）"
-        }
         return text
     }
 
-    private func formatMetric(_ result: SimulationResult?, name: String, markStale: Bool) -> String {
+    /// Pure number text. The stale marker lives in the view (a "待更新" badge);
+    /// `l1Freshness` stays the independent truth the badge reads.
+    private func formatMetric(_ result: SimulationResult?, name: String) -> String {
         guard let metric = result?.metric(named: name), let value = metric.value, !metric.omitted else {
             return result == nil ? "无结果" : "未知"
         }
-        let text = UserFacingCopy.displayQuantity(value, unit: metric.unit)
-        if markStale {
-            return "\(text)（\(UserFacingCopy.freshnessTitle(.stale))）"
-        }
-        return text
+        return UserFacingCopy.displayQuantity(value, unit: metric.unit)
     }
 
     private func resetRunState() {

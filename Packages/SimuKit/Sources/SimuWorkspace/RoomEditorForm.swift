@@ -42,6 +42,11 @@ public struct RoomEditorForm: View {
     private var page: Binding<InspectorPage>?
     private var column: RoomInspectorColumn
     @State private var ownedPage = InspectorPage.list
+    /// One parent disclosure over the room-editing sections (user request
+    /// 2026-10-04): 房间 / 门窗 / 家具 / 使用 / 空调 collapse together so the
+    /// sidebar can be tidied with a single tap. 计算准备 stays outside — it
+    /// is a global navigation row, not room content.
+    @State private var isRoomSettingsExpanded = true
     @State private var sizeX: Double = 0
     @State private var sizeY: Double = 0
     @State private var sizeZ: Double = 0
@@ -187,7 +192,10 @@ public struct RoomEditorForm: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("项目状态 \(statusText)")
-            Section("房间") {
+            // 父折叠栏（用户要求 2026-10-04）：房间/门窗/家具/使用/空调
+            // 五节统一收进一个开关，一点收起或展开，替代原来平铺五个分区。
+            DisclosureGroup("房间设置", isExpanded: $isRoomSettingsExpanded) {
+                Section("房间") {
                 InspectorRow(title: roomLine, isSelected: currentPage == .room) { toggle(.room) }
                     .accessibilityLabel("编辑房间尺寸 \(roomLine)")
             }
@@ -201,14 +209,14 @@ public struct RoomEditorForm: View {
                             toggle(.opening(opening.id))
                         }
                     }
-                    // 横排（用户要求 2026-10-03）：两个添加按钮并排一行，
-                    // 各占一半宽度，替代原来上下两行。
+                    // 横排且左对齐（用户要求 2026-10-04）：两个按钮从左边
+                    // 紧挨着排，收缩到文字宽度，不再各占半行撑满整行。
                     HStack(spacing: 12) {
                         Button("添加窗") { addOpening(kind: .window) }
-                            .frame(maxWidth: .infinity)
+                            .fixedSize()
                             .accessibilityLabel("添加窗，沿墙位置单位米")
                         Button("添加门") { addOpening(kind: .door) }
-                            .frame(maxWidth: .infinity)
+                            .fixedSize()
                             .accessibilityLabel("添加门，沿墙位置单位米")
                     }
                 }
@@ -258,8 +266,10 @@ public struct RoomEditorForm: View {
                         toggle(.returnTerminal)
                     }
                     InspectorRow(title: "风量与新风", isSelected: currentPage == .airflow) { toggle(.airflow) }
+                    }
                 }
             }
+            // Closes the 房间设置 parent disclosure.
         }
     }
 

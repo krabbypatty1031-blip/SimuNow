@@ -180,6 +180,16 @@ public enum UserFacingCopy: Sendable {
         }
     }
 
+    /// Short value for card cells whose label already says "质量检查",
+    /// so a row never reads "检查: 已通过检查" (label/value duplication).
+    public static func qualityShortTitle(_ quality: QualityState) -> String {
+        switch quality {
+        case .notEvaluated: "尚未检查"
+        case .passed: "已通过"
+        case .failed: "未通过"
+        }
+    }
+
     public static func freshnessTitle(_ freshness: ResultFreshness?) -> String {
         switch freshness {
         case .current: "按当前房间"
@@ -273,7 +283,10 @@ public enum UserFacingCopy: Sendable {
     }
 
     public static func displayQuantity(_ value: Double, unit: String) -> String {
-        "\(displayNumber(value)) \(unit)"
+        // Display-layer unit spelling only; contract `unit` fields stay as-is.
+        // "C" reads as a bare letter next to numbers, so the card shows "°C".
+        let displayUnit = unit == "C" ? "°C" : unit
+        return "\(displayNumber(value)) \(displayUnit)"
     }
 
     public static func displayRange(_ min: Double, _ max: Double, unit: String) -> String {

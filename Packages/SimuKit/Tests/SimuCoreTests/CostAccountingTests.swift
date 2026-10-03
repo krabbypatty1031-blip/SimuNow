@@ -180,7 +180,12 @@ import SimuWorkspace
     store.applyOccupantCount(10)
     #expect(store.l1Freshness == .stale)
     #expect(store.metricText(named: "p_elec_w").contains("2000"))
-    #expect(store.metricText(named: "p_elec_w").contains(UserFacingCopy.freshnessTitle(.stale)))
+    // Stale marking moved to the view layer ("待更新" badge next to the
+    // number); the long sentence no longer repeats per number. The guard is
+    // `l1Freshness` above — the independent truth the badge reads — plus the
+    // number row stays free of "current" claims.
+    #expect(!store.metricText(named: "p_elec_w").contains(UserFacingCopy.freshnessTitle(.stale)))
+    #expect(!store.metricText(named: "p_elec_w").contains("当前"))
 }
 
 @MainActor
@@ -365,9 +370,13 @@ import SimuWorkspace
     #expect(store.candidateL1Freshness(record) == .stale)
     let power = store.candidateL1PowerText(record)
     let cost = store.candidateL1CostText(record)
-    #expect(power.contains(UserFacingCopy.freshnessTitle(.stale)))
+    // Pure numbers on the card; the view reads candidateL1Freshness (asserted
+    // above) to attach the "待更新" badge, so stale watts stay marked.
+    #expect(power == "2000.00 W")
+    #expect(cost.contains("HKD"))
+    #expect(!power.contains(UserFacingCopy.freshnessTitle(.stale)))
+    #expect(!cost.contains(UserFacingCopy.freshnessTitle(.stale)))
     #expect(!power.contains("当前输入"))
-    #expect(cost.contains(UserFacingCopy.freshnessTitle(.stale)))
     #expect(!cost.contains("当前输入"))
 }
 

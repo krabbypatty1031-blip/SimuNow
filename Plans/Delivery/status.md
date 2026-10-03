@@ -17,6 +17,7 @@
 | 编译/测试/启动 | 验证记录为准 | verification.md |
 | P2-01 项目模型 | 已冻结 v2 三分区；开口有墙面跨度 | `Scripts/check.sh test`；Python `test_project_model` |
 | P2-02 房间编辑表单 | 尺寸/门窗/朝向/假设可写内存模型；无计算按钮 | 独立验收 PASS；`Scripts/check.sh test`；`RoomEditorForm` 两端共用 |
+| Mac 设置式房间编辑 | 清单留在左侧，选中项在右侧；未写入的字段在对应「应用」前有圆点；计算准备、电价、假设合成一项并提前 | `inspector-settings-layout`；SimuNowMac 与 SimuNowiOS Debug BUILD SUCCEEDED（2026-10-03） |
 | P2-03 放置校验 | 家具/座位/送回风口可数值编辑；风量互校；坐标映射 | 独立验收 PASS；`PlacementTests`；ADR-006 本阶段不撤销；`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED |
 | P2-04 项目包 | 原子保存/导入 `.simunow/project.json` | 独立验收 PASS；`PackageTests`；ADR-007 目录包 |
 | P2-05 模板与 P1 映射 | 办公/教室模板、基准快照、只读 P1 字段 | 独立验收 PASS；`TemplateTests`；Python `test_p1_mapping`；窗面积 1.95 不是墙宽 |

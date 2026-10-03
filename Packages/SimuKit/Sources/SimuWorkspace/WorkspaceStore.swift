@@ -107,6 +107,22 @@ public final class WorkspaceStore {
         project = draft
     }
 
+    /// Zone setpoint. This is not the supply-air temperature.
+    public func applyZoneSetpointC(_ value: Double) {
+        guard var draft = project, var hvac = draft.hvac else { return }
+        hvac.setpointC = PhysicalQuantity(value: value, unit: "C", source: .user)
+        fieldIssues = draft.applyHVAC(hvac)
+        project = draft
+    }
+
+    /// Supply-air temperature. This is not the zone setpoint.
+    public func applySupplyTemperatureC(_ value: Double) {
+        guard var draft = project, var hvac = draft.hvac else { return }
+        hvac.supplyTemperatureC = PhysicalQuantity(value: value, unit: "C", source: .user)
+        fieldIssues = draft.applyHVAC(hvac)
+        project = draft
+    }
+
     public func upsertOpening(_ opening: Opening) {
         var draft = project ?? ProjectDraft(name: "未命名房间")
         fieldIssues = draft.upsertOpening(opening)

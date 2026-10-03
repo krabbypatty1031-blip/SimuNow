@@ -2,7 +2,7 @@
 
 ## 当前实现与扩展边界
 
-P0 Swift 模型和 `Protocols/Schemas` 仅覆盖 ProjectDraft、SimulationRequest、RunReceipt。Draft 不包含几何，不能提交数值求解。完整模型在 P2 / P3 扩展并版本化；不要静默复用 draft 做 solver input。
+P0 Swift 模型和 `Protocols/Schemas` 覆盖 ProjectDraft、SimulationRequest、RunReceipt。`schemaVersion` 1 不含几何，不能提交数值求解。P2-01 将 v2 扩展为 geometry / occupancy / hvac；v1 JSON 解码后分区为空，不得填默认房间。P1 `room_p1.json` 仍是求解夹具，不是 App 项目包。不要静默复用 v1 draft 做 solver input。
 协议文件是数值边界的唯一依据；display USDZ 只做展示，求解器使用经过简化和验证的几何。
 
 ## 项目包
@@ -24,7 +24,7 @@ Project.simunow/
     fields/*.bin                float32 场与掩码
 ```
 
-上面是目标格式，P0 未实现保存/导入。P2 建立迁移、原子写入和损坏检测。
+上面是目标格式。P2 已实现最小集：`Name.simunow/project.json` 原子写入（先写临时目录再替换）。`geometry/`、`runs/` 仍可空着不写。P3 再加 input 快照。
 
 ## 完整模型设计
 
@@ -41,7 +41,7 @@ Project.simunow/
 | Environment | 天气、代表日、时区、户外参数 | 文件哈希、日期与工况 |
 | Cost | 电价、时段、币种、设备/安装报价来源 | 缺失不填零费用 |
 
-每个不确定物理值带 value / unit / source / reference / uncertainty；区间必须有含义和来源。
+每个不确定物理值带 value / unit / source；`reference` 与 `uncertainty` 为可选。空字符串不作为出处。区间必须有含义和来源。
 
 ## 任务事件
 

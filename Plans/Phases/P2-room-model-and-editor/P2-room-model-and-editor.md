@@ -29,3 +29,17 @@ Mac 属性面板与 iOS 详情表单复用字段；先数值编辑与俯视放�
 
 输出能进入 P1 管线，错误定位到具体字段；Mac 和 iOS 能浏览同一输入。保存/导入有实际行为后再显示可用按钮。
 拖拽复杂时保留数值编辑与俯视点击，任意扫描几何放 P6；不延后统一坐标校验。
+
+## 子任务索引
+
+可验收拆分（writing-plans）。状态只在本目录勾选，事实结论仍只写 `Plans/Delivery/status.md`。
+
+| 父项 | 子任务文件 | 证明什么 |
+|---|---|---|
+| P2-01 | [P2-01-project-model.md](P2-01-project-model.md) | v2 几何/使用/HVAC 契约，v1 不可求解 |
+| P2-02 | [P2-02-wizard.md](P2-02-wizard.md) | 尺寸、门窗、朝向、来源可编辑，带单位 |
+| P2-03 | [P2-03-placement.md](P2-03-placement.md) | 家具/风口/座位不穿墙，坐标转换集中 |
+| P2-04 | [P2-04-persistence.md](P2-04-persistence.md) | 原子保存、导入、损坏与版本 |
+| P2-05 | [P2-05-templates.md](P2-05-templates.md) | 办公/教室模板有出处，能映射 P1 字段 |
+
+总清单：[P2-checklist.md](P2-checklist.md)。未勾选不得把 P2 标为完成。计算提交、场显示、EnergyPlus 接入属于 P3/P4，不在本阶段。

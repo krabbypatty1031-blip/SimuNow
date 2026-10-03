@@ -26,6 +26,22 @@
 选择：空工作区、UnconfiguredSimulationClient 抛错、worker doctor 返回 not_configured。
 影响：架构可开发，任何显示收益都要真实计算依据；人工 fixture 仅用于接口测试。
 
+## ADR-006：P2 编辑不提供撤销（已接受）
+
+日期：2026-10-03。
+背景：P2-03g 要求先决定撤销范围，未实现却显示撤销会违反「无空按钮」。
+选择：本阶段只编辑内存模型，不提供撤销栈；关闭未保存即丢失。
+影响：P2-04 保存后以文件为真相；若以后要撤销，另开 ADR。
+验证：`RoomEditorForm` 无撤销按钮。
+
+## ADR-007：项目包为目录而非 zip（已接受）
+
+日期：2026-10-03。
+背景：P2-04 要求锁定 `*.simunow` 目录包或 zip 等价物。
+选择：目录包 `Name.simunow/project.json`。先写 `FileManager.temporaryDirectory` 再替换目标，失败时保留旧 JSON。
+影响：Mac 用 NSSavePanel/NSOpenPanel；iOS 用 folder/json 文件选择器。包路径只留在内存，不写入 project.json。P3 再在包内加 runs 快照。
+验证：`PackageTests` 关闭重开与失败替换；工作区「打开 / 保存」绑定 `ProjectPackage`。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。

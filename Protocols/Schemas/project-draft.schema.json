@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:simunow:p0:project-draft:1",
+  "$id": "urn:simunow:p2:project-draft:2",
   "title": "project-draft",
   "type": "object",
   "additionalProperties": false,
@@ -14,7 +14,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": 1
+      "enum": [1, 2]
     },
     "id": {
       "type": "string",
@@ -36,6 +36,164 @@
     },
     "coordinateSystem": {
       "const": "rightHandedZUp"
+    },
+    "geometry": { "$ref": "#/$defs/geometry" },
+    "occupancy": { "$ref": "#/$defs/occupancy" },
+    "hvac": { "$ref": "#/$defs/hvac" }
+  },
+  "if": {
+    "properties": {
+      "schemaVersion": { "const": 2 }
+    }
+  },
+  "then": {
+    "required": ["geometry", "occupancy", "hvac"]
+  },
+  "$defs": {
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "source"],
+      "properties": {
+        "value": { "type": "number" },
+        "unit": { "type": "string" },
+        "source": {
+          "enum": ["scan", "measured", "manufacturer", "user", "preset", "assumed"]
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uncertainty": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sizeX", "sizeY", "sizeZ", "northYawDegrees", "openings", "obstacles", "assumptions"],
+      "properties": {
+        "sizeX": { "$ref": "#/$defs/quantity" },
+        "sizeY": { "$ref": "#/$defs/quantity" },
+        "sizeZ": { "$ref": "#/$defs/quantity" },
+        "northYawDegrees": { "$ref": "#/$defs/quantity" },
+        "openings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/opening" }
+        },
+        "obstacles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/obstacle" }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "wall", "s0", "s1", "z0", "z1"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["window", "door"] },
+        "wall": { "enum": ["xMin", "xMax", "yMin", "yMax"] },
+        "s0": { "$ref": "#/$defs/quantity" },
+        "s1": { "$ref": "#/$defs/quantity" },
+        "z0": { "$ref": "#/$defs/quantity" },
+        "z1": { "$ref": "#/$defs/quantity" },
+        "heatFluxWm2": { "$ref": "#/$defs/quantity" }
+      }
+    },
+    "obstacle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "origin", "size"],
+      "properties": {
+        "id": { "type": "string" },
+        "origin": { "$ref": "#/$defs/position" },
+        "size": { "$ref": "#/$defs/position" }
+      }
+    },
+    "occupancy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["occupantCount", "occupantSensibleW", "lightingW", "equipmentW", "seats"],
+      "properties": {
+        "occupantCount": { "$ref": "#/$defs/quantity" },
+        "occupantSensibleW": { "$ref": "#/$defs/quantity" },
+        "lightingW": { "$ref": "#/$defs/quantity" },
+        "equipmentW": { "$ref": "#/$defs/quantity" },
+        "seats": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/seat" }
+        }
+      }
+    },
+    "seat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "position", "source"],
+      "properties": {
+        "id": { "type": "string" },
+        "position": { "$ref": "#/$defs/position" },
+        "source": {
+          "enum": ["scan", "measured", "manufacturer", "user", "preset", "assumed"]
+        }
+      }
+    },
+    "hvac": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "setpointC",
+        "supplyTemperatureC",
+        "supplySpeedMs",
+        "supplyAirflowM3s",
+        "supply",
+        "returnTerminal",
+        "outdoorAirM3s",
+        "cop"
+      ],
+      "properties": {
+        "kind": { "const": "splitAC" },
+        "setpointC": { "$ref": "#/$defs/quantity" },
+        "supplyTemperatureC": { "$ref": "#/$defs/quantity" },
+        "supplySpeedMs": { "$ref": "#/$defs/quantity" },
+        "supplyAirflowM3s": { "$ref": "#/$defs/quantity" },
+        "supply": { "$ref": "#/$defs/terminal" },
+        "returnTerminal": { "$ref": "#/$defs/terminal" },
+        "outdoorAirM3s": { "$ref": "#/$defs/quantity" },
+        "cop": { "$ref": "#/$defs/quantity" }
+      }
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "wall", "s0", "s1", "z0", "z1"],
+      "properties": {
+        "id": { "type": "string" },
+        "wall": { "enum": ["xMin", "xMax", "yMin", "yMax"] },
+        "s0": { "$ref": "#/$defs/quantity" },
+        "s1": { "$ref": "#/$defs/quantity" },
+        "z0": { "$ref": "#/$defs/quantity" },
+        "z1": { "$ref": "#/$defs/quantity" }
+      }
     }
   }
 }

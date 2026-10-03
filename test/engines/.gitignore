@@ -1,0 +1,11 @@
+# Vendor binaries live here so the Mac worker can run without /Applications.
+# They are too large and machine-specific to commit.
+EnergyPlus
+EnergyPlus-*/
+*.tar.gz
+*.tgz
+weather/*.epw
+weather/*.zip
+MANIFEST.json
+openfoam-image.tar
+.DS_Store

@@ -10,9 +10,15 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 # Engine artifacts stay local. Re-include the P1 helpers the Mac WorkerTree copies and the L2 pipeline needs.
+# Install scripts must ship; EnergyPlus / EPW / images stay out via test/engines/.gitignore.
 /test/*
 !/test/p1/
+!/test/engines/
 /test/p1/*
+/test/engines/*
+!/test/engines/install_engines.sh
+!/test/engines/openfoam.sh
+!/test/engines/.gitignore
 !/test/p1/write_idf.py
 !/test/p1/run_l1.py
 !/test/p1/room_input.py

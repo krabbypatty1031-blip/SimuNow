@@ -81,6 +81,7 @@
 | 对比 PDF 排版美化（用户要求 2026-10-04） | 已通 | LaTex 撞沙盒/体量/离线约束后选 HTML/CSS + WKWebView `createPDF`（ADR-024）：`EvidencePDFAssembler` 渲染层从 CoreText 手绘改为 HTML 模板——标题层级、蓝色竖条节标题、bullet 行动建议、附录灰色小字、中英字体栈、Letter 612×792 多页（WKWebView 显式 Letter frame + `rect = .null`，非 null rect 只截单页）；`write` 改 `async throws`，iOS 同步解除 `unsupportedPlatform` 限制（case 保留源兼容）；DeepSeek 任意文本进 HTML 前全部 `escapeHTML`；`NarrationGuard` 过滤、`appendix` 证据行、两位小数口径零改动。已知限制：WebKit 提取层把「风」映射为部首 ⻛（CJK Radicals Supplement 无 NFKC 分解）且 CJK 字间插空白——视觉渲染不受影响，复制/搜索文本受损；测试 `pdfTextContains`（NFKC + 去空白 + 部首映射表）兜底断言。`Scripts/check.sh test` **216 全绿**；`mac`/`ios` BUILD SUCCEEDED |
 | GitHub 首页中英 README（用户要求 2026-10-04） | 已通（文档） | 原 README 仍写「P0 骨架、房间编辑/CFD/报告均为待开发」。重写为同一 `README.md` 中英对照（GitHub 首页只渲染该文件）：产品介绍、要解决的问题、L1/L2/舒适/对比/守卫 PDF 实现、模块与保真度架构、安装与需准备资料。未把 Release 沙盒 exec、iOS 本机求解、RoomPlan、L0/L3、全年核证、回收期写成已交付。 |
 | 代表日日期 + L1 窗/墙热写入 L2（用户要求 2026-10-04） | 已通（自动化） | 草稿可选 `weather` MM-DD（缺省仍 07-15，拒 2/29）。该日写入 EnergyPlus `RunPeriod` 与 L1 哈希；解析当天窗热（Gain−Loss）与不透明围护导热。当前 L1 才把这两项写入 L2 窗通量与 walls `fixedGradient`；缺 L1 / stale L1 保持草稿 80 W/m²，不编造天气热流。检查器「天气日期」；对比口径含天气日期。`Scripts/check.sh test` **233 全绿**；`mac` / `ios` BUILD SUCCEEDED；Python `Backend/tests` **149** + `test/p1` L1/房间契约 **29** 全绿。未宣称实况预报、全年 EnergyPlus、2/29、Release 沙盒 exec。App Debug 改日期后先 L1 再 L2 的座位变化待手测。 |
+| 引擎安装脚本入库（用户要求 2026-10-04） | 已通（仓库） | `/test/*` 曾挡住整个 `test/engines/`，克隆后 README 的 `install_engines.sh` 不存在。现放行 `install_engines.sh`、`openfoam.sh` 与目录 `.gitignore`。EnergyPlus 树、tar.gz、EPW、`MANIFEST.json`、镜像仍不入库。 |
 
 ## 下一步
 

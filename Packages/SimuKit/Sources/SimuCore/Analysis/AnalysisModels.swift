@@ -252,15 +252,25 @@ public struct SteadyHeatBalancePayload: Codable, Equatable, Sendable {
     public let coolingSensibleWatts: Double?
     public let excludedTerms: [String]
     public let capacityScreen: SensibleCapacityScreen
+    public let completeness: HeatBalanceCompleteness?
+    public let lowerCoolingSensibleWatts: Double?
+    public let upperCoolingSensibleWatts: Double?
+    public let scenarios: [HeatSensitivityScenario]?
+    public let adoptedSensibleCapacityWatts: Double?
+    public let notes: [String]?
     public init(
         terms: [HeatBalanceTerm], totalSignedWatts: Double?, coolingSensibleWatts: Double?,
-        excludedTerms: [String], capacityScreen: SensibleCapacityScreen = .cannotEvaluate
+        excludedTerms: [String], capacityScreen: SensibleCapacityScreen = .cannotEvaluate,
+        completeness: HeatBalanceCompleteness? = nil, lowerCoolingSensibleWatts: Double? = nil, upperCoolingSensibleWatts: Double? = nil,
+        scenarios: [HeatSensitivityScenario]? = nil, adoptedSensibleCapacityWatts: Double? = nil, notes: [String]? = nil
     ) {
         self.terms = terms
         self.totalSignedWatts = totalSignedWatts
         self.coolingSensibleWatts = coolingSensibleWatts
         self.excludedTerms = excludedTerms
         self.capacityScreen = capacityScreen
+        self.completeness = completeness; self.lowerCoolingSensibleWatts = lowerCoolingSensibleWatts; self.upperCoolingSensibleWatts = upperCoolingSensibleWatts
+        self.scenarios = scenarios; self.adoptedSensibleCapacityWatts = adoptedSensibleCapacityWatts; self.notes = notes
     }
 }
 public enum LocalAnalysisPayload: Codable, Equatable, Sendable {

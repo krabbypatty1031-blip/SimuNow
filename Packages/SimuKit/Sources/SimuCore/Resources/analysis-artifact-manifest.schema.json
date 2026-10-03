@@ -648,6 +648,16 @@
           "minimum": 1,
           "type": "integer"
         },
+        "measurementPeriod": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "power": {
           "$ref": "#/$defs/NativeElectricalPower"
         },
@@ -827,6 +837,7 @@
           "type": "array"
         },
         "comparisonContextHash": {
+          "pattern": "^[a-f0-9]{64}$",
           "type": "string"
         },
         "comparisonID": {
@@ -834,13 +845,40 @@
           "type": "string"
         },
         "comparisonVersion": {
+          "const": 1,
           "type": "integer"
+        },
+        "decisionVariables": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "incomparableReasons": {
           "items": {
             "$ref": "#/$defs/AnalysisMissingReason"
           },
           "type": "array"
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/EstimateComparisonMetric"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projectID": {
           "format": "uuid",
@@ -905,6 +943,190 @@
       "title": "Control",
       "type": "object"
     },
+    "CostEvaluationConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "displayFractionDigits": {
+          "maximum": 8,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excludedCosts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requestedWindows": {
+          "items": {
+            "$ref": "#/$defs/AnalysisTimeWindow"
+          },
+          "type": "array"
+        },
+        "tariffs": {
+          "items": {
+            "$ref": "#/$defs/CostTariffInterval"
+          },
+          "maxItems": 1440,
+          "type": "array"
+        },
+        "timeBasis": {
+          "$ref": "#/$defs/AnalysisTimeBasis"
+        }
+      },
+      "required": [
+        "timeBasis",
+        "requestedWindows",
+        "tariffs",
+        "displayFractionDigits",
+        "excludedCosts"
+      ],
+      "type": "object"
+    },
+    "CostEvaluationPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "decimalPolicy": {
+          "type": "string"
+        },
+        "lowerCostDecimal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+        },
+        "missingReasons": {
+          "items": {
+            "$ref": "#/$defs/AnalysisMissingReason"
+          },
+          "type": "array"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/CostEvaluationSegment"
+          },
+          "type": "array"
+        },
+        "totalCostDecimal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+        },
+        "upperCostDecimal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+        }
+      },
+      "required": [
+        "segments",
+        "missingReasons",
+        "decimalPolicy"
+      ],
+      "type": "object"
+    },
+    "CostEvaluationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "$ref": "#/$defs/CostEvaluationConfiguration"
+        },
+        "evaluationHash": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "evaluationVersion": {
+          "const": 1,
+          "type": "integer"
+        },
+        "owner": {
+          "const": "com.simunow.native-analysis",
+          "type": "string"
+        },
+        "parentIdentity": {
+          "$ref": "#/$defs/RunIdentity"
+        },
+        "payload": {
+          "$ref": "#/$defs/CostEvaluationPayload"
+        },
+        "projectID": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evaluationVersion",
+        "owner",
+        "projectID",
+        "parentIdentity",
+        "evaluationHash",
+        "configuration",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "CostEvaluationSegment": {
+      "additionalProperties": false,
+      "properties": {
+        "costDecimal": {
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "type": "string"
+        },
+        "endMinute": {
+          "type": "integer"
+        },
+        "energyKWhDecimal": {
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "type": "string"
+        },
+        "rateDecimal": {
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "startMinute": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "startMinute",
+        "endMinute",
+        "energyKWhDecimal",
+        "rateDecimal",
+        "costDecimal",
+        "source"
+      ],
+      "type": "object"
+    },
     "CostInputs": {
       "additionalProperties": false,
       "properties": {
@@ -940,6 +1162,98 @@
         "quotes"
       ],
       "title": "CostInputs",
+      "type": "object"
+    },
+    "CostTariffInterval": {
+      "additionalProperties": false,
+      "properties": {
+        "endMinute": {
+          "type": "integer"
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "$ref": "#/$defs/SourceRecord"
+                },
+                "state": {
+                  "const": "known"
+                },
+                "uncertainty": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/UncertaintyBounds"
+                    },
+                    {
+                      "properties": {
+                        "lower": {
+                          "anyOf": [
+                            {
+                              "const": 0
+                            },
+                            {
+                              "maximum": 1000000000000.0,
+                              "minimum": 1e-12
+                            }
+                          ],
+                          "type": "number"
+                        },
+                        "upper": {
+                          "anyOf": [
+                            {
+                              "const": 0
+                            },
+                            {
+                              "maximum": 1000000000000.0,
+                              "minimum": 1e-12
+                            }
+                          ],
+                          "type": "number"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "unit": {
+                  "const": "currency/kWh"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "const": 0
+                    },
+                    {
+                      "maximum": 1000000000000.0,
+                      "minimum": 1e-12
+                    }
+                  ],
+                  "type": "number"
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "unit",
+                "source"
+              ],
+              "type": "object"
+            },
+            {
+              "$ref": "#/$defs/Unknown"
+            }
+          ]
+        },
+        "startMinute": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "startMinute",
+        "endMinute",
+        "rate"
+      ],
       "type": "object"
     },
     "DailySchedule": {
@@ -1215,6 +1529,73 @@
       "title": "EquipmentGain",
       "type": "object"
     },
+    "EstimateComparisonMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "absoluteDifference": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseline": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metric": {
+          "type": "string"
+        },
+        "percentDifference": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ranking": {
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric",
+        "unit",
+        "reasons",
+        "ranking"
+      ],
+      "type": "object"
+    },
     "EvaluationInputs": {
       "additionalProperties": false,
       "properties": {
@@ -1380,6 +1761,41 @@
       "title": "HVACDevice",
       "type": "object"
     },
+    "HeatBalanceCompleteness": {
+      "enum": [
+        "completeDeclaredCase",
+        "declaredSubset"
+      ],
+      "type": "string"
+    },
+    "HeatBalanceCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "airPropertyConditions": {
+          "type": "string"
+        },
+        "conductanceScope": {
+          "type": "string"
+        },
+        "indoorConditionConfirmed": {
+          "type": "boolean"
+        },
+        "internalSensibleScope": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        }
+      },
+      "required": [
+        "conductanceScope",
+        "internalSensibleScope",
+        "airPropertyConditions",
+        "indoorConditionConfirmed",
+        "source"
+      ],
+      "type": "object"
+    },
     "HeatBalanceTerm": {
       "additionalProperties": false,
       "properties": {
@@ -1443,6 +1859,122 @@
         "latent"
       ],
       "title": "HeatGain",
+      "type": "object"
+    },
+    "HeatInternalSource": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "effectiveFraction": {
+          "$ref": "#/$defs/NativeRatio"
+        },
+        "entityID": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "sensible": {
+          "$ref": "#/$defs/NativeThermalPower"
+        }
+      },
+      "required": [
+        "entityID",
+        "description",
+        "sensible",
+        "effectiveFraction"
+      ],
+      "type": "object"
+    },
+    "HeatSensitivityConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "type": "array"
+        },
+        "relationship": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        }
+      },
+      "required": [
+        "fields",
+        "relationship",
+        "source"
+      ],
+      "type": "object"
+    },
+    "HeatSensitivityScenario": {
+      "additionalProperties": false,
+      "properties": {
+        "adoptedValues": {
+          "items": {
+            "$ref": "#/$defs/HeatSensitivityValue"
+          },
+          "type": "array"
+        },
+        "coolingSensibleWatts": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "totalSignedWatts": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "adoptedValues",
+        "totalSignedWatts",
+        "coolingSensibleWatts"
+      ],
+      "type": "object"
+    },
+    "HeatSensitivityValue": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRecord"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "unit",
+        "source"
+      ],
+      "type": "object"
+    },
+    "HeatTermExclusion": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "term": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "reason"
+      ],
       "type": "object"
     },
     "HvacRecord": {
@@ -2582,6 +3114,40 @@
         }
       ]
     },
+    "NativeEnergyRate": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/SourceRecord"
+            },
+            "state": {
+              "const": "known"
+            },
+            "uncertainty": {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            "unit": {
+              "const": "currency/kWh"
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "unit",
+            "source"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/Unknown"
+        }
+      ]
+    },
     "NativeHeatConductance": {
       "anyOf": [
         {
@@ -2598,6 +3164,40 @@
             },
             "unit": {
               "const": "W/K"
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "state",
+            "value",
+            "unit",
+            "source"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/Unknown"
+        }
+      ]
+    },
+    "NativeRatio": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/SourceRecord"
+            },
+            "state": {
+              "const": "known"
+            },
+            "uncertainty": {
+              "$ref": "#/$defs/UncertaintyBounds"
+            },
+            "unit": {
+              "const": "1"
             },
             "value": {
               "type": "number"
@@ -3053,11 +3653,45 @@
     "PowerEstimateConfiguration": {
       "additionalProperties": false,
       "properties": {
+        "aggregateCoverageNote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aggregateDeviceIDs": {
+          "anyOf": [
+            {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "intervals": {
           "items": {
             "$ref": "#/$defs/AnalysisPowerInterval"
           },
           "type": "array"
+        },
+        "ratedContinuousConfirmed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestedWindows": {
           "items": {
@@ -4025,14 +4659,44 @@
         "conductance": {
           "$ref": "#/$defs/NativeHeatConductance"
         },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeatBalanceCoverage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "density": {
           "$ref": "#/$defs/NativeDensity"
         },
         "excludedTerms": {
           "items": {
+            "enum": [
+              "conductance",
+              "outdoorAir",
+              "infiltration",
+              "internalSensibleHeat",
+              "solarSensibleHeat"
+            ],
             "type": "string"
           },
           "type": "array"
+        },
+        "exclusions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/HeatTermExclusion"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "indoorTemperature": {
           "$ref": "#/$defs/NativeTemperature"
@@ -4042,6 +4706,19 @@
         },
         "internalSensibleHeat": {
           "$ref": "#/$defs/NativeThermalPower"
+        },
+        "internalSources": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/HeatInternalSource"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "outdoorAir": {
           "$ref": "#/$defs/NativeVolumeFlow"
@@ -4059,11 +4736,41 @@
             }
           ]
         },
+        "sensibleHeatRatio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeRatio"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sensitivity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeatSensitivityConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "solarSensibleHeat": {
           "$ref": "#/$defs/NativeThermalPower"
         },
         "specificHeat": {
           "$ref": "#/$defs/NativeSpecificHeat"
+        },
+        "totalCoolingCapacity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeThermalPower"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -4084,8 +4791,28 @@
     "SteadyHeatBalancePayload": {
       "additionalProperties": false,
       "properties": {
+        "adoptedSensibleCapacityWatts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "capacityScreen": {
           "$ref": "#/$defs/SensibleCapacityScreen"
+        },
+        "completeness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeatBalanceCompleteness"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "coolingSensibleWatts": {
           "anyOf": [
@@ -4099,9 +4826,53 @@
         },
         "excludedTerms": {
           "items": {
+            "enum": [
+              "conductance",
+              "outdoorAir",
+              "infiltration",
+              "internalSensibleHeat",
+              "solarSensibleHeat"
+            ],
             "type": "string"
           },
           "type": "array"
+        },
+        "lowerCoolingSensibleWatts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scenarios": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/HeatSensitivityScenario"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "maxItems": 5
         },
         "terms": {
           "items": {
@@ -4110,6 +4881,16 @@
           "type": "array"
         },
         "totalSignedWatts": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upperCoolingSensibleWatts": {
           "anyOf": [
             {
               "type": "number"

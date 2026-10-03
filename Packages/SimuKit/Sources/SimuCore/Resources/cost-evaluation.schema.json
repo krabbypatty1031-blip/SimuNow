@@ -5249,8 +5249,8 @@
       "type": "object"
     }
   },
-  "$id": "https://simunow.local/schemas/analysis-artifact-manifest.schema.json",
-  "$ref": "#/$defs/AnalysisArtifactManifest",
+  "$id": "https://simunow.local/schemas/cost-evaluation.schema.json",
+  "$ref": "#/$defs/CostEvaluationRecord",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "AnalysisArtifactManifest"
+  "title": "CostEvaluationRecord"
 }

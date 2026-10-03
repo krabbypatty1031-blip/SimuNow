@@ -18,6 +18,8 @@ public final class WorkspaceStore {
     public var presentedError: String?
     public let modelRegistry: ModelRegistry
     public let projectValidator: ProjectValidator
+    public let estimates: ThermalEstimateCoordinator
+    @ObservationIgnored public var persistCostEvaluation: (@MainActor @Sendable (NativeCostEvaluationArtifact) throws -> Void)?
     public let preview: PreviewCoordinator
     @ObservationIgnored public var persistNativeAnalysis: (@MainActor @Sendable (NativeAnalysisArtifact) throws -> Void)?
     public let localAnalysisClient: any LocalAnalysisSubmitting
@@ -35,6 +37,7 @@ public final class WorkspaceStore {
         self.simulationClient = simulationClient
         self.localAnalysisClient = localAnalysisClient
         self.preview = PreviewCoordinator(client: localAnalysisClient)
+        self.estimates = ThermalEstimateCoordinator(client: localAnalysisClient)
     }
 
     public var currentScenario: Scenario? {

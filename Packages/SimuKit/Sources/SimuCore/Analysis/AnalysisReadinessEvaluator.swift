@@ -218,35 +218,12 @@ public struct AnalysisReadinessEvaluator: Sendable {
                     "本次仅预览方向与遮挡，不采用此物理项：\(v.message)", entity: v.entityID, warning: true)
             }
         case .powerEstimate(let config):
-            if config.requestedWindows.isEmpty {
-                issue("power_window_required", "/analysis/configuration/requestedWindows", "明确要估算的时段。")
-            }
-            if config.intervals.isEmpty {
-                issue("power_basis_required", "/analysis/configuration/intervals", "明确用电功率与功率口径；制冷量不能代替电功率。")
-            }
-            for (i, p) in config.intervals.enumerated() where p.power.value == nil {
-                issue(
-                    "power_missing", "/analysis/configuration/intervals/\(i)/power", "功率未知，结果只能给出已知部分的小计。",
-                    warning: true)
+            for m in ThermalEstimateValidation.powerMissing(config, deviceIDs: scenario.inputs.hvac.map(\.id)) {
+                issue(m.code, "/analysis/configuration/" + m.fieldPath, m.reason)
             }
         case .steadyHeatBalance(let config):
-            let values: [(String, Double?)] = [
-                ("conductance", config.conductance.value),
-                ("indoorTemperature", config.indoorTemperature.value),
-                ("outdoorTemperature", config.outdoorTemperature.value),
-                ("outdoorAir", config.outdoorAir.value), ("infiltration", config.infiltration.value),
-                ("density", config.density.value), ("specificHeat", config.specificHeat.value),
-                ("internalSensibleHeat", config.internalSensibleHeat.value),
-                ("solarSensibleHeat", config.solarSensibleHeat.value),
-            ]
-            for (field, value) in values where value == nil {
-                issue("heat_input_missing", "/analysis/configuration/\(field)", "显热情景缺少 \(field)，不能将未知补为零。")
-            }
-            if let density = config.density.value, density <= 0 {
-                issue("heat_density", "/analysis/configuration/density", "密度必须大于零。")
-            }
-            if let heat = config.specificHeat.value, heat <= 0 {
-                issue("heat_specific_heat", "/analysis/configuration/specificHeat", "比热必须大于零。")
+            for m in ThermalEstimateValidation.heatMissing(config) {
+                issue(m.code, "/analysis/configuration/" + m.fieldPath, m.reason)
             }
         }
         return .init(

@@ -43,7 +43,7 @@ Golden：`{"a":typed Int64(1),"b":typed Double(-0)}` bytes 为 `0900000000000000
 | Hash | 投影 |
 |---|---|
 | snapshotHash | 全 snapshot，包括未知扩展原 token，作为完整证据 |
-| inputHash | project/scenario/method、采用配置/来源/假设；preview 加去名称/northAngle 的几何、供风口 id/position/direction、设备 kind/version/id/roomID、去名称的 seat/sample；power/heat 只采用明确方法配置 |
+| inputHash | project/scenario/method、采用配置/来源/假设；preview 加去名称/northAngle 的几何、供风口 id/position/direction、设备 kind/version/id/roomID、去名称的 seat/sample；power采用明确方法配置及排序设备ID覆盖清单；heat只采用明确冻结方法配置 |
 | computationHash | 同 input 投影 + project/scenario/method 命名空间，缓存不跨方案载荷重绑定 |
 | evaluationHash | 固定 runID/inputHash + 评价版本 + 固定评价配置；N4 负责费用具体 schema |
 
@@ -51,7 +51,7 @@ Golden：`{"a":typed Int64(1),"b":typed Double(-0)}` bytes 为 `0900000000000000
 
 ## 执行与事件
 
-`LocalAnalysisSubmitting.submit` 返回有限产量 AsyncStream，cancel 幂等。`LocalAnalysisExecutor.method` + `execute(request,progress)` 返回 typed LocalAnalysisExecution；只有实际注册 executor 可运行。生产默认 unavailable client 没有假算法。
+`LocalAnalysisSubmitting.submit` 返回有限产量 AsyncStream，cancel 幂等。`LocalAnalysisExecutor.method` + `execute(request,progress)` 返回 typed LocalAnalysisExecution；只有实际注册 executor 可运行。生产client只注册已实现的真实方法（N3 airflowPreview、N4 powerEstimate/steadyHeatBalance）；unavailable client没有假算法。
 
 actor 最大 2 running / 8 queued，先登记 job 再启动 detached CPU task；accepted→validating→running→可选 progress→checking→唯一 completed/failed/cancelled。sequence 从0递增，每run最多24事件、progress最多16，合法终态不丢。取消排队立即终止，运行取消由 Task.checkCancellation 协作退出；消费者断开触发取消，deinit 释放句柄和continuation。completed 与 checks.failed 可以并存，表示执行完成但方法检查未通过；只有 checks.passed 进入成功缓存。
 
@@ -91,3 +91,27 @@ Workspace 的配置采用冻结项目/方案/原配置草稿，通过同一 P2 �
 `ProjectCodec.validate/validateSnapshot` 与对应 encode 执行相同结构和插件载荷检查，仅不序列化未使用的 bytes。`AnalysisInputResolver.prepare` 返回同一次验证的 request/readiness；`validatedRequestData` 在完整 wire、hash、readiness 检查后返回编码数据供 artifact 使用，公开可变/篡改 request 仍会拒绝。没有“可信 hash 即跳过验证”的入口。
 
 JSON wire 输出保持排序、Foundation 字符串 escaping 与原 number token；canonical 数字保持 Int64/UInt64 精度、负零归一与 opaque 原拼写。原生侧文件 append 仅当 document 的公开 project/metadata 与构造时已验证值相等、assets 与旧值相等时复用输入编码/天气摘要；完整输出文件/目录/字节预算仍检查，任何输入/资产变化走完整构造。生产平台入口持有全 App 共享 client，窗口拥有独立 coordinator；2 running/8 queued 为进程级登记上限。
+
+## N4 估算生产接入与费用评价
+
+N4不改project v2/P0/package v1。现有v1配置兼容增加可选字段：Power的`ratedContinuousConfirmed`、`aggregateDeviceIDs/aggregateCoverageNote`及每段`measurementPeriod`；Heat的`coverage`、冻结`internalSources`、逐项`exclusions`、`totalCoolingCapacity/sensibleHeatRatio`与`sensitivity`。旧记录可保留；完整新生产运行必须通过更严格就绪度。未知不能作为已完成计算，N1旧test executor产出的无片段/无完整ledger占位数据不能升级为有效N4结果。
+
+功率按实际请求窗口相交段检查unknown/basis，所有输入仍拒绝结构非法/负值/非有限/重叠。measuredAverage需measured来源及采样时段，ratedContinuous需明确确认。多设备需明确合计覆盖全部设备ID。SingleSplit.electricalPower只导入草稿，用户再选basis；P2 fraction不自动成为启停率。源和配置冻结，后续高级输入变动需明确重新导入/采用；未采用的风向、循环风、电价、热量不改变功率hash。
+
+HeatCoverage声明UA/内部显热覆盖、空气参数适用条件并明确采用Tin。五项账目为conductance、outdoorAir、infiltration、internalSensibleHeat、solarSensibleHeat；内部清单只采用总显热×有效比例，不加radiant/convective/latent。清单内区间首版拒绝，需改用有来源的一致合计范围。明确排除项需逐项理由并标declaredSubset，不能进行完整容量筛查。ρ支持0<value≤10kg/m³、cp支持0<value≤10000J/(kg.K)、温度−100…100°C；这是数值支持范围，不是现实校准有效性。所有nominal/bounds端点一起校验。
+
+采用的热输入bounds必须全部显式登记于sensitivity，最多2个输入、4个端点+1名义；相关性已知而无组合关系不自动当独立。结果保存各情景采用值/单位/来源与min/max，无概率。显热容量以direct sensible或total×有来源SHR；未知SHR不取1。能力lower覆盖最大需求才判账面覆盖，能力upper低于最小需求才判不足，其余不可筛查；排除项同样不可筛查。
+
+独立`CostEvaluationRecord` owner=com.simunow.native-analysis、evaluationVersion=1，包含projectID、完整parentIdentity、evaluationHash、固定configuration与payload。费用只评价严格完整checked power run，同fixed24HourReference窗口。所有功率/价格/窗口边界并集按半开片段计算；缺价/缺币种保留电量，费用总额missing。币种首版三字母单币种，不换汇。
+
+Decimal策略：将已验证binary64输入转其最短round-trip十进制字符串后进入Foundation Decimal（38有效数字）；每片按W×分钟/60000得到kWh，再乘单币种/kWh费率，base-10累加。支持非负价格，功率/价格范围按非负端点积传播。费用采用的功率W与费率/端点仅支持0或1e−12…1e12；这将算术远离Foundation Decimal指数边界（本机SDK可能对极小数乘法返回不报错的巨大值）。更小非零值拒绝费用评价，电量仍可独立可用；保留合法0和实际小额累加。不可表示或下溢为零的非零输入拒绝，不能生成假免费。`energyKWhDecimal/rateDecimal/costDecimal/totalCostDecimal/lowerCostDecimal/upperCostDecimal`为十进制字符串，不经JSON Double。最终UI按配置digits做half-even展示，精确值和片段保留；不是声明采用某账单结算规则。不补未知税费、订阅/设备/安装费或全年收益。
+
+费用位于`runs/<runID>/native-analysis/evaluations/<evaluationHash>.json`，单份≤256KiB。NativeCostEvaluationCodec后台重算核对固定父输入和payload；appendCostEvaluation检查最新父run/项目/场景、父字节与manifest，扩文件索引与完整预算，原input/result字节保持。重复hash同内容复用，冲突拒绝。重开先验证manifest所列长度/sha256，再按固定parent重算验证费用；未知未列附件保留。超预算结果明确未保存。
+
+ComparisonSnapshot复用N1类型，兼容增加可选decisionVariables/metrics；独立comparison-snapshot.schema验证固定纯值。比较方法/version、请求窗口、basis、背景条件、规则档案、检查与当前hash；变化字段需用户明确声明，其他字段为背景。名称/相机不成为几何背景。费用币种/费率不同阻断费用比较，电量可独立有效；范围重叠不排序为最佳，过期/不完整口径cannotRank，零分母百分比不可定义。N4不写comparison包侧文件，N5负责ComparisonRecord固定保存。
+
+开发DEBUG入口旗标SIMUNOW_THERMAL_PROBE使用真实WorkspaceDocumentView及全App client，公开来源/范围/missing/子集/未知SHR/仅制冷量/真实附件冲突均为输入反例，没有预制结果。运行日志和平台交互证据分别记录。
+
+费用artifact后台封装校验父manifest列出附件的原SHA/大小并携带不可变原字节与索引票据；MainActor最新文档事务只比较原字节/索引，再追加费用与小manifest。若后台准备后父附件或索引出现未验证变化，原子拒绝并保留会话结果以便重新评价；同hash同原字节复用，未知未列附件保留。
+
+固定power/heat证据在Simulation/Artifact/Comparator边界按methodVersion=1调用实际PowerIntegrator/SteadyHeatBalance纯函数重算，精确核对确定性binary64派生数值、片段/ledger、采用区间/覆盖/basis、容量筛查及端点情景；自报hash与自一致总和不能代替输入匹配。无采用区间的旧名义记录可省略新增零宽包络/名义情景，存在输入bounds时不得省略。未知方法版本拒绝；failed记录不能用于有效收益比较。

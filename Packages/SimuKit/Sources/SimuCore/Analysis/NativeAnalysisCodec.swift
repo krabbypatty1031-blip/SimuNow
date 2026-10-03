@@ -6,6 +6,8 @@ public enum NativeAnalysisRecord: String, Sendable {
     case result = "local-analysis-result"
     case manifest = "analysis-artifact-manifest"
     case configuration = "analysis-configuration"
+    case costEvaluation = "cost-evaluation"
+    case comparisonSnapshot = "comparison-snapshot"
 }
 /// A separate strict wire boundary; it never changes project v2 or P0 quality semantics.
 public struct NativeAnalysisCodec: Sendable {
@@ -13,7 +15,7 @@ public struct NativeAnalysisCodec: Sendable {
     public init(registry: ModelRegistry = .builtIn) { self.registry = registry }
     private static let schemas: [String: Result<JSONValue, ProjectDataError>] = {
         var values: [String: Result<JSONValue, ProjectDataError>] = [:]
-        for record in [NativeAnalysisRecord.request, .event, .result, .manifest, .configuration] {
+        for record in [NativeAnalysisRecord.request, .event, .result, .manifest, .configuration, .costEvaluation, .comparisonSnapshot] {
             do {
                 guard
                     let url = Bundle.module.url(
@@ -59,6 +61,40 @@ public struct NativeAnalysisCodec: Sendable {
     }
     public func decodeConfiguration(_ data: Data) throws -> AnalysisConfigurationStore {
         try decode(data, record: .configuration, validate: validateStore)
+    }
+    public func encodeCostEvaluation(_ value: CostEvaluationRecord) throws -> Data {
+        try encode(value, record: .costEvaluation, validate: validateCostEvaluation)
+    }
+    public func decodeCostEvaluation(_ data: Data) throws -> CostEvaluationRecord {
+        try decode(data, record: .costEvaluation, validate: validateCostEvaluation)
+    }
+    public func encodeComparisonSnapshot(_ value: ComparisonSnapshot) throws -> Data {
+        try encode(value, record: .comparisonSnapshot, validate: validateComparisonSnapshot)
+    }
+    public func decodeComparisonSnapshot(_ data: Data) throws -> ComparisonSnapshot {
+        try decode(data, record: .comparisonSnapshot, validate: validateComparisonSnapshot)
+    }
+    public func validateCostEvaluation(_ value: CostEvaluationRecord) throws {
+        try ThermalEstimateValidation.validateWindows(value.configuration.requestedWindows)
+        try ThermalEstimateValidation.validateWindows(value.configuration.tariffs.map { .init(startMinute:$0.startMinute,endMinute:$0.endMinute) },requireNonempty:false)
+        for t in value.configuration.tariffs {
+            try ThermalEstimateValidation.validateParameter(t.rate)
+            if case .known(let rate,_,let bounds) = t.rate {
+                try ThermalEstimateValidation.validateCostNumericInput(rate)
+                if let bounds { try ThermalEstimateValidation.validateCostNumericInput(bounds.lower); try ThermalEstimateValidation.validateCostNumericInput(bounds.upper) }
+            }
+        }
+        guard value.payload.missingReasons.isEmpty == (value.payload.totalCostDecimal != nil),
+              value.payload.totalCostDecimal == nil || value.configuration.currency?.range(of:"^[A-Z]{3}$",options:.regularExpression) != nil else { throw ProjectDataError.contract("Cost completeness/currency mismatch") }
+        for segment in value.payload.segments { guard segment.startMinute < segment.endMinute else { throw ProjectDataError.contract("Invalid cost segment") } }
+    }
+    public func validateComparisonSnapshot(_ value: ComparisonSnapshot) throws {
+        let metrics = value.metrics ?? []
+        guard metrics.count <= 16, Set(metrics.map(\.metric)).count == metrics.count else { throw ProjectDataError.contract("Invalid comparison metrics") }
+        for m in metrics {
+            guard [m.baseline,m.candidate,m.absoluteDifference,m.percentDifference].compactMap({$0}).allSatisfy(\.isFinite),
+                  m.reasons.isEmpty || m.percentDifference == nil, m.baseline != 0 || m.percentDifference == nil else { throw ProjectDataError.contract("Undefined comparison percentage") }
+        }
     }
     public func validateRequestWire(_ value: LocalAnalysisRequest) throws {
         _ = try validatedTree(value, record: .request, validate: validateRequest)
@@ -135,7 +171,8 @@ public struct NativeAnalysisCodec: Sendable {
         case .powerEstimate(let p):
             try windows(p.requestedWindows.map { ($0.startMinute, $0.endMinute) })
             try windows(p.intervals.map { ($0.startMinute, $0.endMinute) })
-        case .steadyHeatBalance: break
+            try ThermalEstimateValidation.validatePower(p)
+        case .steadyHeatBalance(let p): try ThermalEstimateValidation.validateHeat(p)
         }
         try validateParameters(try JSONTreeCoding.encode(config))
     }
@@ -216,6 +253,48 @@ public struct NativeAnalysisCodec: Sendable {
                 guard r.hitPosition == nil || r.state == .occluded else {
                     throw ProjectDataError.contract("Hit position without occlusion")
                 }
+            }
+        }
+        func close(_ a:Double,_ b:Double)->Bool { a.isFinite && b.isFinite && abs(a-b)<=max(1e-9,max(abs(a),abs(b))*1e-9) }
+        func envelope(_ nominal:Double?,_ lower:Double?,_ upper:Double?) throws {
+            guard (lower == nil) == (upper == nil) else { throw ProjectDataError.contract("Incomplete result range") }
+            if let lo=lower,let hi=upper { guard let nominal,lo.isFinite,hi.isFinite,lo>=0,lo<=nominal,nominal<=hi else { throw ProjectDataError.contract("Invalid result nominal/envelope") } }
+        }
+        if case .powerEstimate(let p)=result.payload {
+            try ThermalEstimateValidation.validateWindows(p.requestedWindows,requireNonempty:result.checks.state == .passed)
+            try ThermalEstimateValidation.validateWindows(p.segments.map{.init(startMinute:$0.startMinute,endMinute:$0.endMinute)},requireNonempty:false)
+            var sum=0.0
+            for s in p.segments {
+                guard s.powerWatts.isFinite,s.powerWatts>=0,s.energyKWh>=0,close(s.energyKWh,s.powerWatts*Double(s.endMinute-s.startMinute)/60000),
+                      p.requestedWindows.contains(where:{$0.startMinute<=s.startMinute && $0.endMinute>=s.endMinute}) else { throw ProjectDataError.contract("Invalid power result segment") }
+                sum += s.energyKWh
+            }
+            guard close(p.knownSubtotalKWh,sum) else { throw ProjectDataError.contract("Power subtotal differs from segments") }
+            if let total=p.totalEnergyKWh { guard close(total,sum) else { throw ProjectDataError.contract("Power total differs from segments") } }
+            if result.checks.state == .passed {
+                guard let total=p.totalEnergyKWh,close(total,sum),result.missingReasons.isEmpty else { throw ProjectDataError.contract("Passed power result has missing complete total") }
+                for w in p.requestedWindows {
+                    var cursor=w.startMinute
+                    for s in p.segments where s.startMinute>=w.startMinute && s.endMinute<=w.endMinute {
+                        guard s.startMinute==cursor else { throw ProjectDataError.contract("Passed power result has coverage gap") };cursor=s.endMinute
+                    }
+                    guard cursor==w.endMinute else { throw ProjectDataError.contract("Passed power result is partial") }
+                }
+            }
+            try envelope(p.totalEnergyKWh,p.lowerEnergyKWh,p.upperEnergyKWh)
+        }
+        if case .steadyHeatBalance(let p)=result.payload {
+            guard Set(p.excludedTerms).count == p.excludedTerms.count, Set(p.excludedTerms).isSubset(of:Set(ThermalEstimateValidation.heatTerms)) else { throw ProjectDataError.contract("Unknown or duplicate excluded result term") }
+            guard Set(p.terms.map(\.id)).count==p.terms.count,p.terms.allSatisfy({$0.signedWatts.isFinite && ThermalEstimateValidation.heatTerms.contains($0.id)}) else { throw ProjectDataError.contract("Invalid or repeated heat ledger term") }
+            if result.checks.state == .passed {
+                guard let total=p.totalSignedWatts,let cooling=p.coolingSensibleWatts,close(total,p.terms.reduce(0){$0+$1.signedWatts}),close(cooling,max(0,total)),result.missingReasons.isEmpty,
+                      p.completeness == (p.excludedTerms.isEmpty ? .completeDeclaredCase:.declaredSubset),
+                      Set(p.terms.map(\.id)) == Set(ThermalEstimateValidation.heatTerms).subtracting(p.excludedTerms),
+                      p.excludedTerms.isEmpty || p.capacityScreen == .cannotEvaluate else { throw ProjectDataError.contract("Passed heat ledger incomplete or mislabeled") }
+            }
+            try envelope(p.coolingSensibleWatts,p.lowerCoolingSensibleWatts,p.upperCoolingSensibleWatts)
+            if let scenarios=p.scenarios {
+                guard !scenarios.isEmpty,scenarios.count<=5,Set(scenarios.map(\.id)).count==scenarios.count,let nominal=scenarios.first(where:{$0.id=="nominal"}),close(nominal.totalSignedWatts,p.totalSignedWatts ?? .nan),close(nominal.coolingSensibleWatts,p.coolingSensibleWatts ?? .nan),scenarios.allSatisfy({close($0.coolingSensibleWatts,max(0,$0.totalSignedWatts))}),close(scenarios.map(\.coolingSensibleWatts).min()!,p.lowerCoolingSensibleWatts ?? .nan),close(scenarios.map(\.coolingSensibleWatts).max()!,p.upperCoolingSensibleWatts ?? .nan) else { throw ProjectDataError.contract("Heat scenarios/envelope mismatch") }
             }
         }
         guard !result.provenance.cacheHit || result.provenance.sourceRunID != nil else {

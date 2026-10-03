@@ -7,7 +7,9 @@ struct SimuNowMacApp: App {
     // Shared across DocumentGroup windows; each window keeps its own coordinator.
     @State private var analysisClient = LocalAnalysisClient.production()
     var body: some Scene {
-        #if SIMUNOW_AIRFLOW_PROBE && DEBUG
+        #if SIMUNOW_THERMAL_PROBE && DEBUG
+        WindowGroup("N4 Swift Thermal Estimate") { NativeThermalEstimateProbeHostView(localAnalysisClient: analysisClient) }
+        #elseif SIMUNOW_AIRFLOW_PROBE && DEBUG
         WindowGroup("N3 Swift Airflow Preview") { NativeAirflowPreviewProbeHostView() }
         #elseif SIMUNOW_ROOM_PROBE && DEBUG
         WindowGroup("N2 Room Scene Probe") { NativeRoomSceneProbeHostView() }
@@ -28,7 +30,7 @@ struct SimuNowMacApp: App {
         }
         #endif
         #endif
-        #if DEBUG && !SIMUNOW_NATIVE_PROBE && !SIMUNOW_ROOM_PROBE && !SIMUNOW_AIRFLOW_PROBE
+        #if DEBUG && !SIMUNOW_NATIVE_PROBE && !SIMUNOW_ROOM_PROBE && !SIMUNOW_AIRFLOW_PROBE && !SIMUNOW_THERMAL_PROBE
         WindowGroup("N1 RealityKit Probe", id: "native-probe") { NativeAnalysisProbeHostView() }
         WindowGroup("N2 Room Scene Probe", id: "room-scene-probe") { NativeRoomSceneProbeHostView() }
         #endif

@@ -38,6 +38,7 @@ public struct NativeArtifactCodec: Sendable {
         let input = try AnalysisInputResolver(registry: registry).validatedRequestData(request)
         let codec = NativeAnalysisCodec(registry: registry)
         let output = try codec.encodeResult(result)
+        try ThermalEstimateEvidenceValidation.validate(request:request,result:result)
         guard input.count <= Self.maximumInputBytes, output.count <= Self.maximumResultBytes else { throw NativeArtifactError.resourceLimit("Native input/result exceeds budget") }
         let manifest = AnalysisArtifactManifest(runID: request.identity.runID, scenarioID: request.identity.scenarioID,
             projectID: request.resolvedInput.snapshot.projectID, files: [
@@ -61,9 +62,11 @@ public struct NativeArtifactCodec: Sendable {
         let input = try data("input.json", maximum: Self.maximumInputBytes), output = try data("result.json", maximum: Self.maximumResultBytes)
         let request = try codec.decodeRequest(input), result = try codec.decodeResult(output)
         try AnalysisInputResolver(registry: registry).validate(request)
-        guard request.identity == result.identity, request.identity.runID == manifest.runID,
+        guard request.resolvedInput.snapshot.projectID == manifest.projectID,
+              request.identity == result.identity, request.identity.runID == manifest.runID,
               request.identity.scenarioID == manifest.scenarioID, request.method == result.method,
               result.assumptions == request.resolvedInput.adoptedAssumptions else { throw NativeArtifactError.identityMismatch }
+        try ThermalEstimateEvidenceValidation.validate(request:request,result:result)
         return .init(request: request, result: result, manifest: manifest, inputData: input, resultData: output, manifestData: manifestData)
     }
     public func read(entries: [String:ProjectPackageEntry], projectID: UUID) -> NativeArtifactReadResult {
@@ -113,6 +116,43 @@ public extension SimuNowDocument {
         let data: [String:ProjectPackageEntry] = ["input.json": .file(artifact.inputData), "result.json": .file(artifact.resultData), "manifest.json": .file(artifact.manifestData)]
         var entries = preservedEntries
         try entries.setNativeEntry(.directory(data), at: ["runs",artifact.request.identity.runID.uuidString.lowercased(),"native-analysis"], allowReplace: false)
+        try Self.validateOwnedNativeBudget(entries)
+        return try replacingPreservedEntries(entries)
+    }
+    /// Append-only evaluation; never rewrites the parent's frozen input/result.
+    func appendingCostEvaluation(_ evaluation: NativeCostEvaluationArtifact, expectedProjectID: UUID) throws -> Self {
+        guard project.id == expectedProjectID, evaluation.record.projectID == project.id else { throw NativeArtifactError.identityMismatch }
+        let key = evaluation.record.parentIdentity.runID.uuidString.lowercased()
+        guard case .directory(let runs) = preservedEntries["runs"], case .directory(let run) = runs[key], case .directory(let native) = run["native-analysis"],
+              case .file(let input) = native["input.json"], case .file(let result) = native["result.json"],
+              input == evaluation.verifiedParentFiles["input.json"], result == evaluation.verifiedParentFiles["result.json"],
+              case .file(let manifestData) = native["manifest.json"] else { throw NativeArtifactError.identityMismatch }
+        let codec = NativeAnalysisCodec(), manifest = try codec.decodeManifest(manifestData)
+        guard manifest.runID == evaluation.record.parentIdentity.runID, manifest.projectID == project.id, manifest.scenarioID == evaluation.record.parentIdentity.scenarioID else { throw NativeArtifactError.identityMismatch }
+        let relative = "evaluations/\(evaluation.record.evaluationHash).json"
+        let currentIndex=Dictionary(uniqueKeysWithValues:manifest.files.map{($0.relativePath,$0)})
+        guard evaluation.verifiedParentIndex.allSatisfy({currentIndex[$0.key] == $0.value}) else { throw NativeArtifactError.contentMismatch("Parent index changed; retry evaluation") }
+        // SHA and payload validation happened in the background codec. Compare exact
+        // immutable bytes/indexes here; a concurrent unverified index change fails atomically.
+        for file in manifest.files {
+            guard case .file(let data) = ProjectPackageEntry.directory(native).entry(at:file.relativePath) else { throw NativeArtifactError.contentMismatch(file.relativePath) }
+            if file.relativePath == relative {
+                guard data == evaluation.data, file.byteCount == evaluation.data.count, file.sha256 == evaluation.sha256 else { throw NativeArtifactError.collision(relative) }
+            } else {
+                guard evaluation.verifiedParentIndex[file.relativePath] == file, evaluation.verifiedParentFiles[file.relativePath] == data else { throw NativeArtifactError.contentMismatch("Parent attachment changed; retry evaluation: \(file.relativePath)") }
+            }
+        }
+        if let existing = ProjectPackageEntry.directory(native).entry(at:relative) {
+            guard existing == .file(evaluation.data), manifest.files.contains(where:{$0.relativePath == relative && $0.byteCount == evaluation.data.count && $0.sha256 == evaluation.sha256}) else { throw NativeArtifactError.collision(relative) }
+            return self
+        }
+        guard !manifest.files.contains(where:{$0.relativePath == relative}) else { throw NativeArtifactError.contentMismatch(relative) }
+        let nextManifest = AnalysisArtifactManifest(runID:manifest.runID,scenarioID:manifest.scenarioID,projectID:manifest.projectID,files:manifest.files + [.init(relativePath:relative,byteCount:evaluation.data.count,sha256:evaluation.sha256)])
+        let nextManifestData = try codec.encodeManifest(nextManifest)
+        guard nextManifestData.count <= NativeArtifactCodec.maximumManifestBytes else { throw NativeArtifactError.resourceLimit("manifest.json") }
+        var entries = preservedEntries
+        try entries.setNativeEntry(.file(evaluation.data),at:["runs",key,"native-analysis","evaluations",evaluation.record.evaluationHash+".json"],allowReplace:false)
+        try entries.setNativeEntry(.file(nextManifestData),at:["runs",key,"native-analysis","manifest.json"],allowReplace:true)
         try Self.validateOwnedNativeBudget(entries)
         return try replacingPreservedEntries(entries)
     }
@@ -196,5 +236,48 @@ public extension NativeArtifactCodec {
         let path="runs/\(runID.uuidString.lowercased())/native-analysis"
         guard case .directory(let files)=ProjectPackageEntry.directory(entries).entry(at:path) else { throw NativeArtifactError.invalidManifest }
         return try decode(files,expectedRunID:runID,expectedProjectID:projectID)
+    }
+}
+
+public struct NativeCostEvaluationArtifact: Equatable, Sendable {
+    public let record: CostEvaluationRecord
+    public let data: Data
+    public let parentInputSHA256: String
+    public let parentResultSHA256: String
+    fileprivate let sha256: String
+    fileprivate let verifiedParentFiles: [String:Data]
+    fileprivate let verifiedParentIndex: [String:AnalysisArtifactFile]
+    fileprivate init(record:CostEvaluationRecord,data:Data,parentInputSHA256:String,parentResultSHA256:String,verifiedParentFiles:[String:Data],verifiedParentIndex:[String:AnalysisArtifactFile]) {
+        self.record=record;self.data=data;self.parentInputSHA256=parentInputSHA256;self.parentResultSHA256=parentResultSHA256
+        self.sha256=AnalysisHasher.sha256(data);self.verifiedParentFiles=verifiedParentFiles;self.verifiedParentIndex=verifiedParentIndex
+    }
+}
+public enum NativeCostEvaluationCodec {
+    public static func make(_ record:CostEvaluationRecord,parent:NativeAnalysisArtifact,entries:[String:ProjectPackageEntry] = [:]) throws -> NativeCostEvaluationArtifact {
+        try CostEvaluator.validate(record,parent:.init(request:parent.request,result:parent.result))
+        let data=try NativeAnalysisCodec().encodeCostEvaluation(record)
+        guard data.count <= CostEvaluator.maximumRecordBytes else { throw NativeArtifactError.resourceLimit("cost evaluation") }
+        let root="runs/\(parent.request.identity.runID.uuidString.lowercased())/native-analysis/"
+        var verified:[String:Data]=[:],index:[String:AnalysisArtifactFile]=[:]
+        for file in parent.manifest.files {
+            try Task.checkCancellation()
+            let bytes: Data
+            if file.relativePath == "input.json" { bytes=parent.inputData }
+            else if file.relativePath == "result.json" { bytes=parent.resultData }
+            else if case .file(let existing)=ProjectPackageEntry.directory(entries).entry(at:root+file.relativePath) { bytes=existing }
+            else { throw NativeArtifactError.contentMismatch(file.relativePath) }
+            guard bytes.count == file.byteCount, AnalysisHasher.sha256(bytes) == file.sha256 else { throw NativeArtifactError.contentMismatch(file.relativePath) }
+            verified[file.relativePath]=bytes;index[file.relativePath]=file
+        }
+        guard index["input.json"] != nil,index["result.json"] != nil else { throw NativeArtifactError.invalidManifest }
+        return .init(record:record,data:data,parentInputSHA256:index["input.json"]!.sha256,parentResultSHA256:index["result.json"]!.sha256,verifiedParentFiles:verified,verifiedParentIndex:index)
+    }
+    public static func load(hash:String,parent:NativeAnalysisArtifact,entries:[String:ProjectPackageEntry]) throws -> CostEvaluationRecord {
+        let path="runs/\(parent.request.identity.runID.uuidString.lowercased())/native-analysis/evaluations/\(hash).json"
+        guard case .file(let data)=ProjectPackageEntry.directory(entries).entry(at:path),data.count<=CostEvaluator.maximumRecordBytes,
+              let index=parent.manifest.files.first(where:{$0.relativePath=="evaluations/\(hash).json"}),index.byteCount==data.count,index.sha256==AnalysisHasher.sha256(data) else { throw NativeArtifactError.contentMismatch(path) }
+        let record=try NativeAnalysisCodec().decodeCostEvaluation(data)
+        guard record.evaluationHash==hash else { throw NativeArtifactError.identityMismatch }
+        try CostEvaluator.validate(record,parent:.init(request:parent.request,result:parent.result));return record
     }
 }

@@ -55,7 +55,9 @@ public struct WorkspaceView: View {
         .onChange(of: previewInput) { _, input in
             store.preview.update(input,registry: store.modelRegistry,persist: persistPreview)
         }
-        .onDisappear { store.preview.stop() }
+        .onChange(of: estimateInput) { _, input in store.estimates.update(input,registry:store.modelRegistry) }
+        .onAppear { store.estimates.update(estimateInput,registry:store.modelRegistry) }
+        .onDisappear { store.preview.stop();store.estimates.stop() }
         .alert("操作未完成", isPresented: Binding(get: { store.presentedError != nil },
             set: { if !$0 { store.presentedError = nil } })) {
             Button("好", role: .cancel) { store.presentedError = nil }
@@ -83,7 +85,7 @@ public struct WorkspaceView: View {
         case .workspace:
             if let project = store.project, let id = store.selectedScenarioID, !project.geometry.rooms.isEmpty {
                 VStack(spacing:0) {
-                ScrollView { AirflowPreviewPanelView(store:store,input:previewInput).padding() }.frame(maxHeight:240)
+                ScrollView { VStack(alignment:.leading) { AirflowPreviewPanelView(store:store,input:previewInput);DisclosureGroup("电量、电费与显热情景") { ThermalEstimatePanelView(store:store,entries:nativeEntries,input:estimateInput) } }.padding() }.frame(maxHeight:300)
                 RoomObjectsView(project: project, scenarioID: id, registry: store.modelRegistry,
                                 focusEntityID: focusEntityID, overlay: store.preview.overlay, rendererCapability: rendererCapability, onCommit: commit)
                 }
@@ -95,7 +97,7 @@ public struct WorkspaceView: View {
                 ScenarioListView(project: project, selectedScenarioID: store.selectedScenarioID,
                     baselineScenarioID: store.baselineScenarioID, onSelect: { store.selectedScenarioID = $0 },
                     onCommit: commit, onSetBaseline: { try store.setBaseline($0) })
-                ScrollView { PreviewComparisonView(store: store, additionalIssues: packageIssues).padding() }.frame(maxHeight:260)
+                ScrollView { VStack(alignment:.leading) { PreviewComparisonView(store: store, additionalIssues: packageIssues);EstimateComparisonView(store:store,entries:nativeEntries,revision:nativeSidefileRevision,additionalIssues:packageIssues) }.padding() }.frame(maxHeight:400)
             }
         case .runs:
             NativeAnalysisHistoryView(store:store,entries:nativeEntries,revision:nativeSidefileRevision)
@@ -205,6 +207,9 @@ public struct WorkspaceView: View {
             Form { content() }.formStyle(.grouped).navigationTitle(title)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { sheet = nil } } }
         }.modifier(EditorSheetSize())
+    }
+    private var estimateInput:EstimateWorkspaceInput {
+        .init(project:store.project,scenarioID:store.selectedScenarioID,configuration:store.analysisConfiguration,additionalIssues:packageIssues)
     }
     private var previewInput: PreviewWorkspaceInput {
         .init(project:store.project,scenarioID:store.selectedScenarioID,configuration:store.selectedScenarioID.flatMap { store.analysisConfiguration?.configuration(scenarioID:$0,kind:.airflowPreview) }, additionalIssues:packageIssues)

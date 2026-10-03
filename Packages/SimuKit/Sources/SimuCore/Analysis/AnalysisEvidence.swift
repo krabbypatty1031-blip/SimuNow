@@ -19,10 +19,13 @@ public struct ComparisonSnapshot: Codable, Equatable, Sendable {
     public let comparisonContextHash: String
     public let comparableItems: [String]
     public let incomparableReasons: [AnalysisMissingReason]
+    public let decisionVariables: [String]?
+    public let metrics: [EstimateComparisonMetric]?
     public init(comparisonVersion: Int = 1, comparisonID: UUID = UUID(), projectID: UUID, runs: [ComparisonRunReference],
-                comparisonContextHash: String, comparableItems: [String], incomparableReasons: [AnalysisMissingReason]) {
+                comparisonContextHash: String, comparableItems: [String], incomparableReasons: [AnalysisMissingReason], decisionVariables: [String]? = nil, metrics: [EstimateComparisonMetric]? = nil) {
         self.comparisonVersion = comparisonVersion; self.comparisonID = comparisonID; self.projectID = projectID
         self.runs = runs; self.comparisonContextHash = comparisonContextHash; self.comparableItems = comparableItems; self.incomparableReasons = incomparableReasons
+        self.decisionVariables = decisionVariables; self.metrics = metrics
     }
 }
 public struct RecommendationEvidence: Codable, Equatable, Sendable {

@@ -33,10 +33,10 @@ public struct AirflowPreviewExecutor: LocalAnalysisExecutor {
     }
 }
 extension LocalAnalysisClient {
-    /// Only implemented methods are registered. Thermal executors will be added by N4.
+    /// Only implemented methods are registered. All methods use the same App scheduling budget.
     public static func production(registry: ModelRegistry = .builtIn) -> LocalAnalysisClient {
         do {
-            return try .init(executors: [AirflowPreviewExecutor(registry: registry)], registry: registry)
+            return try .init(executors: [AirflowPreviewExecutor(registry: registry), PowerEstimateExecutor(), SteadyHeatBalanceExecutor()], registry: registry)
         } catch { preconditionFailure("Invalid built-in local analysis registry: \(error)") }
     }
 }

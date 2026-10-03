@@ -20,7 +20,7 @@ private func nativeConfiguration(_ kind: AnalysisKind, watts: Double = 1000) -> 
     case .steadyHeatBalance: return .init(payload: .steadyHeatBalance(.init(conditionMinute: 600,
         conductance: .known(value: 100,source: source), indoorTemperature: .known(value: 20,source: source), outdoorTemperature: .known(value: 30,source: source),
         outdoorAir: .known(value: 0,source: source), infiltration: .known(value: 0,source: source), density: .known(value: 1.2,source: source),
-        specificHeat: .known(value: 1000,source: source), internalSensibleHeat: .known(value: 0,source: source), solarSensibleHeat: .known(value: 0,source: source))))
+        specificHeat: .known(value: 1000,source: source), internalSensibleHeat: .known(value: 0,source: source), solarSensibleHeat: .known(value: 0,source: source), coverage: .init(conductanceScope: "synthetic UA aggregate", internalSensibleScope: "synthetic explicit zero", airPropertyConditions: "synthetic 20–30°C", indoorConditionConfirmed: true, source: source))))
     }
 }
 private func nativeRequest(_ kind: AnalysisKind = .airflowPreview, project: ProjectDocument? = nil, watts: Double = 1000, id: UUID = UUID()) throws -> LocalAnalysisRequest {
@@ -33,8 +33,8 @@ private func nativeExecution(_ request: LocalAnalysisRequest, checks: AnalysisCh
     switch request.method.kind {
     case .airflowPreview: payload = .airflowPreview(.init(profileID: "simunow.preview.genericCone",profileVersion: 1,
         paths: [.init(id: 0,points: [.init(position: .init(x: 1,y: 1,z: 1),strength: 1)],termination: .lengthLimit)], relations: [], validEmissionCount: 1))
-    case .powerEstimate: payload = .powerEstimate(.init(requestedWindows: [.init(startMinute: 0,endMinute: 120)],segments: [], totalEnergyKWh: 2,knownSubtotalKWh: 2))
-    case .steadyHeatBalance: payload = .steadyHeatBalance(.init(terms: [.init(id: "envelope",signedWatts: 1000,description: "synthetic")],totalSignedWatts: 1000,coolingSensibleWatts: 1000,excludedTerms: []))
+    case .powerEstimate: payload = .powerEstimate(.init(requestedWindows: [.init(startMinute: 0,endMinute: 120)],segments: [.init(startMinute: 0,endMinute: 120,powerWatts: 1000,energyKWh: 2,basis: .declaredScenario)], totalEnergyKWh: 2,knownSubtotalKWh: 2))
+    case .steadyHeatBalance: payload = .steadyHeatBalance(.init(terms: ThermalEstimateValidation.heatTerms.map{.init(id:$0,signedWatts:$0 == "conductance" ? 1000:0,description:"synthetic")},totalSignedWatts: 1000,coolingSensibleWatts: 1000,excludedTerms: [],completeness:.completeDeclaredCase))
     }
     return .init(payload: payload,checks: .init(state: checks))
 }
@@ -287,15 +287,70 @@ private func nativeEvents(_ stream: AsyncStream<LocalAnalysisEvent>) async -> [L
     let golden = try AnalysisCanonicalizer.bytes(.object(["b":.double(-0),"a":.integer(1)]))
     #expect(AnalysisHasher.sha256(golden) == "f687733f0e238dc9116c86e1fa298630971a69c9eabfff1f2912ea0d2985e9ae")
 }
+private actor NativeConsumerCancellationGate {
+    private var continuation: CheckedContinuation<Void, any Error>?
+    private(set) var started = false
+    private(set) var consumerStarted = false
+    private(set) var cancellationObserved = false
+    private(set) var exited = false
+    private(set) var wasMainThread = false
+    func recordConsumerStarted() { consumerStarted = true }
+    func wait(isMainThread: Bool) async throws {
+        started = true; wasMainThread = isMainThread
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            if cancellationObserved { continuation.resume(throwing: CancellationError()) }
+            else { self.continuation = continuation }
+        }
+    }
+    func cancel() {
+        cancellationObserved = true
+        continuation?.resume(throwing: CancellationError()); continuation = nil
+    }
+    func recordExit() { exited = true }
+}
+private struct NativeConsumerCancellationExecutor: LocalAnalysisExecutor {
+    let method = AnalysisMethod(kind: .powerEstimate)
+    let gate: NativeConsumerCancellationGate
+    func execute(_ request: LocalAnalysisRequest, progress: @escaping @Sendable (Double) async -> Void) async throws -> LocalAnalysisExecution {
+        do {
+            try await withTaskCancellationHandler(operation: {
+                try await gate.wait(isMainThread: nativeSynchronousCPUThreadProbe())
+            }, onCancel: { Task { await gate.cancel() } })
+        } catch { await gate.recordExit(); throw error }
+        await gate.recordExit()
+        throw CancellationError() // No successful result can race the consumer's cancellation.
+    }
+}
 @Test func nativeConsumerCancellationReleasesJobsAndNoMainActorCPU() async throws {
-    let client = try LocalAnalysisClient(executors:[NativeTestExecutor(method:.init(kind:.powerEstimate),slow:true)])
+    let gate = NativeConsumerCancellationGate()
+    let client = try LocalAnalysisClient(executors:[NativeConsumerCancellationExecutor(gate:gate)])
     let request = try nativeRequest(.powerEstimate)
     let stream = try await client.submit(request)
-    let consumer = Task { for await _ in stream { try Task.checkCancellation() } }
+    let consumer = Task { await gate.recordConsumerStarted(); for await _ in stream { try Task.checkCancellation() } }
+    let clock = ContinuousClock(), startDeadline = clock.now.advanced(by:.seconds(30))
+    while clock.now < startDeadline {
+        let started = await gate.started, consumerStarted = await gate.consumerStarted
+        if started && consumerStarted { break }
+        try await Task.sleep(for:.milliseconds(5))
+    }
+    let started = await gate.started, consumerStarted = await gate.consumerStarted
+    if !started || !consumerStarted {
+        consumer.cancel(); _ = await consumer.result; await client.shutdown()
+        #expect(started && consumerStarted, "Cancellation gate did not start within the bounded hang guard")
+        return
+    }
+    #expect(await gate.wasMainThread == false)
     consumer.cancel(); _ = await consumer.result
-    let clock = ContinuousClock(), deadline = clock.now.advanced(by:.seconds(2))
-    while await client.statistics().running > 0 && clock.now < deadline { try await Task.sleep(for:.milliseconds(5)) }
+    let exitDeadline = clock.now.advanced(by:.seconds(30))
+    while clock.now < exitDeadline {
+        let statistics = await client.statistics(), exited = await gate.exited
+        if statistics.running == 0 && statistics.queued == 0 && exited { break }
+        try await Task.sleep(for:.milliseconds(5))
+    }
+    let cancellationObserved = await gate.cancellationObserved, exited = await gate.exited
+    #expect(cancellationObserved && exited)
     #expect(await client.statistics().running == 0)
+    #expect(await client.statistics().queued == 0)
     #expect(await client.statistics().cacheCount == 0)
     await client.shutdown()
 }

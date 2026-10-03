@@ -13,7 +13,7 @@ def enum(values): return {'type':'string','enum':values}
 primitive = {'String': {'type':'string'}, 'Double': {'type':'number'}, 'Int': {'type':'integer'}, 'UInt32': {'type':'integer','minimum':0,'maximum':4294967295}, 'Bool': {'type':'boolean'}, 'UUID':{'type':'string','format':'uuid'}}
 quantities = {'ElectricalPower':defs['AnalysisPowerInterval']['power'] if 'AnalysisPowerInterval' in defs else defs['AirPort']['properties']['area']}
 # Units retain the existing source/uncertainty and known/unknown union.
-units = {'ElectricalPower':'W','ThermalPower':'W','Temperature':'degC','VolumeFlow':'m3/s','Density':'kg/m3','HeatConductance':'W/K','SpecificHeat':'J/(kg.K)'}
+units = {'ElectricalPower':'W','ThermalPower':'W','Temperature':'degC','VolumeFlow':'m3/s','Density':'kg/m3','HeatConductance':'W/K','SpecificHeat':'J/(kg.K)','EnergyRate':'currency/kWh','Ratio':'1'}
 for name, unit in units.items():
     known = obj({'state':{'const':'known'},'value':{'type':'number'},'unit':{'const':unit},'source':ref('SourceRecord'),'uncertainty':ref('UncertaintyBounds')}, ['state','value','unit','source'])
     defs['Native'+name] = {'anyOf':[known, ref('Unknown')]}
@@ -40,6 +40,7 @@ for name, vals in {
     'AnalysisChecksState':['passed','failed','notEvaluated'],
     'PreviewPathTermination':['hit','escaped','weak','lengthLimit','stepLimit'],
     'PreviewRelationState':['intersectsAssumedPath','occluded','outsideAssumedPath','notEvaluated'],
+    'HeatBalanceCompleteness':['completeDeclaredCase','declaredSubset'],
     'SensibleCapacityScreen':['sufficientForDeclaredSensibleCase','insufficientForDeclaredSensibleCase','cannotEvaluate'],
     'LocalAnalysisStage':['accepted','validating','running','progress','checking','completed','failed','cancelled'],
 }.items(): defs[name] = enum(vals)
@@ -50,6 +51,25 @@ def c(name, field, **rule): defs[name]['properties'][field].update(rule)
 for name,field in [('AnalysisConfiguration','configVersion'),('AnalysisConfigurationStore','storeVersion'),('LocalAnalysisRequest','requestVersion'),('LocalAnalysisResult','resultVersion'),('LocalAnalysisEvent','eventVersion'),('AnalysisArtifactManifest','artifactVersion'),('AnalysisArtifactManifest','requestVersion'),('AnalysisArtifactManifest','resultVersion')]: c(name,field,const=1)
 c('AnalysisMethod','methodVersion',const=1)
 c('AnalysisArtifactManifest','owner',const='com.simunow.native-analysis')
+c('CostEvaluationRecord','evaluationVersion',const=1)
+c('CostEvaluationRecord','owner',const='com.simunow.native-analysis')
+c('CostEvaluationRecord','evaluationHash',pattern='^[a-f0-9]{64}$')
+c('ComparisonSnapshot','comparisonVersion',const=1)
+c('ComparisonSnapshot','comparisonContextHash',pattern='^[a-f0-9]{64}$')
+for name, fields in [('CostEvaluationSegment',['energyKWhDecimal','rateDecimal','costDecimal']),('CostEvaluationPayload',['totalCostDecimal','lowerCostDecimal','upperCostDecimal'])]:
+    for field in fields: c(name,field,pattern='^[0-9]+(?:\\.[0-9]+)?$')
+# Cost-only numeric support: keep irrelevant snapshot tariffs usable by other methods.
+cost_number = {'type':'number','anyOf':[{'const':0},{'minimum':1e-12,'maximum':1e12}]}
+cost_rate = copy.deepcopy(defs['NativeEnergyRate'])
+cost_rate['anyOf'][0]['properties']['value'] = copy.deepcopy(cost_number)
+cost_rate['anyOf'][0]['properties']['uncertainty'] = {'allOf':[ref('UncertaintyBounds'),{'properties':{'lower':copy.deepcopy(cost_number),'upper':copy.deepcopy(cost_number)}}]}
+defs['CostTariffInterval']['properties']['rate'] = cost_rate
+c('CostEvaluationConfiguration','displayFractionDigits',minimum=0,maximum=8)
+c('CostEvaluationConfiguration','tariffs',maxItems=1440)
+for heat in ['SteadyHeatBalanceConfiguration','SteadyHeatBalancePayload']:
+    defs[heat]['properties']['excludedTerms']['items'] = enum(['conductance','outdoorAir','infiltration','internalSensibleHeat','solarSensibleHeat'])
+c('HeatSensitivityConfiguration','fields',maxItems=2)
+c('SteadyHeatBalancePayload','scenarios',maxItems=5)
 c('AirflowPreviewPayload','strengthUnit',const='1')
 c('LocalAnalysisRequest','hashFormat',const='simunow.native.canonical.v1')
 defs['RunIdentity'] = obj({'runID':copy.deepcopy(primitive['UUID']),'scenarioID':copy.deepcopy(primitive['UUID']),'inputHash':copy.deepcopy(primitive['String'])})
@@ -87,7 +107,7 @@ for target,payloadpath in [('LocalAnalysisRequest',['resolvedInput','configurati
         if target == 'LocalAnalysisResult': leaf['properties']['basis']={'const':'rulePreview' if kind=='airflowPreview' else 'simplifiedEstimate'}
         branches.append({'if':condition,'then':leaf})
     defs[target]['allOf']=branches
-outputs={'local-analysis-request':'LocalAnalysisRequest','local-analysis-event':'LocalAnalysisEvent','local-analysis-result':'LocalAnalysisResult','analysis-artifact-manifest':'AnalysisArtifactManifest','analysis-configuration':'AnalysisConfigurationStore'}
+outputs={'local-analysis-request':'LocalAnalysisRequest','local-analysis-event':'LocalAnalysisEvent','local-analysis-result':'LocalAnalysisResult','analysis-artifact-manifest':'AnalysisArtifactManifest','analysis-configuration':'AnalysisConfigurationStore','cost-evaluation':'CostEvaluationRecord','comparison-snapshot':'ComparisonSnapshot'}
 def verify_refs(node):
     if isinstance(node,dict):
         if '$ref' in node and node['$ref'].startswith('#/$defs/') and node['$ref'][8:] not in defs: raise SystemExit('Undefined native schema ref: '+node['$ref'])

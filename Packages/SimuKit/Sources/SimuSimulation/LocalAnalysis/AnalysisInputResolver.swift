@@ -133,6 +133,9 @@ public struct AnalysisHasher: Sendable {
             "configuration": try typed(input.configuration, "AnalysisConfiguration"),
             "assumptions": .array(try input.adoptedAssumptions.map { try typed($0, "AnalysisAssumption") }),
         ]
+        if method.kind == .powerEstimate {
+            fields["coveredDeviceIDs"] = .array(input.snapshot.inputs.hvac.map { $0.id.uuidString.lowercased() }.sorted().map { .string($0) })
+        }
         if method.kind == .airflowPreview {
             var geometry = try JSONTreeCoding.encode(input.snapshot.geometry)
             if var g = geometry.fields {

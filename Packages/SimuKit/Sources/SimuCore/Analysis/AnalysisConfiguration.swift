@@ -67,17 +67,23 @@ public struct AnalysisPowerInterval: Codable, Equatable, Sendable {
     public let endMinute: Int
     public let power: ElectricalPower
     public let basis: ElectricalPowerBasis
-    public init(startMinute: Int, endMinute: Int, power: ElectricalPower, basis: ElectricalPowerBasis) {
-        self.startMinute = startMinute; self.endMinute = endMinute; self.power = power; self.basis = basis
+    public let measurementPeriod: String?
+    public init(startMinute: Int, endMinute: Int, power: ElectricalPower, basis: ElectricalPowerBasis, measurementPeriod: String? = nil) {
+        self.startMinute = startMinute; self.endMinute = endMinute; self.power = power; self.basis = basis; self.measurementPeriod = measurementPeriod
     }
 }
 public struct PowerEstimateConfiguration: Codable, Equatable, Sendable {
     public let timeBasis: AnalysisTimeBasis
     public let requestedWindows: [AnalysisTimeWindow]
     public let intervals: [AnalysisPowerInterval]
+    public let ratedContinuousConfirmed: Bool?
+    public let aggregateDeviceIDs: [UUID]?
+    public let aggregateCoverageNote: String?
     public init(timeBasis: AnalysisTimeBasis = .fixed24HourReference,
-                requestedWindows: [AnalysisTimeWindow], intervals: [AnalysisPowerInterval]) {
+                requestedWindows: [AnalysisTimeWindow], intervals: [AnalysisPowerInterval],
+                ratedContinuousConfirmed: Bool? = nil, aggregateDeviceIDs: [UUID]? = nil, aggregateCoverageNote: String? = nil) {
         self.timeBasis = timeBasis; self.requestedWindows = requestedWindows; self.intervals = intervals
+        self.ratedContinuousConfirmed = ratedContinuousConfirmed; self.aggregateDeviceIDs = aggregateDeviceIDs; self.aggregateCoverageNote = aggregateCoverageNote
     }
 }
 public enum HeatConductanceTag: QuantityTag { public static let unit = "W/K" }
@@ -97,14 +103,24 @@ public struct SteadyHeatBalanceConfiguration: Codable, Equatable, Sendable {
     public let solarSensibleHeat: ThermalPower
     public let excludedTerms: [String]
     public let sensibleCoolingCapacity: ThermalPower?
+    public let coverage: HeatBalanceCoverage?
+    public let internalSources: [HeatInternalSource]?
+    public let exclusions: [HeatTermExclusion]?
+    public let totalCoolingCapacity: ThermalPower?
+    public let sensibleHeatRatio: Ratio?
+    public let sensitivity: HeatSensitivityConfiguration?
     public init(conditionMinute: Int, conductance: HeatConductance, indoorTemperature: Temperature,
                 outdoorTemperature: Temperature, outdoorAir: VolumeFlow, infiltration: VolumeFlow,
                 density: Density, specificHeat: SpecificHeat, internalSensibleHeat: ThermalPower,
-                solarSensibleHeat: ThermalPower, excludedTerms: [String] = [], sensibleCoolingCapacity: ThermalPower? = nil) {
+                solarSensibleHeat: ThermalPower, excludedTerms: [String] = [], sensibleCoolingCapacity: ThermalPower? = nil,
+                coverage: HeatBalanceCoverage? = nil, internalSources: [HeatInternalSource]? = nil, exclusions: [HeatTermExclusion]? = nil,
+                totalCoolingCapacity: ThermalPower? = nil, sensibleHeatRatio: Ratio? = nil, sensitivity: HeatSensitivityConfiguration? = nil) {
         self.conditionMinute = conditionMinute; self.conductance = conductance; self.indoorTemperature = indoorTemperature
         self.outdoorTemperature = outdoorTemperature; self.outdoorAir = outdoorAir; self.infiltration = infiltration
         self.density = density; self.specificHeat = specificHeat; self.internalSensibleHeat = internalSensibleHeat
         self.solarSensibleHeat = solarSensibleHeat; self.excludedTerms = excludedTerms; self.sensibleCoolingCapacity = sensibleCoolingCapacity
+        self.coverage = coverage; self.internalSources = internalSources; self.exclusions = exclusions
+        self.totalCoolingCapacity = totalCoolingCapacity; self.sensibleHeatRatio = sensibleHeatRatio; self.sensitivity = sensitivity
     }
 }
 public enum AnalysisConfigurationPayload: Equatable, Sendable, Codable {

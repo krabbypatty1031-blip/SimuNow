@@ -9,6 +9,7 @@ N1 新增 [Swift 本地分析 v1](native-analysis-v1.md)：独立 request/event/
 
 - Schemas/local-analysis-request.schema.json、local-analysis-event.schema.json、local-analysis-result.schema.json：本地方法与 typed payload。
 - Schemas/analysis-configuration.schema.json、analysis-artifact-manifest.schema.json：独立本地配置与不可变 run 文件索引。
+- Schemas/cost-evaluation.schema.json、comparison-snapshot.schema.json：N4固定父run的独立费用评价与纯值比较，精确货币数值使用Decimal字符串。
 - Schemas/project-document.schema.json：ProjectDocument v2。
 - Schemas/scenario-input-snapshot.schema.json：ScenarioInputSnapshot v2，尚非运行请求。
 - Schemas/project-package-metadata.schema.json：App 项目包 v1 的基准/模板信息。

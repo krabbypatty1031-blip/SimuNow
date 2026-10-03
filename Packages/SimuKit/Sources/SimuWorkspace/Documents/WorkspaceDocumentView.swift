@@ -98,6 +98,9 @@ public struct WorkspaceDocumentView: View {
         store.persistNativeAnalysis = { artifact in
             documentBinding.wrappedValue = try documentBinding.wrappedValue.appendingNativeAnalysis(artifact,expectedProjectID: artifact.manifest.projectID)
         }
+        store.persistCostEvaluation = { artifact in
+            documentBinding.wrappedValue = try documentBinding.wrappedValue.appendingCostEvaluation(artifact,expectedProjectID:artifact.record.projectID)
+        }
         store.validateDocumentChange = { state in
             _ = try documentBinding.wrappedValue.applyingWorkspaceState(state)
         }

@@ -3,7 +3,7 @@
   "identity": {
     "runID": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
     "scenarioID": "cccccccc-cccc-cccc-cccc-cccccccccccc",
-    "inputHash": "ef2073dc8a395c0c010a7e57ee206486ceff01fc55daea78c32eae7e86c808aa"
+    "inputHash": "aa0e6da1cbe9d71c6bef7413f4942a4a5090335ca21c7755b35a4746014969e1"
   },
   "state": "succeeded",
   "quality": "passed",
@@ -11,9 +11,9 @@
     "checkMesh": "ok",
     "solverEnded": true,
     "monitorsStable": true,
-    "massRelativeError": 2.351851851898921e-06,
+    "massRelativeError": 1.1296296296775327e-06,
     "massGate": 0.01,
-    "energyRelativeError": 0.001885597795282524,
+    "energyRelativeError": 0.003910470709654258,
     "energyGate": 0.05
   },
   "supplyTemperatureC": 16.0,
@@ -24,8 +24,8 @@
       "x": 1.5,
       "y": 1.5,
       "z": 1.1,
-      "tC": 25.079600000000028,
-      "uMag": 0.026380645037807876,
+      "tC": 24.42899,
+      "uMag": 0.026422291828611288,
       "lowSpeedAbsoluteError": true
     },
     {
@@ -33,8 +33,8 @@
       "x": 1.5,
       "y": 4.5,
       "z": 1.1,
-      "tC": 25.09086000000002,
-      "uMag": 0.025807106231529025,
+      "tC": 24.439700000000016,
+      "uMag": 0.02593268603005269,
       "lowSpeedAbsoluteError": true
     },
     {
@@ -42,8 +42,8 @@
       "x": 4.5,
       "y": 1.5,
       "z": 1.1,
-      "tC": 25.386230000000012,
-      "uMag": 0.030565793494985213,
+      "tC": 24.727720000000033,
+      "uMag": 0.03017474825220459,
       "lowSpeedAbsoluteError": true
     },
     {
@@ -51,15 +51,15 @@
       "x": 4.5,
       "y": 4.5,
       "z": 1.1,
-      "tC": 25.375370000000032,
-      "uMag": 0.033790965998616626,
+      "tC": 24.717520000000036,
+      "uMag": 0.033269469388210064,
       "lowSpeedAbsoluteError": true
     }
   ],
   "metrics": [
     {
       "name": "seat_t_c_min",
-      "value": 25.079600000000028,
+      "value": 24.42899,
       "unit": "C",
       "method": "openfoam_cell_sample",
       "fidelity": "l2",
@@ -67,7 +67,7 @@
     },
     {
       "name": "seat_t_c_max",
-      "value": 25.386230000000012,
+      "value": 24.727720000000033,
       "unit": "C",
       "method": "openfoam_cell_sample",
       "fidelity": "l2",
@@ -75,7 +75,7 @@
     },
     {
       "name": "seat_u_mag_max",
-      "value": 0.033790965998616626,
+      "value": 0.033269469388210064,
       "unit": "m/s",
       "method": "openfoam_cell_sample",
       "fidelity": "l2",

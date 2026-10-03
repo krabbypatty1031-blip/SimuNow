@@ -69,6 +69,35 @@ class OccupiedScheduleTests(unittest.TestCase):
         self.assertIn("People, Occupants, Room, OccupiedHours, People, 8,", text)
         self.assertNotIn("People, Occupants, Room, OccupiedHours, People, 4,", text)
 
+    def test_people_activity_follows_template_sensible_plus_constant_latent(self):
+        """ADR-012: occupantSensibleW is per-person SENSIBLE heat. The People
+        activity level = sensible + latent (13, measured split, L1-only q_cool
+        term), so both layers count the same sensible watts."""
+        import write_idf as wi
+
+        draft = json.loads(json.dumps(OFFICE))
+        sensible = 30.0
+        draft["occupancy"]["occupantSensibleW"]["value"] = sensible
+        room = project_to_l1_room(draft)
+        with tempfile.TemporaryDirectory() as tmp:
+            text = wi.write_idf(room, Path(tmp) / "room.idf").read_text(encoding="utf-8")
+        activity = sensible + wi.OCCUPANT_LATENT_W
+        self.assertIn(f"Schedule:Constant, Activity, ActivityLevel, {activity:g}", text)
+
+    def test_office_people_pair_keeps_p3_activity_bit_for_bit(self):
+        """After ADR-012 alignment the office template (sensible 57 + latent 13)
+        keeps the exact P3 People activity number 70, so the L1 hand-test values
+        stay valid without a re-run. The engine derives the sensible split
+        itself; the SHF literal stays for legibility."""
+        import write_idf as wi
+
+        room = project_to_l1_room(OFFICE)
+        self.assertEqual(room["gains"]["people_w"]["value"], 57.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            text = wi.write_idf(room, Path(tmp) / "room.idf").read_text(encoding="utf-8")
+        self.assertIn("Schedule:Constant, Activity, ActivityLevel, 70", text)
+        self.assertIn("People, Occupants, Room, OccupiedHours, People, 8, , , 0.3", text)
+
 
 if __name__ == "__main__":
     unittest.main()

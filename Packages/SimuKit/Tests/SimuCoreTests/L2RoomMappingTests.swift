@@ -38,7 +38,8 @@ import SimuCore
     #expect(changed.occupantCount == 3)
     #expect(changed.seats.count == baseline.seats.count)
     #expect(changed.occupantCount != Double(changed.seats.count))
-    #expect(changed.occupantSensibleW == 3 * 70)
+    // ADR-012: per-person sensible heat is 57 W; latent (13) stays L1-only.
+    #expect(changed.occupantSensibleW == 3 * 57)
 }
 
 @Test func changingSupplySpeedChangesMappedSpeed() throws {

@@ -123,7 +123,7 @@ private func makeOfficeDraft() -> ProjectDraft {
     )
     let occupancy = OccupancyModel(
         occupantCount: PhysicalQuantity(value: 8, unit: "1", source: .preset),
-        occupantSensibleW: PhysicalQuantity(value: 70, unit: "W", source: .preset),
+        occupantSensibleW: PhysicalQuantity(value: 57, unit: "W", source: .preset),
         lightingW: PhysicalQuantity(value: 180, unit: "W", source: .preset),
         equipmentW: PhysicalQuantity(value: 400, unit: "W", source: .preset),
         seats: [

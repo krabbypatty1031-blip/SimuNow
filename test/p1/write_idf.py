@@ -10,6 +10,15 @@ from room_input import input_hash, qty, window_area_m2
 
 LOGGER = logging.getLogger("simunow.p1.write_idf")
 
+# ADR-012: per-person LATENT heat, listed separately from the template's
+# occupantSensibleW (per-person SENSIBLE heat). Measured EnergyPlus split of
+# the 70 W activity level: 57.0 W sensible + 13.0 W latent per person; the SHF
+# literal in the People object is not honoured by this engine, which derives
+# the split itself, so the sensible share on the L1 side is 57 W - the same
+# watts the L2 field must see. Latent heat only enters the L1 q_cool account;
+# it never becomes an L2 field source.
+OCCUPANT_LATENT_W = 13.0
+
 
 def _hhmm_ok(text: str) -> bool:
     """EnergyPlus Until fields need HH:MM. 24:00 is allowed only as an end."""
@@ -69,6 +78,8 @@ def _schedule_names(room: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def l1_people_w(room: dict[str, Any]) -> float:
+    """Total per-person SENSIBLE heat × count. Same watts the L2 field sees;
+    latent heat is L1-only (ADR-012) and never enters the L2 volume source."""
     return qty(room["gains"]["n_people"]) * qty(room["gains"]["people_w"])
 
 
@@ -108,7 +119,12 @@ def gains_table(room: dict[str, Any]) -> dict[str, Any]:
         "Opaque UA and infiltration exist only in L1."
     )
     return {
-        "people": row(people, people, "n_people × people_w matches the fixture on both layers"),
+        "people": row(
+            people,
+            people,
+            "per-person sensible people_w on both layers; L1 People activity = "
+            f"sensible + latent {OCCUPANT_LATENT_W:g} W (latent L1-only, q_cool)",
+        ),
         "lights": row(lights, lights, "same lighting_w; L1 may split radiant, L2 smears all into T"),
         "equipment": row(equip, equip, "same equipment_w; L1 may split radiant, L2 smears all into T"),
         "window": row(window_l1, window_l2, window_note),
@@ -139,6 +155,11 @@ def write_idf(room: dict[str, Any], dest: Path) -> Path:
     t_in = qty(room["l1"]["t_in_c"])
     n_people = int(qty(room["gains"]["n_people"]))
     people_w = qty(room["gains"]["people_w"])
+    # ADR-012: people_w is per-person SENSIBLE heat. The People activity level
+    # adds the separately listed latent heat so q_cool keeps counting it. The
+    # engine derives the sensible split itself (SHF literal is not honoured),
+    # so 57 + 13 = 70 keeps the pre-alignment office IDF bit for bit.
+    activity_w = people_w + OCCUPANT_LATENT_W
     lights_w = qty(room["gains"]["lighting_w"])
     equip_w = qty(room["gains"]["equipment_w"])
     infil = qty(room["l1"]["infil_m3_s"])
@@ -175,7 +196,7 @@ ScheduleTypeLimits, ControlType, 0, 4, DISCRETE;
 Schedule:Constant, AlwaysOn, Fraction, 1.0;
 Schedule:Constant, HeatSet, Temperature, {t_in};
 Schedule:Constant, CoolSet, Temperature, {t_in};
-Schedule:Constant, Activity, ActivityLevel, {people_w};
+Schedule:Constant, Activity, ActivityLevel, {activity_w:.6g};
 ! Control type 4 = DualSetpoint. An occupancy fraction is not valid here.
 Schedule:Constant, DualControl, ControlType, 4;
 {extra_schedules}
@@ -198,6 +219,8 @@ BuildingSurface:Detailed, WallE, Wall, WallConst, Room, , Outdoors, , SunExposed
 BuildingSurface:Detailed, WallW, Wall, WallConst, Room, , Outdoors, , SunExposed, WindExposed, 0.5, 4,  0,0,0,  0,{ly},0,  0,{ly},{lz},  0,0,{lz};
 FenestrationSurface:Detailed, EastWin, Window, WinConst, WallE, , , , , 4,  {lx},{y0},{z0},  {lx},{y0},{z1},  {lx},{y1},{z1},  {lx},{y1},{z0};
 
+! ADR-012: activity 57 sensible + 13 latent per person. The SHF literal 0.3 is
+! not honoured by this engine (it derives the split itself); kept for legibility.
 People, Occupants, Room, {occupancy_schedule}, People, {n_people}, , , 0.3, AUTOCALCULATE, Activity;
 Lights, RoomLights, Room, {occupancy_schedule}, LightingLevel, {lights_w}, , , 0, 0.2, 0.2, 0, GeneralLights;
 ElectricEquipment, PlugLoads, Room, {occupancy_schedule}, EquipmentLevel, {equip_w}, , , 0, 0.5, 0;

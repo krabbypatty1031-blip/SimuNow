@@ -61,7 +61,7 @@ enum BundledTemplateJSON {
     },
     "occupancy": {
       "occupantCount": { "value": 8, "unit": "1", "source": "preset" },
-      "occupantSensibleW": { "value": 70.0, "unit": "W", "source": "preset" },
+      "occupantSensibleW": { "value": 57.0, "unit": "W", "source": "preset" },
       "lightingW": { "value": 180.0, "unit": "W", "source": "preset" },
       "equipmentW": { "value": 400.0, "unit": "W", "source": "preset" },
       "schedule": {
@@ -160,7 +160,7 @@ enum BundledTemplateJSON {
     },
     "occupancy": {
       "occupantCount": { "value": 24, "unit": "1", "source": "preset" },
-      "occupantSensibleW": { "value": 70.0, "unit": "W", "source": "preset" },
+      "occupantSensibleW": { "value": 57.0, "unit": "W", "source": "preset" },
       "lightingW": { "value": 480.0, "unit": "W", "source": "preset" },
       "equipmentW": { "value": 600.0, "unit": "W", "source": "preset" },
       "schedule": {

@@ -46,7 +46,8 @@ class L2RoomMappingTests(unittest.TestCase):
         room = project_to_l2_room(draft)
         self.assertEqual(room["gains"]["n_people"]["value"], 3)
         self.assertEqual(len(room["seats"]), 4)
-        self.assertEqual(room["gains"]["people_w"]["value"], 70)
+        # ADR-012: people_w is per-person SENSIBLE heat (57 W office template).
+        self.assertEqual(room["gains"]["people_w"]["value"], 57)
 
     def test_changing_supply_speed_changes_hash(self):
         from room_input import input_hash

@@ -19,8 +19,11 @@ class BoundaryTests(unittest.TestCase):
 
     def test_occupant_sensible_counted_once(self):
         mapped = map_l2_boundary(OFFICE, None)
-        self.assertEqual(mapped["occupantSensibleW"], 8 * 70)
-        self.assertEqual(sum(item["watts"] for item in mapped["heatSources"] if item["name"] == "occupants"), 560)
+        # ADR-012: per-person sensible heat is 57 W (measured EnergyPlus split
+        # of the 70 W activity level); the L2 field sees the same sensible
+        # watts as the L1 People object. Latent (13 W) is L1-only.
+        self.assertEqual(mapped["occupantSensibleW"], 8 * 57)
+        self.assertEqual(sum(item["watts"] for item in mapped["heatSources"] if item["name"] == "occupants"), 456)
         self.assertEqual(len([item for item in mapped["heatSources"] if item["name"] == "occupants"]), 1)
         self.assertIn("envelope_u_value", mapped["omitted"])
 

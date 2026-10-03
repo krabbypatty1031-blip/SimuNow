@@ -77,6 +77,17 @@
 影响：`enginesURL(in:)` 语义从 `runtime/engines` 改为 `runtime/test/engines`（L1 probe 仍按 enginesRoot 下 `EnergyPlus/energyplus` 相对解析，行为不变）；`Scripts/generate_project.py` Stage WorkerTree 同步九脚本；App 内首跑 L2 的沙盒 docker 可达性待手测记录，未验证前不宣称 App 内闭环。
 验证：`WorkerStagingTests`（六 L2 脚本 staged、engines 落位 test/engines）；`L2ClientTests`（未配置拒绝、wrapper 探测、field-slice 读取/缺文件 nil）；`Backend/tests/test_l2_staged.py` 以 subprocess 重建 staged 树全链路跑 `run-l2`（succeeded + quality passed + field-slice.json 落位，17.7 s）；Python 76 + Swift 113 全绿。
 
+## ADR-012：人员热源以「每人显热」为 L1/L2 对账基准，先披露后对齐（已接受）
+
+日期：2026-10-03（当日以 EnergyPlus 分项输出修正根因）。
+背景：单变量实测（`room_p1.json` 唯一改 `n_people` 8→3，两个 IDF 逐行 diff 仅差 People 数，真实 EnergyPlus）发现每人「冷量足迹」≈177.6 W：`q_cool_w` 6334.87→5446.86（−888.02 W），`p_elec_w` 同步 −296.00 W（=−888.02/3），两边 `zone_t` 均 26.0。分项实测（追加 Output:Variable 重跑）：每人 = 显冷 133.3 + 潜冷 44.3 W，其中直接对应人员得热仅 70 W（显 57.0 + 潜 13.0，恰好等于 Activity 表 70 W 全额，守恒闭合）；剩余 ~107.6 W/人是送风为凝结人员湿负荷过冷到更低露点的间接冷量。根因：`write_idf.py` 的 `People` 行把 70 W/人当**活动代谢率**（显热分率由引擎自动定，实测 ≈0.81，IDF 中的 0.3 字面未作为 SHF 生效），而 `L2BoundaryMapping` 把模板 `occupantSensibleW=70` **全额当显热体积源**——office 8 人时 L1 人员显热 456 W vs L2 560 W，L2 温度场虚增 104 W（13 W/人）。违反 AGENTS.md「人员与设备热源在 L1/L2 中同口径」红线的精神：数字分开有注释，但显热份额未真正对齐。
+备选：(a) 仅在口径对照表披露、不改数字——否，L2 座位温度场带 392 W 虚增热源，位置级结论失真；(b) 改 L1 让 70 W 变纯显热（SHF=1.0）——否，抹掉人员产湿使 L1 漏算真实潜热/除湿负荷；(c) 把 `occupantSensibleW` 语义定为「每人显热」，L1 的 People 对象按同额显热 + 潜热单列口径写入，L2 保持显热体积源，潜热只进 L1 的 `q_cool` 账。
+选择：(c)。实施时点：P4-06 三方案对比之前完成 `write_idf` 人员显热份额与模板值对齐，并重钉 `Fixtures` 与 P3 手测数字；实施前对照表披露该错位，L2 座位结果按「人员源含口径余量」披露。对账规则：跨 L1/L2 的「人员热」对比只以**显热**为基准；`q_cool` 含新风与人员潜热（除湿），不可与 L2 显热收支直接比大小；PMV 所需 RH 由草稿舒适假设单独供给（缺则 omitted，ADR-010），L2 场不解湿度。
+影响：`q_cool_w` 语义不变（总冷量含潜热）；对齐后 L2 座位温度将小幅下移（人员源 560→456 W，8 人办公室虚增 104 W），座位结论随之更新，旧 run 标 stale 不复用；`test_l1_schedule`/`L2BoundaryTests` 同步改口径断言。
+验证：2026-10-03 单变量实测（8/3 人两 run 目录 `test/outputs/p1_l1/20261003T053325Z`、`20261003T053649Z`；IDF diff 仅 People 数；CSV 日总冷量差 73.54 MJ 与均值口径一致）＋分项实测（追加 Output:Variable 重跑：显冷差 133.3、潜冷差 44.3、People 显 57.0/潜 13.0 W 每人，合计 70 守恒闭合）；对齐实施时补 `write_idf` People 显热断言与双端契约测试。
+
+**实施补录（2026-10-03，对齐已完成）**：模板 `occupantSensibleW` 70→57（office/classroom JSON + `BundledTemplateJSON` 两处，语义=每人显热，实测拆分）；`write_idf.py` 新增 `OCCUPANT_LATENT_W=13`（显式单列，只进 L1 `q_cool`），People 行 activity=显+潜=70 **逐位不变**（SHF 字面 0.3 保留并加 IDF 注释「引擎自行拆分」），L1 IDF 与 P3 手测数字无需重跑；L2 人员显热源 560→456 W（虚增 104 W 消除），钉版重跑 `Fixtures/task/{result,field-slice}-l2.json`（固定 UUID aaaa…/cccc…，inputHash `aa0e6da1…`）：座位温度 **24.43–24.73 °C**（对齐前 25.08–25.39 为 70 W/人全额显热错位口径）、切片 23.35–25.21 °C（24×24 全有效）；断言更新 `test_l1_schedule`（activity 跟随显+潜的敏感性断言 + office activity 70 逐位基线）、`test_boundary`/`test_l2_room`（456 W / 57 W）、`L2BoundaryTests`/`L2RoomMappingTests`/`ContractTests`（57 口径）。Python 78 + Swift 125 全绿；mac/ios BUILD SUCCEEDED。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。

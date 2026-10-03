@@ -16,11 +16,14 @@ import SimuCore
 @Test func occupantSensibleHeatIsCountedOnce() throws {
     let draft = try ProjectTemplates.bundled(named: "office").project
     let mapped = try L2BoundaryMapping.map(draft: draft, l1: nil)
-    #expect(mapped.occupantSensibleW == 8 * 70)
+    // ADR-012: template occupantSensibleW is per-person SENSIBLE heat
+    // (57 W, the measured EnergyPlus split of the 70 W activity level);
+    // latent heat (13 W) stays an L1-only q_cool term, never in the L2 field.
+    #expect(mapped.occupantSensibleW == 8 * 57)
     #expect(mapped.occupantCount == 8)
     #expect(mapped.heatSources.filter { $0.name == "occupants" }.count == 1)
     let occupantTotal = mapped.heatSources.filter { $0.name == "occupants" }.map(\.watts).reduce(0, +)
-    #expect(occupantTotal == 560)
+    #expect(occupantTotal == 456)
     #expect(mapped.omitted.contains("envelope_u_value"))
     #expect(!mapped.omitted.contains("occupants"))
 }

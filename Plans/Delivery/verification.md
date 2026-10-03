@@ -1,6 +1,6 @@
 # 工程验证记录
 
-日期：2026-10-03（P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（ADR-012 人员显热对齐 / P4-05/P4-06 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
 
 ## P4-06 验证（2026-10-03）
@@ -13,13 +13,25 @@
 
 不得当作产品功能：候选并排的**实际显示效果未手测**（UI 无测试 target，编译与单测不能代替手测）；「基准 + 两候选」需用户改空间参数 → 提交 → 固定三次产生，本仓库未预置候选数据；对比结论（哪个更舒适）不做自动推荐（P5 建议）。
 
+## ADR-012 人员显热对齐验证（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| Python `unittest discover -s Backend/tests` | 通过，78 项（约 40s） | 新增/更新断言：`test_l1_schedule`（occupantSensibleW=30 → People activity=43 敏感性、office activity 70 逐位基线）；`test_boundary`/`test_l2_room`（人员显热源 8×57=456 W、`people_w==57`）；钉版 `test_l2_runner`/`test_field_slice` 为独立复算型断言，随新钉版自动自洽 |
+| `Scripts/check.sh test` | 通过，125 项（SimuCoreTests 115 + SimuVisualizationTests 10） | 更新断言：`L2BoundaryTests`（8×57、occupantTotal 456）、`L2RoomMappingTests`（3×57）、`ContractTests`（模板 occupantSensibleW 57）；`BundledTemplateJSON` office/classroom 两处 57.0 |
+| 钉版重跑 | 真实收敛场 | `run-l2` 固定 UUID 重跑（对齐后口径）：`Fixtures/task/result-l2.json` 座位 tC 24.42899–24.72772 °C（对齐前 25.08–25.39，下移 ~0.65 K，虚增 104 W 消除）；`field-slice-l2.json` 23.34831–25.20712 °C、576 全有效；result.identity.inputHash `aa0e6da1…`（草稿快照哈希），切片 inputHash `c922cf7a…`（P1 房间哈希），两层语义，钉版 match: False 为预期 |
+| L1 逐位不变 | 逐行 diff 证据 | People 行 activity = 57+13=70 与对齐前逐位一致（SHF 字面 0.3 保留，引擎自行拆分）→ L1 IDF 与 P3 手测数字（`q_cool` 6334.87）无需重钉 |
+| `Scripts/check.sh mac` / `ios` | BUILD SUCCEEDED | 模板 JSON 数值变化不影响 App 编译；`generate_project.py` 无需改动（包内源码与资源） |
+
+不得当作产品功能：ADR-012 消除的是 L1/L2 人员显热口径错位（70 全额显热 vs 实测 57 显 + 13 潜），不代表座位温度有任何实测标定；切片与座位数字仍为钉版真实求解值，App 内重跑需沙盒手测（同 P4-05d 待办）。
+
 ## P4-05 全量验证（2026-10-03）
 
 | 检查 | 结果 | 说明 |
 |---|---|---|
 | `Scripts/check.sh test` | 通过，107 项（SimuCoreTests 97 + SimuVisualizationTests 10；另含 App 内 L2 接线新增 6 项共 113，再含 `WorkspaceL2Tests` 3 项共 116） | P4-05 b/c 新增：`FieldSliceTests` 3 项（fixture 解码；wire claim 变体 unit K / axisOrder ["x","y"] / interpolated / leftHandedYUp / failed 与 shape 不匹配均拒绝）；`SlicePaletteTests` 3 项（hue 单调蓝→红、clamp 不外推、图例带物理范围与 °C、退化范围单色）；`RoomSceneTests` 7 项（P4-05a） |
 | Python `unittest discover -s Backend/tests` | 通过，75 项（约 21.8s；另含接线新增 `test_l2_staged` 1 项共 76，约 38s） | P4-05 b/c 新增 `test_field_slice` 5 项（合成 2 单元场掩码/统计/契约字段、z 越界与 spacing≤0 拒绝、quality False 不写文件）；钉版 `test_l2_runner` 追加 576 格点独立复算（格点→foam_xyz→最近单元 T == payload 值，9 位小数；stats 与 values 一致；validCount == 掩码计数） |
-| 钉版切片数值 | 真实收敛场 | `Fixtures/task/field-slice-l2.json`：24×24 格心 @z=1.1 m、576 全有效、23.938–25.876 °C、inputHash = P1 房间输入哈希（`ef2073dc…`，与 result.identity.inputHash 是两个语义层，切片哈希与 quality.json/samples.json 同源） |
+| 钉版切片数值 | 真实收敛场 | `Fixtures/task/field-slice-l2.json`（ADR-012 重钉后）：24×24 格心 @z=1.1 m、576 全有效、23.348–25.207 °C（对齐前 23.938–25.876 为 70 W/人全额显热口径）、inputHash = P1 房间输入哈希（`c922cf7a…`，与 result.identity.inputHash 是两个语义层，切片哈希与 quality.json/samples.json 同源） |
 | `Scripts/check.sh mac` | BUILD SUCCEEDED | `FieldSlice`/`SlicePalette`/`RoomWireframeView` 切片叠加与图例；`generate_project.py` Stage WorkerTree 扩为九个 P1 脚本 |
 | `Scripts/check.sh ios` | BUILD SUCCEEDED | `SimuVisualization` 无 macOS 专属 API；iOS 不接本地 OpenFOAM |
 
@@ -47,7 +59,7 @@
 | Python `unittest discover -s Backend/tests` | 通过，55 项（约 20.6s） | 含钉版 `test_l2_runner` 全管线：state succeeded、quality passed、`checkMesh ok`、`monitorsStable`、座位 tC>15、`seat_t_c_min` 非 omitted |
 | `python3 test/p1/test_quality.py` | 通过，5 项 | 进口面导热合成 case 手算 −51.0087 W；湍流/计数不匹配/缺 patch 拒绝；2026-10-03 弱射流回归：计入过、不计 23% 挂 |
 | `python3 test/p1/test_room.py` | 通过，8 项 | 预算新必填 `q_inlet_cond_w` 后全绿 |
-| 钉版 L2 管线数值 | quality passed | 质量相对误差 2.35e-6；能量相对误差 **0.19%**（计入门禁前假象 23.4%）；`terms_w.q_inlet_cond = −305.9 W`；座位 25.08 / 25.09 / 25.39 / 25.38 °C，uMag 0.026–0.034 m/s 全带 `lowSpeedAbsoluteError` |
+| 钉版 L2 管线数值 | quality passed | 质量相对误差 2.35e-6；能量相对误差 **0.19%**（计入门禁前假象 23.4%）；`terms_w.q_inlet_cond = −305.9 W`；座位（ADR-012 对齐后重钉）24.42899 / 24.43970 / 24.72772 / 24.71752 °C，uMag 0.0259–0.0333 m/s 全带 `lowSpeedAbsoluteError` |
 | P4-03 座位采样 | 通过 | `Backend.tests.test_l2_sampling` 3 项（合成场）；钉版 `test_l2_runner` 追加最近单元温度复算；证据 run：域外座位 omitted（`reason: not_in_fluid`），4 有效座位采样，state succeeded / quality passed |
 | `Fixtures/task/result-l2.json` | 钉版真值 | 固定 UUID（aaaa…/cccc…）；真实收敛场数值，非手编 |
 | `Scripts/check.sh mac` | BUILD SUCCEEDED | `SimulationResult` 加可选 `qualityDetail`/`seatSamples` 后两端编译兼容 |

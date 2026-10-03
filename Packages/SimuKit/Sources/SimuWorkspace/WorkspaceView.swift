@@ -74,7 +74,6 @@ public struct WorkspaceView: View {
             if let project = store.project, let id = store.selectedScenarioID, !project.geometry.rooms.isEmpty {
                 RoomObjectsView(project: project, scenarioID: id, registry: store.modelRegistry,
                                 focusEntityID: focusEntityID, onCommit: commit)
-                    .id("\(id)-\(focusEntityID?.uuidString ?? "")")
             } else {
                 EmptyStateView("建立房间模型", symbol: "square.dashed", message: "通过矩形房间向导或办公室、教室模板开始；未知输入可保留为草稿。")
             }

@@ -7,6 +7,10 @@ private struct ObjectEditRequest: Identifiable {
     let isNew: Bool
     var id: String { selection.id }
 }
+private struct RoomGeometryEditRequest: Identifiable {
+    let target: RoomSceneSelectionTarget
+    var id: String { String(describing: target) }
+}
 private struct ObjectOccupantRepairRequest: Identifiable { let id: UUID }
 private struct ObjectMoveRequest: Identifiable {
     let selection: RoomPlanSelection
@@ -20,8 +24,12 @@ public struct RoomObjectsView: View {
     public let scenarioID: UUID
     public let registry: ModelRegistry
     public let focusEntityID: UUID?
+    public let overlay: RoomSceneOverlay
+    public let rendererCapability: RendererCapabilities
     public let onCommit: @MainActor (ProjectDocument, String) throws -> Void
     @State private var selection: RoomPlanSelection?
+    @State private var sceneSelection: SceneObjectKey?
+    @State private var geometryEditRequest: RoomGeometryEditRequest?
     @State private var editRequest: ObjectEditRequest?
     @State private var moveRequest: ObjectMoveRequest?
     @State private var occupantRepairRequest: ObjectOccupantRepairRequest?
@@ -29,9 +37,9 @@ public struct RoomObjectsView: View {
     @State private var placing = false
     @State private var confirmDelete = false
     @State private var error: String?
-    public init(project: ProjectDocument, scenarioID: UUID, registry: ModelRegistry = .builtIn, focusEntityID: UUID? = nil,
+    public init(project: ProjectDocument, scenarioID: UUID, registry: ModelRegistry = .builtIn, focusEntityID: UUID? = nil, overlay: RoomSceneOverlay = .empty, rendererCapability: RendererCapabilities = .current,
                 onCommit: @escaping @MainActor (ProjectDocument, String) throws -> Void) {
-        self.project = project; self.scenarioID = scenarioID; self.registry = registry; self.focusEntityID = focusEntityID; self.onCommit = onCommit
+        self.project = project; self.scenarioID = scenarioID; self.registry = registry; self.focusEntityID = focusEntityID; self.overlay = overlay; self.rendererCapability = rendererCapability; self.onCommit = onCommit
     }
     private var input: ScenarioInputs? { project.scenarios.first { $0.id == scenarioID }?.inputs }
     private var room: Room? { project.geometry.rooms.first }
@@ -45,10 +53,10 @@ public struct RoomObjectsView: View {
     }
     public var body: some View {
         Form {
-            Section("俯视编辑") {
-                RoomPlanView(project: project, scenarioID: scenarioID, selection: selection, registry: registry, placing: placing,
-                             onSelect: { selection = $0; placing = false }, onPlace: place)
-                    .frame(minHeight: 320)
+            Section("房间查看与编辑") {
+                RoomViewportContainer(project: project, scenarioID: scenarioID, registry: registry, capability: rendererCapability,
+                    selection: sceneSelection, planSelection: selection, placing: placing, overlay: overlay,
+                    onSelect: chooseScene, onPlace: place, canEdit: canEditScene, onEdit: editScene)
                 if let selection {
                     ViewThatFits(in: .horizontal) {
                         HStack { selectionActions(selection) }
@@ -124,6 +132,18 @@ public struct RoomObjectsView: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(item: $geometryEditRequest) { request in
+            NavigationStack {
+                switch request.target {
+                case .room(let id): RoomEditorView(project: project, roomID: id, registry: registry, onCommit: onCommit)
+                case .opening(let roomID, let openingID): OpeningEditorView(project: project, roomID: roomID, openingID: openingID, registry: registry, onCommit: onCommit)
+                case .object: Text("请从最新对象列表重新打开属性。")
+                }
+            }
+            #if os(macOS)
+            .frame(minWidth: 560, idealWidth: 680, minHeight: 500, idealHeight: 720)
+            #endif
+        }
         .sheet(item: $editRequest) { request in editor(request) }
         .sheet(item: $occupantRepairRequest) { request in
             if let input, let occupant = input.usage.occupants.first(where: { $0.id == request.id }) {
@@ -148,8 +168,9 @@ public struct RoomObjectsView: View {
         .onChange(of: focusEntityID) { _, id in focus(id) }
         .onChange(of: project) { _, newValue in
             if let selection, !ObjectEditing.contains(selection, in: newValue, scenarioID: scenarioID) { self.selection = nil; placing = false }
+            if let sceneSelection, RoomSceneSelectionAdapter.target(for: sceneSelection, project: newValue, scenarioID: scenarioID) == nil { self.sceneSelection = nil }
         }
-        .onChange(of: scenarioID) { _, _ in selection = nil; placing = false; editRequest = nil; moveRequest = nil; occupantRepairRequest = nil; controlRepairRequest = nil }
+        .onChange(of: scenarioID) { _, _ in selection = nil; sceneSelection = nil; placing = false; editRequest = nil; moveRequest = nil; occupantRepairRequest = nil; controlRepairRequest = nil; geometryEditRequest = nil }
     }
     @ViewBuilder private var addButtons: some View {
         Button("家具", systemImage: "square.fill") { add(.furniture) }
@@ -176,10 +197,10 @@ public struct RoomObjectsView: View {
             + input.hvac.map { .init(kind: .hvac, objectID: $0.id) }
             + input.hvac.flatMap(\.ports).map { .init(kind: .port, objectID: $0.id) }
             + input.controls.map { .init(kind: .control, objectID: $0.id) }
-        if let match = candidates.first(where: { $0.objectID == id }) { selection = match; placing = false; error = nil }
+        if let match = candidates.first(where: { $0.objectID == id }) { chooseScene(.init(match)) }
         else if let occupant = input.usage.occupants.first(where: { $0.id == id }) {
             if input.usage.seats.contains(where: { $0.id == occupant.seatID }) {
-                selection = .init(kind: .seat, objectID: occupant.seatID); placing = false; error = nil
+                chooseScene(.init(category: .occupant, modelID: occupant.id))
             } else {
                 selection = nil; placing = false
                 error = "人员记录引用了不存在的座位 \(occupant.seatID.uuidString)。请使用待修复人员关联表单。"
@@ -188,14 +209,31 @@ public struct RoomObjectsView: View {
     }
     private func objectRow(_ name: String, selection item: RoomPlanSelection) -> some View {
         HStack {
-            Button { selection = item; placing = false } label: {
+            Button { chooseScene(.init(item)) } label: {
                 Label(name, systemImage: selection == item ? "checkmark.circle.fill" : "circle")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain)
-            Button("编辑") { selection = item; edit(item) }.disabled(editableParent(item) == nil)
+            Button("编辑") { chooseScene(.init(item)); edit(item) }.disabled(editableParent(item) == nil)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(name)
+    }
+    private func chooseScene(_ key: SceneObjectKey?) {
+        sceneSelection = key; placing = false; error = nil
+        if let key, let target = RoomSceneSelectionAdapter.target(for: key, project: project, scenarioID: scenarioID), case .object(let item) = target { selection = item }
+        else { selection = nil }
+    }
+    private func canEditScene(_ target: RoomSceneSelectionTarget) -> Bool {
+        switch target {
+        case .object(let item): return editableParent(item) != nil
+        case .room(let id): return project.geometry.rooms.first(where: { $0.id == id }).flatMap { try? $0.shape.resolved(as: RectangularRoom.self, registry: registry) } != nil
+        case .opening(let roomID, let openingID): return project.geometry.rooms.contains { $0.id == roomID && $0.openings.contains { $0.id == openingID } }
+        }
+    }
+    private func editScene(_ target: RoomSceneSelectionTarget) {
+        guard canEditScene(target) else { return }
+        placing = false
+        switch target { case .object(let item): edit(item); case .room, .opening: geometryEditRequest = .init(target: target) }
     }
     private func editableParent(_ item: RoomPlanSelection) -> RoomPlanSelection? {
         guard let input else { return nil }

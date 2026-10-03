@@ -5,6 +5,8 @@ P2-04 新增 [本地项目包 v1](project-package-v1.md)，包元数据属于 Ap
 
 N1 新增 [Swift 本地分析 v1](native-analysis-v1.md)：独立 request/event/result/configuration/manifest，不改变 P0 或项目 v2。开发检查使用 `Scripts/check_native_analysis_contracts.sh`；App 运行不调用 Python 验证器。
 
+UI 修复新增 [可选运行展示信息 v1](run-presentation-v1.md)，为历史提供保存时方案名称和加入项目时间；独立于物理输入和不可变分析证据。
+
 ## 文件
 
 - Schemas/local-analysis-request.schema.json、local-analysis-event.schema.json、local-analysis-result.schema.json：本地方法与 typed payload。
@@ -12,6 +14,7 @@ N1 新增 [Swift 本地分析 v1](native-analysis-v1.md)：独立 request/event/
 - Schemas/cost-evaluation.schema.json、comparison-snapshot.schema.json：N4固定父run的独立费用评价与纯值比较，精确货币数值使用Decimal字符串。
 - Schemas/project-document.schema.json：ProjectDocument v2。
 - Schemas/scenario-input-snapshot.schema.json：ScenarioInputSnapshot v2，尚非运行请求。
+- Schemas/run-presentation.schema.json：App 可选历史展示信息，不参与分析输入与有效性判定。
 - Schemas/project-package-metadata.schema.json：App 项目包 v1 的基准/模板信息。
 - Schemas/project-draft.schema.json：保留 P0 ProjectDraft v1，通过显式迁移进入 v2。
 - Schemas/simulation-request.schema.json、run-receipt.schema.json：保留 P0 任务边界，本轮未改变。

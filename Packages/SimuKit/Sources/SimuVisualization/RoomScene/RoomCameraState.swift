@@ -41,6 +41,17 @@ public struct RoomCameraState: Equatable, Sendable {
         guard factor.isFinite, factor > 0 else { return }
         distance *= factor; constrain(roomBounds)
     }
+    /// Screen-relative pan is a display transform, never a model edit.
+    public mutating func pan(horizontal: Double, vertical: Double, roomBounds: GeometryBounds) {
+        guard horizontal.isFinite, vertical.isFinite else { return }
+        let r = right, u = up, margin = Self.diagonal(roomBounds)
+        let dx = (r.x * horizontal + u.x * vertical) * distance
+        let dy = (r.y * horizontal + u.y * vertical) * distance
+        let dz = (r.z * horizontal + u.z * vertical) * distance
+        target = .init(x: min(roomBounds.origin.x + roomBounds.size.x + margin, max(roomBounds.origin.x - margin, target.x + dx)),
+                       y: min(roomBounds.origin.y + roomBounds.size.y + margin, max(roomBounds.origin.y - margin, target.y + dy)),
+                       z: min(roomBounds.origin.z + roomBounds.size.z + margin, max(roomBounds.origin.z - margin, target.z + dz)))
+    }
     private mutating func constrain(_ bounds: GeometryBounds) { let d = Self.diagonal(bounds); distance = min(d*5,max(d*0.25,distance)) }
     public static func diagonal(_ bounds: GeometryBounds) -> Double { sqrt(bounds.size.x*bounds.size.x + bounds.size.y*bounds.size.y + bounds.size.z*bounds.size.z) }
     public var forward: Direction3D { RoomVector.normalized(.init(x: target.x-position.x, y: target.y-position.y, z: target.z-position.z)) }

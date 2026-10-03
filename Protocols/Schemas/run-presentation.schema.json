@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SimuNow optional run presentation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "owner",
+    "version",
+    "runID",
+    "projectID",
+    "scenarioName",
+    "recordedAt",
+    "method"
+  ],
+  "properties": {
+    "owner": {
+      "const": "com.simunow.presentation"
+    },
+    "version": {
+      "const": 1
+    },
+    "runID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "projectID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scenarioName": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "recordedAt": {
+      "type": "number",
+      "description": "Seconds since 2001-01-01T00:00:00Z; Foundation Codable Date default representation."
+    },
+    "method": {
+      "enum": [
+        "airflowPreview",
+        "powerEstimate",
+        "steadyHeatBalance"
+      ]
+    }
+  }
+}

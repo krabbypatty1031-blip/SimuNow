@@ -11,6 +11,7 @@ private struct PlanMarker: Identifiable {
 
 /// Geometry/input positions and immutable checked rule paths; never a physical velocity/temperature field.
 public struct RoomPlanView: View {
+    @State private var hitCandidates: [PlanChoice] = []
     public let project: ProjectDocument
     public let scenarioID: UUID
     public let selection: RoomPlanSelection?
@@ -57,10 +58,10 @@ public struct RoomPlanView: View {
                         name: "\(seat.name) 采样点 \(i + 1)", position: sample.position))
             }
         }
-        for (i, item) in input.usage.equipment.enumerated() where item.roomID == room.id {
+        for item in input.usage.equipment where item.roomID == room.id {
             result.append(
                 .init(
-                    selection: .init(kind: .equipment, objectID: item.id), name: "设备热源 \(i + 1)",
+                    selection: .init(kind: .equipment, objectID: item.id), name: "热源 · " + item.id.uuidString.prefix(6),
                     position: item.position))
         }
         for device in input.hvac where device.roomID == room.id {
@@ -101,10 +102,12 @@ public struct RoomPlanView: View {
                                 onPlace(projection.unproject(point, z: 0))
                                 return
                             }
-                            if let hit = hitTest(point, projection: projection) { onSelect(hit) }
+                            let hits = hitTest(point, projection: projection)
+                            if hits.count == 1, let hit = hits.first { onSelect(hit.selection) }
+                            else if !hits.isEmpty { hitCandidates = hits }
                         }
                         .accessibilityLabel("房间俯视图")
-                        .accessibilityValue("坐标为米，横轴 X，纵轴 Y。下方对象列表可选择和编辑全部对象。")
+                        .accessibilityValue("坐标为米，横轴 X，纵轴 Y。对象清单可选择和编辑全部对象。")
                         .accessibilityChildren {
                             ForEach(markers) { marker in
                                 Button(marker.name) { onSelect(marker.selection) }
@@ -125,7 +128,7 @@ public struct RoomPlanView: View {
                         description: Text("请补齐受支持房间的宽度和深度。数值表单仍可查看对象。"))
                 }
             }
-            .frame(minHeight: 220, idealHeight: 300)
+            .frame(minHeight: 120, maxHeight: .infinity)
             HStack {
                 Text("米制 · +X 向右 · +Y 向上 · Z 为高度")
                 Spacer()
@@ -139,8 +142,12 @@ public struct RoomPlanView: View {
                 Text(overlay.explanation).font(.caption).foregroundStyle(.secondary)
             }
             if let issue = overlay.validationMessage { Text(issue).font(.caption).foregroundStyle(.orange) }
-            Text("灰色盒体为家具；风口箭头表示输入方向。选择对象后显示完整名称与高度，选中风口还显示方向 Z 分量；全部对象可在下方列表查看。")
-                .font(.caption).foregroundStyle(.secondary)
+        }
+        .confirmationDialog("选择此处的对象", isPresented: Binding(get: { !hitCandidates.isEmpty }, set: { if !$0 { hitCandidates = [] } }), titleVisibility: .visible) {
+            ForEach(hitCandidates) { item in
+                Button(item.name + " · " + item.selection.kind.title) { onSelect(item.selection); hitCandidates = [] }
+            }
+            Button("取消", role: .cancel) { hitCandidates = [] }
         }
     }
     private func selectedDescription(_ marker: PlanMarker) -> String {
@@ -171,7 +178,22 @@ public struct RoomPlanView: View {
             x: topLeft.x, y: topLeft.y, width: b.size.x * projection.scale,
             height: b.size.y * projection.scale)
         context.fill(Path(roomRect), with: .color(Color.primary.opacity(0.025)))
+        let step = pow(10, floor(log10(max(b.size.x, b.size.y)))) / 10
+        let gridStep = max(0.1, step * (step * projection.scale < 20 ? 5 : 1))
+        var grid = Path()
+        for x in stride(from: b.origin.x + gridStep, to: b.origin.x + b.size.x, by: gridStep) {
+            let point = projection.project(.init(x: x, y: b.origin.y, z: 0))
+            grid.move(to: .init(x: point.x, y: roomRect.minY)); grid.addLine(to: .init(x: point.x, y: roomRect.maxY))
+        }
+        for y in stride(from: b.origin.y + gridStep, to: b.origin.y + b.size.y, by: gridStep) {
+            let point = projection.project(.init(x: b.origin.x, y: y, z: 0))
+            grid.move(to: .init(x: roomRect.minX, y: point.y)); grid.addLine(to: .init(x: roomRect.maxX, y: point.y))
+        }
+        context.stroke(grid, with: .color(Color.secondary.opacity(0.18)), lineWidth: 0.5)
         context.stroke(Path(roomRect), with: .color(.primary), lineWidth: 2)
+        context.draw(Text("\(b.size.x.formatted()) m").font(.caption), at: .init(x: roomRect.midX, y: roomRect.maxY + 12))
+        context.draw(Text("\(b.size.y.formatted()) m").font(.caption), at: .init(x: roomRect.minX + 26, y: roomRect.minY + 12))
+        context.draw(Text("网格 \(gridStep.formatted()) m").font(.caption2), at: .init(x: roomRect.minX + 48, y: roomRect.maxY - 12))
         for obstacle in project.geometry.obstacles where obstacle.roomID == room.id {
             guard let box = try? obstacle.shape.resolved(as: BoxObstacle.self, registry: registry),
                 let ob = box.geometryBounds()
@@ -183,8 +205,9 @@ public struct RoomPlanView: View {
             context.fill(Path(rect), with: .color(Color.secondary.opacity(0.3)))
             context.stroke(
                 Path(rect), with: .color(chosen ? .accentColor : .secondary), lineWidth: chosen ? 3 : 1)
-            context.draw(
-                Text(String(obstacle.name.prefix(8))).font(.caption2), at: .init(x: rect.midX, y: rect.midY))
+            if rect.width > 80 && rect.height > 24 {
+                context.draw(Text(obstacle.name).font(.caption2), in: rect.insetBy(dx: 4, dy: 4))
+            }
         }
         for opening in room.openings {
             guard let face = room.surfaces.first(where: { $0.id == opening.surfaceID })?.face,
@@ -206,7 +229,9 @@ public struct RoomPlanView: View {
             var path = Path()
             path.move(to: cg(projection.project(start)))
             path.addLine(to: cg(projection.project(end)))
-            context.stroke(path, with: .color(opening.kind == .window ? .cyan : .orange), lineWidth: 5)
+            context.stroke(path, with: .color(opening.kind == .window ? .cyan : .orange), lineWidth: opening.kind == .window ? 5 : 3)
+            let midpoint = projection.project(.init(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2, z: 0))
+            context.draw(Text(opening.kind == .window ? "窗" : "门").font(.caption2.bold()), at: .init(x: midpoint.x + 10, y: midpoint.y - 10))
         }
         if overlay.validationMessage == nil {
             for line in overlay.paths {
@@ -227,7 +252,14 @@ public struct RoomPlanView: View {
             let chosen = marker.selection == selection
             let radius: Double = marker.selection.kind == .sample ? 3 : 5
             let rect = CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2)
-            context.fill(Path(ellipseIn: rect), with: .color(color(marker.selection.kind)))
+            let symbol: Path
+            switch marker.selection.kind {
+            case .sample:
+                symbol = Path { path in path.move(to: .init(x: p.x, y: p.y - 5)); path.addLine(to: .init(x: p.x + 5, y: p.y)); path.addLine(to: .init(x: p.x, y: p.y + 5)); path.addLine(to: .init(x: p.x - 5, y: p.y)); path.closeSubpath() }
+            case .equipment, .hvac: symbol = Path(rect)
+            default: symbol = Path(ellipseIn: rect)
+            }
+            context.fill(symbol, with: .color(color(marker.selection.kind)))
             if chosen {
                 context.stroke(
                     Path(ellipseIn: rect.insetBy(dx: -4, dy: -4)), with: .color(.accentColor), lineWidth: 2)
@@ -237,11 +269,11 @@ public struct RoomPlanView: View {
             if chosen {
                 let labelX = min(max(p.x, roomRect.minX + 36), roomRect.maxX - 36)
                 context.draw(
-                    Text(String(marker.name.prefix(8))).font(.caption2.bold()),
+                    Text(marker.selection.kind.title).font(.caption2.bold()),
                     at: .init(x: labelX, y: p.y - 22))
             } else if marker.selection.kind == .seat {
                 context.draw(
-                    Text(String(marker.name.prefix(8))).font(.caption2), at: .init(x: p.x, y: p.y + 13))
+                    Text(markers.filter { $0.selection.kind == .seat }.count > 12 ? String((markers.filter { $0.selection.kind == .seat }.firstIndex { $0.id == marker.id } ?? 0) + 1) : marker.name).font(.caption2), at: .init(x: p.x, y: p.y + 13))
             } else if marker.selection.kind == .equipment {
                 let number = marker.name.split(separator: " ").last.map(String.init) ?? ""
                 context.draw(Text("热\(number)").font(.caption2), at: .init(x: p.x, y: p.y + 13))
@@ -275,25 +307,25 @@ public struct RoomPlanView: View {
             context.draw(Text("N").font(.caption.bold()), at: .init(x: end.x, y: end.y - 8))
         }
     }
-    private func hitTest(_ point: PlanPoint, projection: PlanProjection) -> RoomPlanSelection? {
-        if let nearest = markers.map({ ($0, projection.project($0.position)) }).filter({
+    private func hitTest(_ point: PlanPoint, projection: PlanProjection) -> [PlanChoice] {
+        var result = markers.map { ($0, projection.project($0.position)) }.filter {
             hypot($0.1.x - point.x, $0.1.y - point.y) <= 16
-        }).min(by: {
-            hypot($0.1.x - point.x, $0.1.y - point.y) < hypot($1.1.x - point.x, $1.1.y - point.y)
-        }) {
-            return nearest.0.selection
-        }
+        }.sorted {
+            let a = hypot($0.1.x - point.x, $0.1.y - point.y), b = hypot($1.1.x - point.x, $1.1.y - point.y)
+            return a == b ? $0.0.id < $1.0.id : a < b
+        }.map { PlanChoice(selection: $0.0.selection, name: $0.0.name) }
         let position = projection.unproject(point, z: 0)
         for obstacle in project.geometry.obstacles.reversed() where obstacle.roomID == room?.id {
-            guard let box = try? obstacle.shape.resolved(as: BoxObstacle.self, registry: registry),
-                let b = box.geometryBounds()
-            else { continue }
-            if (b.origin.x...b.origin.x + b.size.x).contains(position.x),
-                (b.origin.y...b.origin.y + b.size.y).contains(position.y)
-            {
-                return .init(kind: .furniture, objectID: obstacle.id)
+            guard let box = try? obstacle.shape.resolved(as: BoxObstacle.self, registry: registry), let b = box.geometryBounds() else { continue }
+            if (b.origin.x...b.origin.x + b.size.x).contains(position.x), (b.origin.y...b.origin.y + b.size.y).contains(position.y) {
+                result.append(.init(selection: .init(kind: .furniture, objectID: obstacle.id), name: obstacle.name))
             }
         }
-        return nil
+        return result
     }
+}
+private struct PlanChoice: Identifiable {
+    let selection: RoomPlanSelection
+    let name: String
+    var id: String { selection.id }
 }

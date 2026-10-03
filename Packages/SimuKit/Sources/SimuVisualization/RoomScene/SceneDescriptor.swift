@@ -152,16 +152,18 @@ public struct RoomOverlayPath: Equatable, Sendable, Identifiable {
     public let id: String
     public let points: [Position3D]
     public let blocked: Bool
+    public let hitEntityID: UUID?
     public let meshData: AirflowPathMeshData?
-    public init(id: String, points: [Position3D], blocked: Bool = false, meshData: AirflowPathMeshData? = nil)
+    public init(id: String, points: [Position3D], blocked: Bool = false, hitEntityID: UUID? = nil, meshData: AirflowPathMeshData? = nil)
     {
         self.id = id
         self.points = points
         self.blocked = blocked
+        self.hitEntityID = hitEntityID
         self.meshData = meshData
     }
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id && lhs.points == rhs.points && lhs.blocked == rhs.blocked
+        lhs.id == rhs.id && lhs.points == rhs.points && lhs.blocked == rhs.blocked && lhs.hitEntityID == rhs.hitEntityID
             && (lhs.meshData == nil) == (rhs.meshData == nil)
     }
 }

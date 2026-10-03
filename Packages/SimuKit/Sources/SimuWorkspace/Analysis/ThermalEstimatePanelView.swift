@@ -59,7 +59,7 @@ import SimuSimulation
                 Text(persistence(coordinator.persistence[result.identity.runID] ?? .notSaved)).font(.caption).foregroundStyle(.secondary)
                 switch result.payload {
                 case .powerEstimate(let p):
-                    Text("请求参考窗口电量：\(p.totalEnergyKWh?.formatted() ?? "missing") kWh").font(.headline)
+                    Text("请求参考窗口电量：\(p.totalEnergyKWh?.formatted() ?? "待补充") kWh").font(.headline)
                     if let lo=p.lowerEnergyKWh,let hi=p.upperEnergyKWh,lo != hi { Text("已声明情景范围：\(lo.formatted())…\(hi.formatted()) kWh；无概率。").font(.caption) }
                     Text("固定24小时参考口径，分钟区间[start,end)；不是夏令时实际账单日。").font(.caption)
                     HStack {
@@ -69,8 +69,8 @@ import SimuSimulation
                     if loadingCost || store.estimates.evaluatingCost { ProgressView("后台费用评价…") }
                     costCard(parent:result)
                 case .steadyHeatBalance(let p):
-                    Text("带符号显热收支：\(p.totalSignedWatts?.formatted() ?? "missing") W").font(.headline)
-                    Text("正制冷显负荷：\(p.coolingSensibleWatts?.formatted() ?? "missing") W · \(p.completeness == .declaredSubset ? "指定项子集" : "完整已声明工况")").font(.caption)
+                    Text("带符号显热收支：\(p.totalSignedWatts?.formatted() ?? "待补充") W").font(.headline)
+                    Text("正制冷显负荷：\(p.coolingSensibleWatts?.formatted() ?? "待补充") W · \(p.completeness == .declaredSubset ? "指定项子集" : "完整已声明工况")").font(.caption)
                     if let lo=p.lowerCoolingSensibleWatts,let hi=p.upperCoolingSensibleWatts,lo != hi { Text("端点情景包络：\(lo.formatted())…\(hi.formatted()) W；不含概率。").font(.caption) }
                     Text(capacityTitle(p.capacityScreen)).font(.caption)
                     ForEach(p.terms,id:\.id){term in Text("\(term.description)：\(term.signedWatts.formatted()) W").font(.caption)}
@@ -97,7 +97,7 @@ import SimuSimulation
             let live=try? currentCostConfiguration(parent:parent)
             let current=live==cost.configuration
             if !current { Text("费用评价已过期；费率/币种已改变，父电量仍可用。").font(.caption).foregroundStyle(.secondary) }
-            if current,let amount=cost.payload.totalCostDecimal { Text("参考日窗口费用：\(displayDecimal(amount,digits:cost.configuration.displayFractionDigits)) \(cost.configuration.currency ?? "missing")；情景估算").font(.headline) }
+            if current,let amount=cost.payload.totalCostDecimal { Text("参考日窗口费用：\(displayDecimal(amount,digits:cost.configuration.displayFractionDigits)) \(cost.configuration.currency ?? "待补充")；情景估算").font(.headline) }
             else if current { Text("费用待补充；电量仍可用。").font(.caption) }
             if current {
                 if let lo=cost.payload.lowerCostDecimal,let hi=cost.payload.upperCostDecimal,lo != hi { Text("已声明费用情景范围：\(displayDecimal(lo,digits:cost.configuration.displayFractionDigits))…\(displayDecimal(hi,digits:cost.configuration.displayFractionDigits)) \(cost.configuration.currency ?? "currency")；无概率。").font(.caption) }
@@ -110,31 +110,31 @@ import SimuSimulation
                     Text(source(s.source)).font(.caption2).textSelection(.enabled)
                 }
                 Text("排除：\(cost.configuration.excludedCosts.joined(separator:"、"))；不另加未知税费，不外推年度收益。").font(.caption)
-                Text("固定未格式化总额：\(cost.payload.totalCostDecimal ?? "missing") · 只最终显示舍入，非账单结算规则。").font(.caption2)
+                Text("固定未格式化总额：\(cost.payload.totalCostDecimal ?? "待补充") · 只最终显示舍入，非账单结算规则。").font(.caption2)
                 Text(cost.payload.decimalPolicy).font(.caption2)
                 Text("父Run \(cost.parentIdentity.runID.uuidString) · evaluationHash \(cost.evaluationHash)").font(.caption2)
             }
         } else { Text("费用未评价；请明确电价/币种。未知费用不显示为0。").font(.caption).foregroundStyle(.secondary) }
     }
     private func displayDecimal(_ text:String,digits:Int)->String {
-        guard let value=Decimal(string:text,locale:Locale(identifier:"en_US_POSIX")) else { return "missing" }
+        guard let value=Decimal(string:text,locale:Locale(identifier:"en_US_POSIX")) else { return "待补充" }
         let formatter=NumberFormatter();formatter.numberStyle = .decimal;formatter.minimumFractionDigits=digits;formatter.maximumFractionDigits=digits;formatter.roundingMode = .halfEven
         return formatter.string(from:NSDecimalNumber(decimal:value)) ?? text
     }
-    private func source(_ s:SourceRecord)->String { "来源 \(s.kind.rawValue) · \(s.reference ?? "用户录入") · \(s.note ?? "")" }
+    private func source(_ s:SourceRecord)->String { "来源 \(InputDisplay.source(s.kind)) · \(s.reference ?? "用户录入") · \(s.note ?? "")" }
     @ViewBuilder private func adoptedValues(_ config:AnalysisConfiguration)->some View {
         switch config.payload {
         case .powerEstimate(let p):
             ForEach(Array(p.intervals.enumerated()),id:\.offset){_,i in
-                Text("\(i.startMinute)…\(i.endMinute) min · \(i.power.value?.formatted() ?? "unknown") W · \(i.basis.rawValue)").font(.caption)
+                Text("\(InputDisplay.clock(String(i.startMinute)))–\(InputDisplay.clock(String(i.endMinute))) · \(i.power.value?.formatted() ?? "未知") W · \(InputDisplay.powerBasis(i.basis))").font(.caption)
                 if case .known(_,let s,_)=i.power { Text(source(s)).font(.caption2).textSelection(.enabled) }
                 if let period=i.measurementPeriod { Text("测量时段："+period).font(.caption) }
             }
             if let scope=p.aggregateCoverageNote { Text("合计覆盖："+scope).font(.caption) }
         case .steadyHeatBalance(let p):
-            Text("代表分钟\(p.conditionMinute) · UA：\(p.coverage?.conductanceScope ?? "待声明") · 内部：\(p.coverage?.internalSensibleScope ?? "待声明") · 空气条件：\(p.coverage?.airPropertyConditions ?? "待声明")").font(.caption)
+            Text("代表时刻\(InputDisplay.clock(String(p.conditionMinute))) · UA：\(p.coverage?.conductanceScope ?? "待声明") · 内部：\(p.coverage?.internalSensibleScope ?? "待声明") · 空气条件：\(p.coverage?.airPropertyConditions ?? "待声明")").font(.caption)
             ForEach(ThermalEstimateValidation.heatTerms+["indoorTemperature","outdoorTemperature","density","specificHeat"],id:\.self){f in
-                if let v=ThermalEstimateValidation.heatParameter(p,field:f) { Text("\(f)：\(v.value?.formatted() ?? "unknown") \(v.unit)").font(.caption);if let s=v.source { Text(source(s)).font(.caption2).textSelection(.enabled) } }
+                if let v=ThermalEstimateValidation.heatParameter(p,field:f) { Text("\(f)：\(v.value?.formatted() ?? "未知") \(v.unit)").font(.caption);if let s=v.source { Text(source(s)).font(.caption2).textSelection(.enabled) } }
             }
             ForEach(p.internalSources ?? [],id:\.entityID){entry in
                 Text("冻结内部源 \(entry.entityID.uuidString) · \(entry.description)").font(.caption)
@@ -154,7 +154,7 @@ import SimuSimulation
         }
     }
     @ViewBuilder private func parameterEvidence<Q>(_ title:String,_ p:PhysicalParameter<Q>)->some View {
-        Text("\(title)：\(p.value?.formatted() ?? "unknown") \(Q.unit)").font(.caption)
+        Text("\(title)：\(p.value?.formatted() ?? "未知") \(Q.unit)").font(.caption)
         if case .known(_,let s,let bounds)=p { Text(source(s)).font(.caption2).textSelection(.enabled);if let b=bounds {Text("采用范围\(b.lower.formatted())…\(b.upper.formatted()) \(Q.unit) · \(b.meaning)").font(.caption)} }
     }
     private func capacityTitle(_ c:SensibleCapacityScreen)->String { switch c { case .sufficientForDeclaredSensibleCase:"已声明代表工况显热容量账面覆盖；不代表全制冷选型或舒适通过。";case .insufficientForDeclaredSensibleCase:"已声明代表工况显热容量账面不足。";case .cannotEvaluate:"容量不可筛查：缺显热/SHR依据、负荷/能力范围重叠或存在排除项。" } }
@@ -207,17 +207,17 @@ private struct PowerEstimateEditor:View {
     let apply:@MainActor (PowerEstimateDraft)throws->Void
     @State private var error:String?
     @SwiftUI.Environment(\.dismiss) private var dismiss
-    var body:some View { NavigationStack { Form {
+    var body:some View { NavigationStack { EditorForm {
         Text("单位W为电输入功率；制冷量/COP不采用。未覆盖或未知不是停机。跨午夜输入会拆成两段半开窗口；固定24h参考，不是实际账单日。")
-        Section("请求窗口 / 参考分钟0…1440") {
-            ForEach($draft.windows){$w in HStack{TextField("start",text:$w.startText);TextField("end",text:$w.endText);Button("删除窗口"){draft.windows.removeAll{$0.id==w.id}}}}
+        EditorSection("请求窗口 · 参考日时钟") {
+            ForEach($draft.windows){$w in HStack{ClockMinuteField(title:"开始",text:$w.startText);ClockMinuteField(title:"结束",text:$w.endText);Button("删除窗口"){draft.windows.removeAll{$0.id==w.id}}}}
             Button("增加请求窗口"){draft.windows.append(.init())}
         }
-        Section("功率片段；停机需明确0 W") {
+        EditorSection("功率片段；停机需明确0 W") {
             ForEach($draft.intervals){$i in VStack(alignment:.leading){
-                HStack{TextField("start / min",text:$i.startText);TextField("end / min",text:$i.endText)}
+                HStack{ClockMinuteField(title:"开始",text:$i.startText);ClockMinuteField(title:"结束",text:$i.endText)}
                 PhysicalParameterEditor("电输入功率",draft:$i.parameter,quantity:ElectricalPowerTag.self,range:.nonnegative)
-                Picker("功率basis",selection:$i.basis){Text("请选择口径").tag(Optional<ElectricalPowerBasis>.none);ForEach(ElectricalPowerBasis.allCases,id:\.self){Text($0.rawValue).tag(Optional($0))}}
+                Picker("功率依据",selection:$i.basis){Text("请选择口径").tag(Optional<ElectricalPowerBasis>.none);ForEach(ElectricalPowerBasis.allCases,id:\.self){Text(InputDisplay.powerBasis($0)).tag(Optional($0))}}
                 TextField("实测日期/采样时段/适用范围",text:$i.measurementPeriod,axis:.vertical)
                 Button("删除功率片段"){draft.intervals.removeAll{$0.id==i.id}}
             }}
@@ -228,10 +228,8 @@ private struct PowerEstimateEditor:View {
             if draft.aggregateCoverageConfirmed {TextField("合计覆盖与来源说明",text:$draft.aggregateNote,axis:.vertical)}
         }
         if let error {Text(error).foregroundStyle(.red)}
-    }.formStyle(.grouped).navigationTitle("功率与时段").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
-    #if os(macOS)
-    .frame(minWidth:560,minHeight:550)
-    #endif
+    }.navigationTitle("功率与时段").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
+    .modifier(EditorSheetSize())
     } }
 }
 private struct HeatBalanceEditor:View {
@@ -239,10 +237,10 @@ private struct HeatBalanceEditor:View {
     let apply:@MainActor (HeatBalanceDraft)throws->Void
     @State private var error:String?
     @SwiftUI.Environment(\.dismiss) private var dismiss
-    var body:some View { NavigationStack { Form {
-        Text("explicitAggregateUA：只接明确合计UA，不从面积或表面U猜测。Tin为采用情景，循环风与潜热排除；各显热源只计一次。没有隐藏空气常数。")
-        TextField("代表分钟0…1439",text:$draft.conditionMinuteText)
-        Toggle("明确采用Tin为估算条件，未声称已达室温",isOn:$draft.indoorConfirmed)
+    var body:some View { NavigationStack { EditorForm {
+        Text("采用有明确依据的合计热导（UA）；不会由未齐备的围护参数推测。室内温度为所采用的情景；排除室内循环风与潜热，各显热源只计一次。")
+        ClockMinuteField(title:"代表时刻",text:$draft.conditionMinuteText)
+        Toggle("明确采用室内温度为估算条件，未声称已达室温",isOn:$draft.indoorConfirmed)
         TextField("UA覆盖范围",text:$draft.conductanceScope,axis:.vertical)
         TextField("内部显热覆盖清单/合计范围",text:$draft.internalScope,axis:.vertical)
         TextField("空气密度/比热的适用温度条件",text:$draft.airConditions,axis:.vertical)
@@ -258,24 +256,22 @@ private struct HeatBalanceEditor:View {
         Button("明确冻结当前人员/设备显热与有效比例清单"){do{try draft.importInternalSources()}catch{self.error=error.localizedDescription}}
         if let sources=draft.internalSources {Text("已冻结\(sources.count)项内部总显热；修改合计需与清单一致。");Button("改用显式合计口径，清除清单"){draft.internalSources=nil}}
         parameter("solarSensibleHeat","太阳显热",ThermalPowerTag.self,.nonnegative)
-        Section("明确排除项；子集不能作完整容量筛查") { ForEach(ThermalEstimateValidation.heatTerms,id:\.self){field in
+        EditorSection("明确排除项；子集不能作完整容量筛查") { ForEach(ThermalEstimateValidation.heatTerms,id:\.self){field in
             Toggle("排除 \(field)",isOn:Binding(get:{draft.exclusions[field] != nil},set:{if $0{draft.exclusions[field]=""}else{draft.exclusions.removeValue(forKey:field)}}))
             if draft.exclusions[field] != nil {TextField("排除理由",text:Binding(get:{draft.exclusions[field] ?? ""},set:{draft.exclusions[field]=$0}),axis:.vertical)}
         }}
-        Section("显热能力或有依据总能力×SHR，可保持未知") {
+        EditorSection("显热能力或有依据总能力×SHR，可保持未知") {
             parameter("sensibleCoolingCapacity","直接显热能力",ThermalPowerTag.self,.nonnegative)
             parameter("totalCoolingCapacity","总制冷能力",ThermalPowerTag.self,.nonnegative)
             parameter("sensibleHeatRatio","SHR（未知不能取1）",RatioTag.self,.fraction)
         }
-        Section("范围：最多2个采用输入、4个端点+名义") {
+        EditorSection("范围：最多2个采用输入、4个端点+名义") {
             Picker("区间关系",selection:$draft.sensitivityRelationship){Text("相关性未知，端点情景包络").tag("unknownDependenceEnvelope");Text("有依据的独立端点情景").tag("independentEndpointScenarios")}
             TextField("区间关系/端点范围来源与局限",text:$draft.sensitivityExplanation,axis:.vertical)
         }
         if let error {Text(error).foregroundStyle(.red)}
-    }.formStyle(.grouped).navigationTitle("显热情景输入").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
-    #if os(macOS)
-    .frame(minWidth:600,minHeight:650)
-    #endif
+    }.navigationTitle("显热情景输入").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("采用配置"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
+    .modifier(EditorSheetSize())
     } }
     private func parameter<Q:QuantityTag>(_ field:String,_ title:String,_ tag:Q.Type,_ range:ParameterValueRange)->some View { PhysicalParameterEditor(title,draft:Binding(get:{draft.parameters[field] ?? .init()},set:{draft.parameters[field]=$0}),quantity:tag,range:range) }
 }
@@ -284,20 +280,18 @@ private struct TariffEditor:View {
     let apply:@MainActor (TariffDraft)throws->Void
     @State private var error:String?
     @SwiftUI.Environment(\.dismiss) private var dismiss
-    var body:some View { NavigationStack { Form {
-        Text("费用评价固定电量run。币种/费率未知时费用missing；不换汇，不补税费、设备报价或年度收益。")
-        TextField("三字母币种，例如EUR/CNY",text:$draft.currency)
+    var body:some View { NavigationStack { EditorForm {
+        Text("费用评价固定电量run。币种或费率未知时不生成费用数值；不换汇，不补税费、设备报价或年度收益。")
+        EditorTextField(title:"币种代码，例如 EUR / CNY",text:$draft.currency)
         ForEach($draft.tariffs){$i in VStack{
-            HStack{TextField("start / min",text:$i.startText);TextField("end / min",text:$i.endText)}
+            HStack{ClockMinuteField(title:"开始",text:$i.startText);ClockMinuteField(title:"结束",text:$i.endText)}
             PhysicalParameterEditor("费率（币种/kWh）",draft:$i.parameter,quantity:EnergyRateTag.self,range:.nonnegative)
             Button("删除费率片段"){draft.tariffs.removeAll{$0.id==i.id}}
         }}
         Button("增加费率片段"){draft.tariffs.append(.init())}
         Text("费用仅作单位消费费率情景；订阅、设备和安装费用不在合计内。来源若已含税，不额外加假税。")
         if let error {Text(error).foregroundStyle(.red)}
-    }.formStyle(.grouped).navigationTitle("参考日电价").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("应用费率"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
-    #if os(macOS)
-    .frame(minWidth:520,minHeight:450)
-    #endif
+    }.navigationTitle("参考日电价").toolbar{ToolbarItem(placement:.cancellationAction){Button("取消"){dismiss()}};ToolbarItem(placement:.confirmationAction){Button("应用费率"){do{try apply(draft);dismiss()}catch{self.error=error.localizedDescription}}}}
+    .modifier(EditorSheetSize())
     } }
 }

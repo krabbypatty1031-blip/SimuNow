@@ -116,6 +116,11 @@ public extension SimuNowDocument {
         let data: [String:ProjectPackageEntry] = ["input.json": .file(artifact.inputData), "result.json": .file(artifact.resultData), "manifest.json": .file(artifact.manifestData)]
         var entries = preservedEntries
         try entries.setNativeEntry(.directory(data), at: ["runs",artifact.request.identity.runID.uuidString.lowercased(),"native-analysis"], allowReplace: false)
+        let presentation = NativeRunPresentation(runID: artifact.result.identity.runID, projectID: project.id,
+            scenarioName: project.scenarios.first { $0.id == artifact.result.identity.scenarioID }?.name ?? "原方案",
+            recordedAt: Date(), method: artifact.result.method.kind)
+        let presentationData = try JSONEncoder().encode(presentation)
+        try entries.setNativeEntry(.file(presentationData), at: ["runs", artifact.request.identity.runID.uuidString.lowercased(), "presentation.json"], allowReplace: false)
         try Self.validateOwnedNativeBudget(entries)
         return try replacingPreservedEntries(entries)
     }
@@ -220,6 +225,25 @@ public struct NativeSavedAnalysisIndex: Equatable, Sendable, Identifiable {
     public let scenarioID:UUID
     public let resultBytes:Int
     public let relativePath:String
+    public var presentation: NativeRunPresentation? = nil
+}
+
+/// Optional display metadata, outside native-analysis and its immutable evidence.
+/// Missing/corrupt/future metadata never determines whether a result is valid.
+public struct NativeRunPresentation: Codable, Equatable, Sendable {
+    public let owner: String
+    public let version: Int
+    public let runID: UUID
+    public let projectID: UUID
+    public let scenarioName: String
+    public let recordedAt: Date
+    public let method: AnalysisKind
+    public init(runID: UUID, projectID: UUID, scenarioName: String, recordedAt: Date, method: AnalysisKind) {
+        owner = "com.simunow.presentation"; version = 1
+        self.runID = runID; self.projectID = projectID
+        self.scenarioName = String(String.UnicodeScalarView(scenarioName.unicodeScalars.prefix(256)))
+        self.recordedAt = recordedAt; self.method = method
+    }
 }
 public extension NativeArtifactCodec {
     func index(entries:[String:ProjectPackageEntry],projectID:UUID) -> [NativeSavedAnalysisIndex] {
@@ -229,7 +253,15 @@ public extension NativeArtifactCodec {
                   case .file(let data)=native["manifest.json"],data.count <= Self.maximumManifestBytes,
                   let manifest=try? NativeAnalysisCodec(registry:registry).decodeManifest(data),manifest.runID == runID,manifest.projectID == projectID,
                   let output=manifest.files.first(where:{$0.relativePath == "result.json"}),output.byteCount <= Self.maximumResultBytes else { return nil }
-            return .init(id:runID,scenarioID:manifest.scenarioID,resultBytes:output.byteCount,relativePath:"runs/\(key)/native-analysis")
+            var presentation: NativeRunPresentation?
+            if case .file(let bytes) = run["presentation.json"], bytes.count <= 4096,
+               let decoded = try? JSONDecoder().decode(NativeRunPresentation.self, from: bytes),
+               decoded.owner == "com.simunow.presentation", decoded.version == 1,
+               decoded.runID == runID, decoded.projectID == projectID,
+               decoded.scenarioName.unicodeScalars.count <= 256, decoded.recordedAt.timeIntervalSince1970.isFinite {
+                presentation = decoded
+            }
+            return .init(id:runID,scenarioID:manifest.scenarioID,resultBytes:output.byteCount,relativePath:"runs/\(key)/native-analysis",presentation:presentation)
         }
     }
     func load(runID:UUID,entries:[String:ProjectPackageEntry],projectID:UUID) throws -> NativeAnalysisArtifact {

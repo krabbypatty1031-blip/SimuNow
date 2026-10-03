@@ -1,10 +1,12 @@
 import SwiftUI
 import SimuCore
+import SimuVisualization
 
 /// The caller commits the complete project and template metadata as one undoable transaction.
 @MainActor
 public struct TemplatePickerView: View {
     @SwiftUI.Environment(\.dismiss) private var dismiss
+    @State private var savedDrafts: [String: TemplateOptionsDraft] = [:]
     @State private var kind: ProjectTemplateKind = .office
     @State private var draft = TemplateOptionsDraft(options: .defaults(for: .office))
     @State private var preview: ProjectTemplateInstantiation?
@@ -21,18 +23,20 @@ public struct TemplatePickerView: View {
 
     public var body: some View {
         NavigationStack {
-            Form {
-                Section("可编辑布局示例") {
+            EditorForm {
+                EditorSection("可编辑布局示例") {
                     Picker("模板", selection: $kind) {
                         ForEach(ProjectTemplateKind.allCases) { kind in
                             Text(kind.title).tag(kind)
                         }
-                    }
+                    }.pickerStyle(.segmented)
+                    Text(kind == .office ? "办公室：小组工位与桌体；适合观察不同送风方向与遮挡。" : "教室：成排座位与可选讲台；适合查找密集关注点。")
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
                     Text("模板带有明确的布局假设，物理输入保持待补充。应用模板将替换项目全部几何与方案。")
                         .font(.footnote).foregroundStyle(.secondary)
-                    TextField("项目名称", text: $draft.projectName)
+                    EditorTextField(title: "项目名称", text: $draft.projectName)
                 }
-                Section("尺寸与座位") {
+                EditorSection("尺寸与座位") {
                     number("房间宽度 · m", text: $draft.width)
                     number("房间进深 · m", text: $draft.depth)
                     number("房间高度 · m", text: $draft.height)
@@ -44,44 +48,41 @@ public struct TemplatePickerView: View {
                     Text("按列数逐排放置；最后一排可以不满。座位数不得超过行数 × 列数。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("家具与使用条件") {
+                EditorSection("家具与使用条件") {
                     Toggle("创建桌体", isOn: $draft.includeFurniture)
-                    number("桌宽 · m", text: $draft.deskWidth)
-                    number("桌深 · m", text: $draft.deskDepth)
-                    number("桌高 · m", text: $draft.deskHeight)
+                    number("桌宽 · m", text: $draft.deskWidth).disabled(!draft.includeFurniture)
+                    number("桌深 · m", text: $draft.deskDepth).disabled(!draft.includeFurniture)
+                    number("桌高 · m", text: $draft.deskHeight).disabled(!draft.includeFurniture)
+                    if !draft.includeFurniture { Text("桌体尺寸已保留；重新启用创建桌体时生效。").font(.caption).foregroundStyle(.secondary) }
                     Toggle("创建讲台", isOn: $draft.includeLectern)
                     Toggle("创建人员记录", isOn: $draft.includeOccupants)
                     Toggle("创建桌上热源点", isOn: $draft.includeEquipment)
-                    number("使用开始 · 当地分钟", text: $draft.activeStartMinute)
-                    number("使用结束 · 当地分钟", text: $draft.activeEndMinute)
-                    Text("例如 540 = 09:00。其余时段明确停用；热量、met/clo 和设备性能需要实际依据。")
+                    ClockMinuteField(title: "使用开始", text: $draft.activeStartMinute)
+                    ClockMinuteField(title: "使用结束", text: $draft.activeEndMinute)
+                    Text("其余时段明确停用；热量、活动、衣着和设备性能需要实际依据。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Toggle("创建分体空调", isOn: $draft.includeHVAC)
                     Toggle("创建示例门", isOn: $draft.includeDoor)
                     Toggle("创建示例窗", isOn: $draft.includeWindow)
                 }
-                Section("布局预览") {
-                    if isGenerating { ProgressView("校验布局…") }
-                    if let preview {
-                        TemplateLayoutPreview(project: preview.project, columns: Int(draft.columns) ?? 1)
-                    }
-                    if let generationError {
-                        Label(generationError, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                            .accessibilityLabel("布局不可应用：\(generationError)")
-                    }
-                }
-                Section("出处与假设") {
+                EditorSection("出处与假设") {
                     Text(kind.descriptor.sourceReference).font(.caption.monospaced())
                     ForEach(kind.descriptor.assumptionNotes, id: \.self) { Text($0).font(.footnote) }
                     Text("覆盖的尺寸和活动时段记录为用户输入；未修改的值记录为内部模板假设。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if let commitError {
-                    Section("应用失败") { Text(commitError).foregroundStyle(.red) }
+                    EditorSection("应用失败") { Text(commitError).foregroundStyle(.red) }
                 }
             }
-            .formStyle(.grouped)
+
+            .safeAreaInset(edge: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if isGenerating { ProgressView("正在更新布局…") }
+                    if let preview { TemplateLayoutPreview(project: preview.project, columns: Int(draft.columns) ?? 1) }
+                    if let generationError { Label(generationError, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+                }.padding(12).background(.regularMaterial)
+            }
             .navigationTitle("从模板创建")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -95,8 +96,9 @@ public struct TemplatePickerView: View {
                 }
             }
         }
-        .onChange(of: kind) { _, kind in
-            draft = TemplateOptionsDraft(options: .defaults(for: kind))
+        .onChange(of: kind) { previous, kind in
+            savedDrafts[previous.rawValue] = draft
+            draft = savedDrafts[kind.rawValue] ?? TemplateOptionsDraft(options: .defaults(for: kind))
             commitError = nil
         }
         .task(id: PreviewRequest(kind: kind, draft: draft)) { await generatePreview() }
@@ -104,9 +106,7 @@ public struct TemplatePickerView: View {
         .confirmationDialog("放弃尚未应用的模板设置？", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("放弃设置", role: .destructive) { dismiss() }
         }
-        #if os(macOS)
-        .frame(minWidth: 560, minHeight: 560)
-        #endif
+        .modifier(EditorSheetSize())
     }
 
     private var hasDraftChanges: Bool {
@@ -114,7 +114,7 @@ public struct TemplatePickerView: View {
     }
 
     private func number(_ label: String, text: Binding<String>) -> some View {
-        TextField(label, text: text).accessibilityHint("保留未完成输入；只有有效数字才可应用模板。")
+        EditorTextField(title: label, text: text).accessibilityHint("保留未完成输入；只有有效数字才可应用模板。")
     }
 
     private func generatePreview() async {
@@ -222,31 +222,16 @@ private struct TemplateOptionsDraft: Equatable, Sendable {
 
 /// A semantic layout preview supplements the plan editor, and remains accessible without a canvas.
 private struct TemplateLayoutPreview: View {
-    @ScaledMetric(relativeTo: .body) private var tileWidth: CGFloat = 86
     let project: ProjectDocument
     let columns: Int
-
     var body: some View {
-        let usage = project.scenarios[0].inputs.usage
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(usage.seats.count) 个座位 · \(project.geometry.obstacles.count) 个家具 · \(usage.occupants.count) 人员记录")
-                .font(.headline)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: tileWidth))], spacing: 8) {
-                ForEach(usage.seats.prefix(64), id: \.id) { seat in
-                    VStack(spacing: 4) {
-                        Image(systemName: "chair.fill")
-                        Text(seat.name).font(.caption)
-                    }
-                    .padding(8)
-                    .frame(maxWidth: .infinity)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(seat.name)，X \(seat.position.x) m，Y \(seat.position.y) m；采样高度 1.1 m")
-                }
+        if let scenario = project.scenarios.first {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(scenario.inputs.usage.seats.count) 个座位 · 每排 \(columns) 列 · \(project.geometry.obstacles.count) 个家具").font(.caption.bold())
+                RoomPlanView(project: project, scenarioID: scenario.id, selection: nil,
+                    onSelect: { _ in }, onPlace: { _ in }).frame(height: 160).allowsHitTesting(false).accessibilityHidden(true)
+                Text("按实际生成尺寸绘制 · 内部布局假设。切换模板会保留各自草稿。").font(.caption2).foregroundStyle(.secondary)
             }
-            if usage.seats.count > 64 { Text("另有 \(usage.seats.count - 64) 个座位；创建后在俯视编辑器查看完整布局。") }
-            Text("实际布局按每行 \(columns) 列放置。此处按可用宽度重排、非按比例；精确位置在创建后的俯视编辑器中查看。")
-                .font(.footnote).foregroundStyle(.secondary)
         }
     }
 }

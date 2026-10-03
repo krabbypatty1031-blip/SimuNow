@@ -5,6 +5,7 @@ import SimuVisualization
 private struct ObjectEditRequest: Identifiable {
     let selection: RoomPlanSelection
     let isNew: Bool
+    var focus: EditorFocus = .init()
     var id: String { selection.id }
 }
 private struct RoomGeometryEditRequest: Identifiable {
@@ -26,6 +27,10 @@ public struct RoomObjectsView: View {
     public let focusEntityID: UUID?
     public let overlay: RoomSceneOverlay
     public let rendererCapability: RendererCapabilities
+    public var selectedSceneKey: SceneObjectKey?
+    public var onSelectionChange: @MainActor (SceneObjectKey?) -> Void
+    @Binding private var inspectorPresented: Bool
+    var requestedFocus: EditorFocus = .init()
     public let onCommit: @MainActor (ProjectDocument, String) throws -> Void
     @State private var selection: RoomPlanSelection?
     @State private var sceneSelection: SceneObjectKey?
@@ -37,8 +42,15 @@ public struct RoomObjectsView: View {
     @State private var placing = false
     @State private var confirmDelete = false
     @State private var error: String?
+    @State private var search = ""
+    @State private var showBrowser = false
+    @FocusState private var searching: Bool
     public init(project: ProjectDocument, scenarioID: UUID, registry: ModelRegistry = .builtIn, focusEntityID: UUID? = nil, overlay: RoomSceneOverlay = .empty, rendererCapability: RendererCapabilities = .current,
+                selectedSceneKey: SceneObjectKey? = nil, inspectorPresented: Binding<Bool> = .constant(true),
+                onSelectionChange: @escaping @MainActor (SceneObjectKey?) -> Void = { _ in },
+                focusField: String? = nil,
                 onCommit: @escaping @MainActor (ProjectDocument, String) throws -> Void) {
+        self.selectedSceneKey = selectedSceneKey; self.onSelectionChange = onSelectionChange; _inspectorPresented = inspectorPresented; requestedFocus = .init(entityID: focusEntityID, field: focusField)
         self.project = project; self.scenarioID = scenarioID; self.registry = registry; self.focusEntityID = focusEntityID; self.overlay = overlay; self.rendererCapability = rendererCapability; self.onCommit = onCommit
     }
     private var input: ScenarioInputs? { project.scenarios.first { $0.id == scenarioID }?.inputs }
@@ -52,86 +64,46 @@ public struct RoomObjectsView: View {
         return [b.size.x, b.size.y, b.size.z].allSatisfy { $0.isFinite && $0 > 0 }
     }
     public var body: some View {
-        Form {
-            Section("房间查看与编辑") {
-                RoomViewportContainer(project: project, scenarioID: scenarioID, registry: registry, capability: rendererCapability,
-                    selection: sceneSelection, planSelection: selection, placing: placing, overlay: overlay,
-                    onSelect: chooseScene, onPlace: place, canEdit: canEditScene, onEdit: editScene)
-                if let selection {
-                    ViewThatFits(in: .horizontal) {
-                        HStack { selectionActions(selection) }
-                        VStack(alignment: .leading) { selectionActions(selection) }
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                if geometry.size.width >= 760 {
+                    objectBrowser.frame(width: 220)
+                    Divider()
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Menu { addButtons } label: { Label("添加对象", systemImage: "plus") }.disabled(!canAdd)
+                        if let selection, !inspectorPresented {
+                            Button("编辑属性", systemImage: "pencil") { edit(selection) }
+                                .keyboardShortcut("e", modifiers: .command).disabled(editableParent(selection) == nil)
+                        }
+                        if geometry.size.width < 760 {
+                            Button("对象清单", systemImage: "list.bullet") { showBrowser.toggle() }
+                                .keyboardShortcut("f", modifiers: .command)
+                                .popover(isPresented: $showBrowser) { objectBrowser.frame(width: 280, height: 420).onAppear { searching = true } }
+                        }
+                        Spacer()
+                        if placing { Button("取消放置", role: .cancel) { placing = false } }
                     }.controlSize(.small)
-                    Text("已选：\(selection.kind.title)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if placing { Text("下一次点击设置 X / Y；保持原高度。点击家具设置其最小角，点击座位或空调会连同采样点或风口平移。").font(.caption).foregroundStyle(.secondary) }
-                if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            }
-            Section("添加对象") {
-                ViewThatFits(in: .horizontal) {
-                    HStack { addButtons }
-                    VStack(alignment: .leading) { addButtons }
-                }.disabled(!canAdd)
-                if !canAdd { Text("请先创建方案并补齐受支持房间的三个尺寸。").foregroundStyle(.secondary) }
-            }
-            Section("家具 · 全部方案共享") {
-                ForEach(project.geometry.obstacles, id: \.id) { obstacle in
-                    objectRow(obstacle.name, selection: .init(kind: .furniture, objectID: obstacle.id))
-                    if (try? obstacle.shape.resolved(as: BoxObstacle.self, registry: registry)) == nil {
-                        Text("\(obstacle.shape.kind) v\(obstacle.shape.payloadVersion)：当前类型只读，原数据保留。").font(.caption).foregroundStyle(.secondary)
+                    RoomViewportContainer(project: project, scenarioID: scenarioID, registry: registry, capability: rendererCapability,
+                        selection: sceneSelection, planSelection: selection, placing: placing, overlay: overlay,
+                        onSelect: chooseScene, onPlace: place, canEdit: canEditScene, onEdit: editScene)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if placing {
+                        Label("点击俯视图设置 X/Y；保持高度。家具按最小角放置。", systemImage: "cursorarrow.click")
+                            .font(.caption).fixedSize(horizontal: false, vertical: true)
                     }
-                }
-                if project.geometry.obstacles.isEmpty { Text("尚无家具").foregroundStyle(.secondary) }
-            }
-            if let input {
-                Section("座位、采样点与人员 · 当前方案") {
-                    ForEach(input.usage.seats, id: \.id) { seat in
-                        objectRow(seat.name, selection: .init(kind: .seat, objectID: seat.id))
-                        ForEach(Array(seat.samples.enumerated()), id: \.element.id) { index, sample in
-                            objectRow("\(seat.name) / 采样点 \(index + 1)", selection: .init(kind: .sample, objectID: sample.id))
-                        }
-                        let occupied = input.usage.occupants.contains { $0.seatID == seat.id }
-                        Text(occupied ? "已关联独立人员记录" : "未关联人员记录").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if input.usage.seats.isEmpty { Text("尚无座位").foregroundStyle(.secondary) }
-                }
-                if !input.usage.occupants.filter({ occupant in !input.usage.seats.contains { $0.id == occupant.seatID } }).isEmpty {
-                    Section("待修复的人员关联") {
-                        ForEach(input.usage.occupants.filter { occupant in !input.usage.seats.contains { $0.id == occupant.seatID } }, id: \.id) { occupant in
-                            Text("人员记录引用了不存在的座位：\(occupant.seatID.uuidString)").font(.caption).foregroundStyle(.orange)
-                            Button("选择有效座位并修复") { occupantRepairRequest = .init(id: occupant.id) }
-                        }
-                    }
-                }
-                Section("设备热源 · 当前方案") {
-                    ForEach(Array(input.usage.equipment.enumerated()), id: \.element.id) { index, item in
-                        objectRow("设备热源 \(index + 1)", selection: .init(kind: .equipment, objectID: item.id))
-                    }
-                    if input.usage.equipment.isEmpty { Text("尚无设备热源").foregroundStyle(.secondary) }
-                }
-                Section("空调、风口与控制 · 当前方案") {
-                    ForEach(input.hvac, id: \.id) { device in
-                        objectRow(device.name, selection: .init(kind: .hvac, objectID: device.id))
-                        if (try? device.definition.resolved(as: SingleSplit.self, registry: registry)) == nil {
-                            Text("\(device.definition.kind) v\(device.definition.payloadVersion)：当前类型只读，原数据保留。").font(.caption).foregroundStyle(.secondary)
-                        }
-                        ForEach(Array(device.ports.enumerated()), id: \.element.id) { index, port in
-                            objectRow("\(device.name) / \(port.role == .supply ? "送风口" : "回风口") \(index + 1)", selection: .init(kind: .port, objectID: port.id))
-                        }
-                        ForEach(input.controls.filter { $0.deviceID == device.id }, id: \.id) { control in
-                            objectRow("\(device.name) / 温控测点", selection: .init(kind: .control, objectID: control.id))
-                        }
-                    }
-                    if input.hvac.isEmpty { Text("尚无空调").foregroundStyle(.secondary) }
-                    ForEach(input.controls.filter { control in !input.hvac.contains { $0.id == control.deviceID } }, id: \.id) { control in
-                        Text("温控记录引用了不存在的空调：\(control.deviceID.uuidString)").font(.caption).foregroundStyle(.orange)
-                        Button("选择有效空调并修复温控") { controlRepairRequest = .init(id: control.id) }
-                    }
-                }
+                    if let error { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
+                }.padding(12).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .formStyle(.grouped)
+        #if os(macOS)
+        .inspector(isPresented: $inspectorPresented) {
+            selectionInspector.inspectorColumnWidth(min: 240, ideal: 280, max: 380)
+        }
+        #else
+        .sheet(isPresented: $inspectorPresented) { NavigationStack { selectionInspector.navigationTitle("对象属性").toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { inspectorPresented = false } } } } }
+        #endif
         .sheet(item: $geometryEditRequest) { request in
             NavigationStack {
                 switch request.target {
@@ -141,10 +113,10 @@ public struct RoomObjectsView: View {
                 }
             }
             #if os(macOS)
-            .frame(minWidth: 560, idealWidth: 680, minHeight: 500, idealHeight: 720)
+            .modifier(EditorSheetSize())
             #endif
         }
-        .sheet(item: $editRequest) { request in editor(request) }
+        .sheet(item: $editRequest) { request in RoomObjectEditorView(project: project, scenarioID: scenarioID, selection: request.selection, isNew: request.isNew, registry: registry, onCommit: onCommit).environment(\.editorFocus, request.focus) }
         .sheet(item: $occupantRepairRequest) { request in
             if let input, let occupant = input.usage.occupants.first(where: { $0.id == request.id }) {
                 ObjectOccupantRepairEditor(project: project, scenarioID: scenarioID, occupant: occupant, registry: registry, onCommit: onCommit)
@@ -164,13 +136,141 @@ public struct RoomObjectsView: View {
         } message: {
             Text(selection?.kind == .seat ? "座位对应的人员记录会一起删除。" : selection?.kind == .hvac ? "空调的风口和对应控制会一起删除。" : selection?.kind == .furniture ? "此家具会从所有方案的共享几何中删除。" : "此操作可通过项目撤销恢复。")
         }
-        .onAppear { focus(focusEntityID) }
+        .onAppear { if let selectedSceneKey { chooseScene(selectedSceneKey) }; focus(focusEntityID) }
+        .onChange(of: selectedSceneKey) { _, key in if key != sceneSelection { chooseScene(key) } }
         .onChange(of: focusEntityID) { _, id in focus(id) }
         .onChange(of: project) { _, newValue in
             if let selection, !ObjectEditing.contains(selection, in: newValue, scenarioID: scenarioID) { self.selection = nil; placing = false }
-            if let sceneSelection, RoomSceneSelectionAdapter.target(for: sceneSelection, project: newValue, scenarioID: scenarioID) == nil { self.sceneSelection = nil }
+            if let sceneSelection, RoomSceneSelectionAdapter.target(for: sceneSelection, project: newValue, scenarioID: scenarioID) == nil { self.sceneSelection = nil; onSelectionChange(nil) }
         }
-        .onChange(of: scenarioID) { _, _ in selection = nil; sceneSelection = nil; placing = false; editRequest = nil; moveRequest = nil; occupantRepairRequest = nil; controlRepairRequest = nil; geometryEditRequest = nil }
+        .onChange(of: scenarioID) { _, _ in selection = nil; sceneSelection = nil; onSelectionChange(nil); placing = false; editRequest = nil; moveRequest = nil; occupantRepairRequest = nil; controlRepairRequest = nil; geometryEditRequest = nil }
+    }
+    private func matches(_ name: String) -> Bool { search.isEmpty || name.localizedStandardContains(search) }
+    private var objectBrowser: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("对象清单").font(.headline)
+                Spacer()
+                Button("查找", systemImage: "magnifyingglass") { searching = true }
+                    .labelStyle(.iconOnly).keyboardShortcut("f", modifiers: .command)
+            }
+            TextField("搜索对象名称", text: $search).textFieldStyle(.roundedBorder).focused($searching)
+                .accessibilityLabel("查找房间对象")
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+            EditorDisclosure(title: "家具 · 共享 \(project.geometry.obstacles.count)", initiallyExpanded: true) {
+                ForEach(project.geometry.obstacles.filter { matches($0.name) }, id: \.id) { obstacle in
+                    objectRow(obstacle.name, selection: .init(kind: .furniture, objectID: obstacle.id))
+                    if (try? obstacle.shape.resolved(as: BoxObstacle.self, registry: registry)) == nil {
+                        Text("\(obstacle.shape.kind) v\(obstacle.shape.payloadVersion)：当前类型只读，原数据保留。").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if project.geometry.obstacles.isEmpty { Text("尚无家具").foregroundStyle(.secondary) }
+            }
+            if let input {
+                EditorDisclosure(title: "座位与关注点 \(input.usage.seats.count)", initiallyExpanded: true) {
+                    ForEach(input.usage.seats.filter { matches($0.name + " 座位 采样点 人员") }, id: \.id) { seat in
+                        EditorDisclosure(title: seat.name, entityID: seat.id, initiallyExpanded: !search.isEmpty || selection?.objectID == seat.id || seat.samples.contains { $0.id == selection?.objectID }) {
+                        objectRow(seat.name, selection: .init(kind: .seat, objectID: seat.id))
+                        ForEach(Array(seat.samples.enumerated()), id: \.element.id) { index, sample in
+                            objectRow("\(seat.name) / 采样点 \(index + 1)", selection: .init(kind: .sample, objectID: sample.id))
+                        }
+                        let occupied = input.usage.occupants.contains { $0.seatID == seat.id }
+                        Text(occupied ? "有人使用" : "未配置人员").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if input.usage.seats.isEmpty { Text("尚无座位").foregroundStyle(.secondary) }
+                }
+                if !input.usage.occupants.filter({ occupant in !input.usage.seats.contains { $0.id == occupant.seatID } }).isEmpty {
+                    Section("待修复的人员关联") {
+                        ForEach(input.usage.occupants.filter { occupant in !input.usage.seats.contains { $0.id == occupant.seatID } }, id: \.id) { occupant in
+                            Text("人员记录引用了不存在的座位：\(occupant.seatID.uuidString)").font(.caption).foregroundStyle(.orange)
+                            Button("选择有效座位并修复") { occupantRepairRequest = .init(id: occupant.id) }
+                        }
+                    }
+                }
+                Section("设备热源 · 当前方案") {
+                    ForEach(input.usage.equipment.filter { matches(InputDisplay.equipment($0.id) + " 设备") }, id: \.id) { item in
+                        objectRow(InputDisplay.equipment(item.id), selection: .init(kind: .equipment, objectID: item.id))
+                    }
+                    if input.usage.equipment.isEmpty { Text("尚无设备热源").foregroundStyle(.secondary) }
+                }
+                EditorDisclosure(title: "空调与风口 \(input.hvac.count)", initiallyExpanded: true) {
+                    ForEach(input.hvac.filter { matches($0.name + " 空调 送风口 回风口 温控测点") }, id: \.id) { device in
+                        EditorDisclosure(title: device.name, entityID: device.id, initiallyExpanded: !search.isEmpty || selection?.objectID == device.id || device.ports.contains { $0.id == selection?.objectID } || input.controls.contains { $0.deviceID == device.id && $0.id == selection?.objectID }) {
+                        objectRow(device.name, selection: .init(kind: .hvac, objectID: device.id))
+                        if (try? device.definition.resolved(as: SingleSplit.self, registry: registry)) == nil {
+                            Text("\(device.definition.kind) v\(device.definition.payloadVersion)：当前类型只读，原数据保留。").font(.caption).foregroundStyle(.secondary)
+                        }
+                        ForEach(Array(device.ports.enumerated()), id: \.element.id) { index, port in
+                            objectRow("\(device.name) / \(port.role == .supply ? "送风口" : "回风口") \(index + 1)", selection: .init(kind: .port, objectID: port.id))
+                        }
+                        ForEach(input.controls.filter { $0.deviceID == device.id }, id: \.id) { control in
+                            objectRow("\(device.name) / 温控测点", selection: .init(kind: .control, objectID: control.id))
+                        }
+                    }
+                    }
+                    if input.hvac.isEmpty { Text("尚无空调").foregroundStyle(.secondary) }
+                    ForEach(input.controls.filter { control in !input.hvac.contains { $0.id == control.deviceID } }, id: \.id) { control in
+                        Text("温控记录引用了不存在的空调：\(control.deviceID.uuidString)").font(.caption).foregroundStyle(.orange)
+                        Button("选择有效空调并修复温控") { controlRepairRequest = .init(id: control.id) }
+                    }
+                }
+            }
+
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .task(id: selection) {
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    if let selection { proxy.scrollTo(selection.id, anchor: .center) }
+                }
+            }
+        }.padding(12).frame(maxHeight: .infinity)
+        .environment(\.editorFocus, EditorFocus(entityID: selection?.objectID))
+    }
+    private var selectionInspector: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                if let key = sceneSelection {
+                    Text(FieldNavigation.objectName(project: project, path: "", entityID: key.modelID)).font(.headline)
+                    if let selection {
+                        Label(selection.kind.title, systemImage: "scope")
+                        Label(selection.kind == .furniture ? "全部方案共享" : "仅当前方案", systemImage: "square.stack.3d.up").font(.caption)
+                        if selection.kind == .furniture { Text("修改会使相关方案的预览过期。").font(.caption).foregroundStyle(.secondary) }
+                        if let p = ObjectEditing.position(of: selection, in: project, scenarioID: scenarioID, registry: registry) {
+                            LabeledContent("X · 横向", value: p.x.formatted() + " m")
+                            LabeledContent("Y · 纵向", value: p.y.formatted() + " m")
+                            LabeledContent("Z · 高度", value: p.z.formatted() + " m")
+                        }
+                        if let input, let port = input.hvac.flatMap(\.ports).first(where: { $0.id == selection.objectID }) {
+                            let angles = AirflowDirection.angles(port.direction)
+                            DirectionPreview(yaw: String(angles.yaw), pitch: String(angles.pitch))
+                        }
+                        Button("编辑属性", systemImage: "pencil") { edit(selection) }
+                            .buttonStyle(.borderedProminent).disabled(editableParent(selection) == nil)
+                            .keyboardShortcut("e", modifiers: .command)
+                        Menu("位置与删除") { selectionActions(selection) }
+                        if overlay.paths.contains(where: { $0.hitEntityID == selection.objectID }) {
+                            Label("此对象遮挡了当前假设路径", systemImage: "exclamationmark.triangle").font(.caption)
+                        }
+                    } else if let target = RoomSceneSelectionAdapter.target(for: key, project: project, scenarioID: scenarioID) {
+                        Label("房间与门窗 · 全部方案共享", systemImage: "square.stack.3d.up").font(.caption)
+                        Button("编辑属性") { editScene(target) }.disabled(!canEditScene(target))
+                    }
+                    Button("清除选择") { chooseScene(nil) }.controlSize(.small)
+                } else {
+                    Text("选择对象查看属性").font(.headline)
+                    Text("点击画布或对象清单。属性、位置和遮挡提示将在此同步显示。")
+                        .font(.callout).foregroundStyle(.secondary)
+                    LabeledContent("房间", value: room?.name ?? "未创建")
+                    LabeledContent("家具", value: "\(project.geometry.obstacles.count)")
+                    LabeledContent("座位", value: "\(input?.usage.seats.count ?? 0)")
+                    LabeledContent("空调", value: "\(input?.hvac.count ?? 0)")
+                }
+            }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
     @ViewBuilder private var addButtons: some View {
         Button("家具", systemImage: "square.fill") { add(.furniture) }
@@ -180,12 +280,11 @@ public struct RoomObjectsView: View {
     }
     @ViewBuilder private func selectionActions(_ selection: RoomPlanSelection) -> some View {
         Button(placing ? "取消放置" : "点击放置") { placing.toggle() }.disabled(!canMove(selection))
-        Button("数值位置") {
+        Button("调整位置") {
             if let p = ObjectEditing.position(of: selection, in: project, scenarioID: scenarioID, registry: registry) {
                 moveRequest = .init(selection: selection, position: p)
             }
         }.disabled(!canMove(selection))
-        Button("编辑属性") { edit(selection) }.disabled(editableParent(selection) == nil)
         Button("删除", role: .destructive) { confirmDelete = true }
     }
     private func focus(_ id: UUID?) {
@@ -197,7 +296,7 @@ public struct RoomObjectsView: View {
             + input.hvac.map { .init(kind: .hvac, objectID: $0.id) }
             + input.hvac.flatMap(\.ports).map { .init(kind: .port, objectID: $0.id) }
             + input.controls.map { .init(kind: .control, objectID: $0.id) }
-        if let match = candidates.first(where: { $0.objectID == id }) { chooseScene(.init(match)) }
+        if let match = candidates.first(where: { $0.objectID == id }) { chooseScene(.init(match)); inspectorPresented = true }
         else if let occupant = input.usage.occupants.first(where: { $0.id == id }) {
             if input.usage.seats.contains(where: { $0.id == occupant.seatID }) {
                 chooseScene(.init(category: .occupant, modelID: occupant.id))
@@ -213,13 +312,15 @@ public struct RoomObjectsView: View {
                 Label(name, systemImage: selection == item ? "checkmark.circle.fill" : "circle")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain)
-            Button("编辑") { chooseScene(.init(item)); edit(item) }.disabled(editableParent(item) == nil)
+
         }
+        .id(item.id)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(name)
+        .accessibilityLabel(name + "，" + item.kind.title)
+        .help(name)
     }
     private func chooseScene(_ key: SceneObjectKey?) {
-        sceneSelection = key; placing = false; error = nil
+        sceneSelection = key; onSelectionChange(key); placing = false; error = nil
         if let key, let target = RoomSceneSelectionAdapter.target(for: key, project: project, scenarioID: scenarioID), case .object(let item) = target { selection = item }
         else { selection = nil }
     }
@@ -264,7 +365,7 @@ public struct RoomObjectsView: View {
     }
     private func edit(_ item: RoomPlanSelection) {
         guard let parent = editableParent(item) else { return }
-        placing = false; editRequest = .init(selection: parent, isNew: false)
+        placing = false; editRequest = .init(selection: parent, isNew: false, focus: .init(entityID: item.objectID, field: requestedFocus.field))
     }
     private func add(_ kind: RoomPlanObjectKind) {
         placing = false; editRequest = .init(selection: .init(kind: kind, objectID: UUID()), isNew: true)
@@ -285,7 +386,27 @@ public struct RoomObjectsView: View {
             try onCommit(candidate, "删除对象与相关引用"); self.selection = nil; placing = false; error = nil
         } catch { self.error = error.localizedDescription }
     }
-    @ViewBuilder private func editor(_ request: ObjectEditRequest) -> some View {
+}
+
+@MainActor
+struct RoomObjectEditorView: View {
+    let project: ProjectDocument
+    let scenarioID: UUID
+    let registry: ModelRegistry
+    let onCommit: @MainActor (ProjectDocument, String) throws -> Void
+    private let request: ObjectEditRequest
+    init(project: ProjectDocument, scenarioID: UUID, selection: RoomPlanSelection, isNew: Bool = false,
+         registry: ModelRegistry, onCommit: @escaping @MainActor (ProjectDocument, String) throws -> Void) {
+        self.project = project; self.scenarioID = scenarioID; self.registry = registry; self.onCommit = onCommit
+        self.request = .init(selection: selection, isNew: isNew)
+    }
+    private var input: ScenarioInputs? { project.scenarios.first { $0.id == scenarioID }?.inputs }
+    private var room: Room? { project.geometry.rooms.first }
+    private var roomBounds: GeometryBounds? {
+        guard let room, let shape = try? room.shape.resolved(as: RectangularRoom.self, registry: registry) else { return nil }
+        return shape.geometryBounds()
+    }
+    @ViewBuilder var body: some View {
         if !request.isNew, !ObjectEditing.contains(request.selection, in: project, scenarioID: scenarioID) {
             ObjectUnavailableEditor()
         } else if let room, let input, let bounds = roomBounds {
@@ -320,6 +441,7 @@ public struct RoomObjectsView: View {
         } else { ObjectUnavailableEditor() }
     }
 }
+
 private struct ObjectUnavailableEditor: View {
     @SwiftUI.Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -349,7 +471,7 @@ private struct ObjectPositionEditor: View {
         original = .init(position); _draft = .init(initialValue: .init(position)); _baseProject = .init(initialValue: project)
     }
     var body: some View {
-        ObjectEditorScaffold(title: "数值位置", hasChanges: draft != original, onApply: apply) {
+        ObjectEditorScaffold(title: "调整位置", hasChanges: draft != original, compact: true, onApply: apply) {
             Section("绝对位置") {
                 ObjectPositionFields(title: selection.kind == .furniture ? "盒体最小角" : "计算坐标", draft: $draft)
                 Text("座位移动会同步平移采样点；设备移动会同步平移风口，温控测点保持原位。独立选择采样点、风口或温控测点时，只修改所选点。").font(.caption).foregroundStyle(.secondary)

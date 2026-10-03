@@ -241,3 +241,22 @@ N4代理提交713e06e精确整合为c502e81，随后根代理修复已实现功�
 现有锁定`Backend/.venv`，没有安装依赖。初次沙盒因嵌套SwiftPM sandbox/Xcode服务权限失败，获得自动批准的必要开发工具权限后重跑；没有关闭App sandbox。首轮201项回归有缓存fixture及构建中新旧object混用失败；修正fixture为真实v1积分载荷，源码冻结后专项与全测通过，没有放宽生产数学/缓存门槛。失败日志保留，不用代理191项代替最终201项证据。
 
 电脑操作服务getState在约10.972秒后超时并重置；此前getApp亦未恢复。N4移动端截图只证明房间及入口显示，估算卡片、文件操作、深浅色/大字号/VoiceOver和GPU/App峰值没有新增验收证据。最低macOS14/iOS17运行时不可用。完整清单及继续验收步骤见[最终审查](N1-N4-final-review.md)、[逐项台账](native-acceptance-status.md)。未push或正式发布。
+
+## UI 修复分支验证（2026-10-03）
+
+环境：Linux 云工作区 `/workspace/SimuNow-ui`，隔离分支 `paco-ui-repairs`，基线 `eda5d5c`。按用户要求先完成 Swift 源码，不配置 Xcode。`swift` 与 `xcodebuild` 均不存在，未执行两端构建或共享 Swift 测试。旧记录中的 Mac/Xcode 环境属于当时验证，不是本次环境。
+
+| 检查 | 本轮结果 | 范围 |
+|---|---|---|
+| Python 回归 | 39 项通过 | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=Backend/src:Backend/tests python3 -m unittest discover -s Backend/tests -v`；原数据/规则/迁移/包回归 |
+| Core 模型与原 schema 漂移 | 通过 | `Scripts/generate_domain_models.py --check`、`Scripts/generate_native_analysis_schemas.py --check`、`PYTHONPATH=Backend/src python3 -m simunow_worker.models.schema --check` |
+| 变更 Swift 语法树 | 通过 | 临时 tree-sitter-swift 解析 33 份完整文件和 1 处新增测试片段；该测试文件既有 async 语法超出解析器能力，原代码不变。非类型检查/编译 |
+| 可选历史展示 schema | 通过 | 独立 JSON Schema 2020-12 校验正常样本，并拒绝未来 version、错误 owner、非法方法、过长名称与非法 UUID；不替代 Swift 编码交换 |
+| 逐项实施记录及清单 | 通过 | 99 个连续唯一 ID，原 99 项保留未勾选；变更文档相对链接及 `git diff --check` |
+| 新 Swift 流程回归 | 源码已加入，未运行 | 时钟/日末/未完成输入、字段/重复时段导航、相机平移、显式基准、历史展示版本与原证据独立 |
+| macOS / iOS 编译 | 未运行 | 待 `Scripts/check.sh test`、`Scripts/check.sh mac`、`Scripts/check.sh ios` |
+| 视觉与辅助技术专项 | 未运行 | UI-096～098，及其他条目实际交互；没有本分支截图/实机证据 |
+
+本轮无需修改 pbxproj，新增文件由已有 Swift Package target 收集。没有改变求解公式、未知默认值、原物理输入 schema、部署最低版本或 N5 报告能力；GUI 方法检查仍不等于物理验证。实现入口与平台验收路径见 [逐项记录](UI-repairs-implementation.md)。
+
+本轮原始日志保存在忽略目录 `Artifacts/UI-Repair/python-tests.log` 与 `source-checks.json`。

@@ -21,7 +21,7 @@
 | 11 | [验收案例](References/11-native-acceptance-cases.md) | 92项具体输入/预期结果、人工与自动证据要求 |
 | 12 | [验证](Delivery/validation.md)、[平台](Delivery/platform-and-release.md)、[风险](Delivery/risks.md) | 开发与发布门槛 |
 | 13 | [状态](Delivery/status.md)、[证据](Delivery/verification.md)、[决策](Delivery/decisions.md)、[验收台账](Delivery/native-acceptance-status.md)、[整合审查](Delivery/native-integration-review.md) | 已实现事实与新路线分开 |
-| 14 | [Mac UI 修复清单](UI修复清单.md) | 99 项审查发现、优先级、证据类型、设计方向与验收要求；修复均待处理 |
+| 14 | [Mac UI 修复清单](UI修复清单.md) | 99 项审查发现、验收要求与逐项源码实现记录；平台验收待验证 |
 
 ## 如何逐项执行
 

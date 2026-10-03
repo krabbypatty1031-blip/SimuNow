@@ -80,6 +80,33 @@
       "method": "openfoam_cell_sample",
       "fidelity": "l2",
       "omitted": false
+    },
+    {
+      "name": "seat_pmv_min",
+      "value": null,
+      "unit": "index",
+      "method": "not_modeled",
+      "fidelity": "l2",
+      "omitted": true,
+      "reason": "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+    },
+    {
+      "name": "seat_pmv_max",
+      "value": null,
+      "unit": "index",
+      "method": "not_modeled",
+      "fidelity": "l2",
+      "omitted": true,
+      "reason": "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
+    },
+    {
+      "name": "seat_ppd_max",
+      "value": null,
+      "unit": "%",
+      "method": "not_modeled",
+      "fidelity": "l2",
+      "omitted": true,
+      "reason": "not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)"
     }
   ]
 }

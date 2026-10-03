@@ -59,6 +59,15 @@
 影响：`test/p1/{run_room,quality,sample_seats,foam_io}.py` 随 P4-02 进库（run-l2 依赖）；弱射流房间整体偏冷约 2.3 K 属该供应模型的真实后果，座位结果随 quality 披露，不包装为实测。湍流模型启用后需补 alphat 边界项再复算。
 验证：`test/p1/test_quality.py`（合成 case 手算 −51.0087 W + 2026-10-03 真实数字回归：计入过 / 不计 23% 挂）；钉版 `test_l2_runner` 质量 passed、`quality.json` `terms_w.q_inlet_cond=-305.9`。
 
+## ADR-010：舒适自实现 ISO 7730 附录 D，缺输入 omitted 带原因（已接受）
+
+日期：2026-10-03。
+背景：P4-04 要求座位级 PMV/PPD。草稿 schema 无任何舒适输入（无 clo/met/RH/MRT）；`pythermalcomfort` 未安装且按仓库规则不自动引入运行时依赖。
+备选：(a) 引入 `pythermalcomfort`——否，新增依赖且沙盒 worker 打包更重；(b) 只做「不可评价」占位——否，输入齐全的调用方（P5+ 草稿假设）应有真实计算；(c) 自实现标准闭式方程。
+选择：(c)。`models/comfort.py` 逐行移植 ISO 7730 附录 D 规范性程序（58.15 W/m²·met、分段 fcl、平均迭代 eps 1.5e-4、条件出汗项 0.42(mw−58.15)、hc 两分支取大）；适用域守卫（ta 10–30、tr 10–40、v 0–1、clo 0–2、met 0.8–4、pa ≤ 2700 Pa、PMV ±2）超范围抛 `NotEvaluable`，不猜值。锚点：附录 D 同算法的已发布输出（met 1.4 / clo 0.5 / RH 50：vr 0.22 → PMV 0.17 / PPD 5.6；vr 0.1 → 0.41 / 8.5，逐位复现）与标准 Table 2 / 图 1（PPD(0)=5%、(±0.5)=10%、(±1)=26%）。var 取座位实测风速（久坐无明显肢体运动，不做 met>1 的 Vag 附加）。
+影响：`comfortInputs`（mrtC/rhPct/clo/met）为 `evaluate_l2` 上下文新键，runner 暂不传（无来源）→ 指标 `seat_pmv_min/max`、`seat_ppd_max` omitted + `reason` 列出缺失项；契约 metrics 行加可选 `reason`、座位行加可选 `pmv`/`ppd`（schema + Swift + 透传同步）；部分座位超适用域时聚合只覆盖可评座位并在 `reason` 披露排除口径。P5 若给草稿加舒适假设，runner 补传该键即可。
+验证：`Backend/tests/test_comfort.py`（算法锚点、Table 2、单调性、六项守卫 + pa/PMV 域、缺/部分/超域座位、evaluate_l2 三态）；钉版 run 重生成 `Fixtures/task/result-l2.json`（座位值与旧 fixture 逐位一致 + 三条舒适 omitted 带 reason）；Python 70 + Swift 94 全绿；mac/ios BUILD SUCCEEDED。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。

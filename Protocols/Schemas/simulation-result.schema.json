@@ -87,7 +87,15 @@
           "z": { "type": "number" },
           "tC": { "type": "number" },
           "uMag": { "type": "number" },
-          "lowSpeedAbsoluteError": { "type": "boolean" }
+          "lowSpeedAbsoluteError": { "type": "boolean" },
+          "pmv": {
+            "type": "number",
+            "description": "ISO 7730 PMV at the seat; present only when comfort inputs were complete and in range."
+          },
+          "ppd": {
+            "type": "number",
+            "description": "ISO 7730 PPD [%] at the seat; present only when pmv is present."
+          }
         }
       }
     },
@@ -103,7 +111,11 @@
           "unit": { "type": "string" },
           "method": { "type": "string" },
           "fidelity": { "enum": ["l0", "l1", "l2", "l3"] },
-          "omitted": { "type": "boolean" }
+          "omitted": { "type": "boolean" },
+          "reason": {
+            "type": "string",
+            "description": "Why a value is omitted (missing inputs, out of model range) or how a partial aggregate was formed."
+          }
         }
       }
     }

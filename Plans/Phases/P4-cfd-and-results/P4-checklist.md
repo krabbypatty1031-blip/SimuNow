@@ -37,8 +37,8 @@
 
 ## P4-04 舒适
 
-- [ ] P4-04a 输入够才评 PMV/PPD
-- [ ] P4-04b 缺湿/辐射/衣着或超范围 → 不可评价
+- [x] P4-04a 输入够才评 PMV/PPD（自实现 ISO 7730 附录 D 程序，ADR-010；`comfortInputs` 齐全且在适用域内才逐座位评 `pmv`/`ppd` + 聚合 `seat_pmv_min/max`、`seat_ppd_max`，method `iso7730_pmv`；锚点复现附录 D 同算法已发布输出 0.17/5.6 与 0.41/8.5）
+- [x] P4-04b 缺湿/辐射/衣着或超范围 → 不可评价（缺 MRT/RH/clo/met 任一项或座位值超适用域 → 指标 omitted + `reason` 列出缺失项/排除口径；不填 PMV=0；部分超域聚合只覆盖可评座位并在 reason 披露）
 
 ## P4-05 视口与场
 

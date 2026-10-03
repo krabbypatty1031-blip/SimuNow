@@ -1,6 +1,6 @@
 # 实施状态
 
-日期：2026-10-03。当前阶段：**P4 进行中（质量已通）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）；座位温度 25.08–25.39°C 只在质量通过后出现。尚未做采样补充测试、舒适、视口与候选对比。Mac App 不能当产品 CFD。
+日期：2026-10-03。当前阶段：**P4 进行中（质量、采样、舒适已通）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）；座位温度 25.08–25.39°C 只在质量通过后出现。P4-03 座位采样逐座位核算（域外座位 omitted + reason）。P4-04 舒适已通：自实现 ISO 7730 附录 D 程序（ADR-010），舒适输入缺项 → PMV 指标 omitted + `reason`，不填 0。尚未做视口与候选对比。Mac App 不能当产品 CFD。
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
@@ -37,13 +37,14 @@
 | P4-01 几何与 case | 草稿→L2 房间；可写 case；缺引擎不编造温度 | `L2RoomMappingTests`；Python `test_l2_room` / `test_l2_runner`；office 送风 16≠26；人数≠座位；`run-l2` failed + `seat_t_c` omitted |
 | P4-02 质量门禁 | 钉版求解全管线；五门禁全过；进口面导热实测入账 | 钉版 `test_l2_runner`：state succeeded、quality passed、`checkMesh ok`、`monitorsStable`、质量相对误差 2.35e-6、能量相对误差 0.19%；`test/p1/test_quality.py`（进口面导热 −51.01 W 手算锁定 + 2026-10-03 弱射流回归）；`quality.json` energy.terms_w 含 `q_inlet_cond=-305.9W`；座位 tC 25.08–25.39 仅质量通过时出现；`Fixtures/task/result-l2.json`（钉版真值，固定 UUID）；`L2ResultTests`（门禁缺项不通过；`allGatesPass` 镜像 Python）；`parse_result` 透传 `qualityDetail`/`seatSamples`；schema 同步可选字段 |
 | P4-03 座位采样 | 逐座位核算；域外座位 omitted；座位值钉在求解网格 | `Backend.tests.test_l2_sampling`（合成场：域外座位 omitted + reason；sampled+omitted=座位数；座位值=传入求解网格单元值）；钉版 `test_l2_runner` 追加独立复算最近单元温度 == samples.json；证据 run（5 座位含 x=7 域外）：state succeeded、quality passed、`omitted_seats=[{id:S9-outside, reason:not_in_fluid}]`、4 有效座位照常采样 |
-| L0/L3 与场显示接入 | 进行中 | P4-04 舒适；视口仍空 |
-| 场渲染/舒适/成本/报告 | 待开发 | P4/P5 |
+| P4-04 舒适 | 自实现 ISO 7730 附录 D；缺输入 omitted + 原因；不填 PMV=0 | `Backend.tests.test_comfort` 11 项（附录 D 同算法已发布输出 0.17/5.6 与 0.41/8.5 逐位复现；Table 2 PPD 5/10/26%；温度单调；ta/tr/v/clo/met/rh/pa/PMV 八项适用域守卫）；`evaluate_l2` 上下文 `comfortInputs`（runner 暂不传 → 三条舒适指标 omitted + reason 列出 mrtC/rhPct/clo/met）；部分座位超域聚合只覆盖可评座位并披露；契约 metrics `reason` + 座位 `pmv`/`ppd`（schema + Swift + 透传同步）；`Fixtures/task/result-l2.json` 钉版重生成（座位值逐位同旧 fixture + 舒适 omitted）；`L2ResultTests` 新断言；Python 70 + Swift 94 全绿；mac/ios BUILD SUCCEEDED |
+| L0/L3 与场显示接入 | 进行中 | P4-05 视口；舒适已通 |
+| 场渲染/成本/报告 | 待开发 | P5（renderer 预算在 P4-05） |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。P4-03 已通过：座位采样逐座位核算。下一步 P4-04 舒适（缺 RH/辐射/衣着 → 不可评价），然后 P4-05 视口与 P4-06 候选对比。未推远程。
+P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。P4-03 已通过：座位采样逐座位核算。P4-04 已通过：舒适（ISO 7730 附录 D 自实现，缺输入 omitted + 原因；ADR-010）。下一步 P4-05 视口与场，然后 P4-06 候选对比。未推远程。
 
 ## P4-02 质量门禁技术记录
 

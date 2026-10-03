@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from simunow_worker.models.comfort import comfort_metrics, omitted_comfort_metrics
+
 SEAT_METRIC_NAMES = ("seat_t_c_min", "seat_t_c_max", "seat_u_mag_max")
 SEAT_METRIC_UNITS = {"seat_t_c_min": "C", "seat_t_c_max": "C", "seat_u_mag_max": "m/s"}
 SEAT_METHOD = "openfoam_cell_sample"
@@ -93,6 +95,14 @@ def evaluate_l2(identity: dict, draft: dict, context: dict) -> dict:
     passed = pipeline_completed and quality_pass(detail)
     # Seat values exist only for a quality-passed field. A failed field omits them.
     seat_rows = context.get("seatSamples") if passed else None
+    # Comfort needs MRT/RH/clo/met on top of the field's air T and speed.
+    # Missing comfort inputs keep PMV omitted with a reason, never PMV=0.
+    if seat_rows is None:
+        comfort_rows: list[dict] = omitted_comfort_metrics(
+            "not evaluable: no quality-passed seat samples"
+        )
+    else:
+        seat_rows, comfort_rows = comfort_metrics(seat_rows, context.get("comfortInputs"))
     if not pipeline_completed or detail is None:
         quality_state = "notEvaluated"
     elif passed:
@@ -108,5 +118,5 @@ def evaluate_l2(identity: dict, draft: dict, context: dict) -> dict:
         "supplyTemperatureC": hvac["supplyTemperatureC"]["value"],
         "setpointC": hvac["setpointC"]["value"],
         "seatSamples": seat_rows,
-        "metrics": _seat_metrics(seat_rows),
+        "metrics": _seat_metrics(seat_rows) + comfort_rows,
     }

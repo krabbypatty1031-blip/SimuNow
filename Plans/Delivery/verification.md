@@ -1,7 +1,21 @@
 # 工程验证记录
 
-日期：2026-10-03（P4-02 全量 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（P4-04 全量 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
+
+## P4-04 全量验证（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` | 通过，94 项 | `L2ResultTests` 新增：舒适指标 omitted + `reason`（含 mrtC/rhPct）、座位无 `pmv`；`result-l1.json` 向后兼容不变 |
+| Python `unittest discover -s Backend/tests` | 通过，70 项（约 21.3s） | 含 `test_comfort` 11 项与钉版 `test_l2_runner` 全管线 |
+| `Backend.tests.test_comfort` | 通过，11 项 | 附录 D 同算法已发布输出逐位复现（met1.4/clo0.5/RH50：vr0.22→PMV 0.17/PPD 5.6；vr0.1→0.41/8.5）；Table 2 PPD（0→5.0、±0.5→10.2、±1→26.1）；温度单调；ta/tr/v/clo/met/rh/pa/PMV 适用域守卫；缺/部分/超域座位与 `evaluate_l2` 三态 |
+| `Fixtures/task/result-l2.json` | 钉版重生成 | 真实 run 重跑：座位值与旧 fixture 逐位一致（25.0796/25.3862/0.0338…，确定性验证）；新增三条舒适指标 omitted + `reason: not evaluable: missing mrtC, rhPct, clo, met (comfort inputs not modeled)`；inputHash 不变 |
+| `test_task_protocol` 透传 | 通过 | `parse_result` 不丢 `reason`；座位不出现 `pmv` 键 |
+| `Scripts/check.sh mac` | BUILD SUCCEEDED | `ResultMetric.reason` 与 `SeatSample.pmv/ppd` 加可选字段后兼容 |
+| `Scripts/check.sh ios` | BUILD SUCCEEDED | 同上 |
+
+不得当作产品功能：当前草稿无舒适输入来源，PMV 恒为 omitted + 原因（P5+ 草稿假设接入后才有值）；PMV 是模型判据不是实测满意率；var 取座位实测风速，久坐未做 met>1 的 Vag 附加（ADR-010）。
 
 ## P4-02 全量验证（2026-10-03）
 

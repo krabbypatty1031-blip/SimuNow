@@ -21,4 +21,5 @@ JSON 使用 Swift Codable camelCase，任务消息的 CodingKeys 显式写出。
 
 修改接口需同步 Swift、Python、schema 与 fixture；破坏兼容改版本并提供迁移。包测试验证 draft round-trip、v1 不可求解、v2 设定温度与送风温度分字段、旧结果新鲜度和未配置引擎不可产生成功计算。
 L2 结果的 `qualityDetail` 七个门禁字段全部可选（缺日志不等于过门禁）；`seatSamples` 仅质量通过时出现，失败场省略而不是填 0；低风速座位带 `lowSpeedAbsoluteError` 标记。
+指标行可带 `reason`：omitted 时说明缺什么或超范围，部分聚合时说明排除口径；P4-04 起 `seat_pmv_min` / `seat_pmv_max` / `seat_ppd_max` 由 ISO 7730 附录 D 算法产生，舒适输入（MRT/RH/clo/met）缺一项即 omitted + `reason`，不填 PMV=0；座位行可带 `pmv` / `ppd`（仅输入齐全且在适用域内时出现）。
 Python：`PYTHONPATH=Backend/src python3 -m unittest Backend.tests.test_project_model`。

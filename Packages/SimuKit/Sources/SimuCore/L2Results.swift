@@ -14,6 +14,11 @@ public struct SeatSample: Codable, Equatable, Sendable {
     public var uMag: Double
     /// Near-zero speeds carry absolute error, not a huge percent error.
     public var lowSpeedAbsoluteError: Bool?
+    /// ISO 7730 PMV at the seat; present only when comfort inputs were
+    /// complete and in range. Never filled with 0 when not evaluated.
+    public var pmv: Double?
+    /// ISO 7730 PPD [%] at the seat; present only when pmv is present.
+    public var ppd: Double?
 
     public init(
         id: String,
@@ -22,7 +27,9 @@ public struct SeatSample: Codable, Equatable, Sendable {
         z: Double,
         tC: Double,
         uMag: Double,
-        lowSpeedAbsoluteError: Bool? = nil
+        lowSpeedAbsoluteError: Bool? = nil,
+        pmv: Double? = nil,
+        ppd: Double? = nil
     ) {
         self.id = id
         self.x = x
@@ -31,6 +38,8 @@ public struct SeatSample: Codable, Equatable, Sendable {
         self.tC = tC
         self.uMag = uMag
         self.lowSpeedAbsoluteError = lowSpeedAbsoluteError
+        self.pmv = pmv
+        self.ppd = ppd
     }
 }
 

@@ -138,9 +138,12 @@ public struct ResultMetric: Codable, Equatable, Sendable {
     public var method: String
     public var fidelity: SimulationFidelity
     public var omitted: Bool
+    /// Why the value is omitted (missing inputs, out of model range), or how
+    /// a partial aggregate was formed. Evidence travels with the number.
+    public var reason: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, value, unit, method, fidelity, omitted
+        case name, value, unit, method, fidelity, omitted, reason
     }
 
     public init(
@@ -149,7 +152,8 @@ public struct ResultMetric: Codable, Equatable, Sendable {
         unit: String,
         method: String,
         fidelity: SimulationFidelity,
-        omitted: Bool
+        omitted: Bool,
+        reason: String? = nil
     ) {
         self.name = name
         self.value = omitted ? nil : value
@@ -157,6 +161,7 @@ public struct ResultMetric: Codable, Equatable, Sendable {
         self.method = method
         self.fidelity = fidelity
         self.omitted = omitted
+        self.reason = reason
     }
 
     public init(from decoder: Decoder) throws {
@@ -168,6 +173,7 @@ public struct ResultMetric: Codable, Equatable, Sendable {
         omitted = try container.decodeIfPresent(Bool.self, forKey: .omitted) ?? false
         let decodedValue = try container.decodeIfPresent(Double.self, forKey: .value)
         value = omitted ? nil : decodedValue
+        reason = try container.decodeIfPresent(String.self, forKey: .reason)
     }
 }
 

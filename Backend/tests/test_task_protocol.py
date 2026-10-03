@@ -84,6 +84,19 @@ class TaskProtocolTests(unittest.TestCase):
         self.assertGreater(first["tC"], 15)
         self.assertIn("lowSpeedAbsoluteError", first)
 
+    def test_l2_result_passes_omission_reasons_through(self):
+        # Comfort metrics stay omitted with their reason; the wire copy must
+        # not drop the reason and must not invent a PMV value.
+        payload = json.loads((FIXTURES / "result-l2.json").read_text(encoding="utf-8"))
+        result = parse_result(payload)
+        pmv_min = next(item for item in result["metrics"] if item["name"] == "seat_pmv_min")
+        self.assertTrue(pmv_min["omitted"])
+        self.assertIsNone(pmv_min["value"])
+        self.assertIn("missing", pmv_min["reason"])
+        self.assertIn("mrtC", pmv_min["reason"])
+        for row in result["seatSamples"]:
+            self.assertNotIn("pmv", row)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -73,6 +73,33 @@ private func fixturesDirectory() -> URL {
     #expect(minMetric.fidelity == .l2)
 }
 
+@Test func l2ResultCarriesOmittedComfortMetricsWithReason() throws {
+    // The pinned run has no comfort inputs, so PMV stays omitted with a
+    // reason; it is never filled with a neutral 0 vote.
+    let data = try Data(contentsOf: fixturesDirectory().appendingPathComponent("result-l2.json"))
+    let result = try JSONDecoder().decode(SimulationResult.self, from: data)
+
+    let pmvMin = try #require(result.metric(named: "seat_pmv_min"))
+    #expect(pmvMin.omitted)
+    #expect(pmvMin.value == nil)
+    #expect(pmvMin.unit == "index")
+    #expect(pmvMin.method == "not_modeled")
+    #expect(pmvMin.fidelity == .l2)
+    let reason = try #require(pmvMin.reason)
+    #expect(reason.contains("missing"))
+    #expect(reason.contains("mrtC"))
+    #expect(reason.contains("rhPct"))
+
+    let ppdMax = try #require(result.metric(named: "seat_ppd_max"))
+    #expect(ppdMax.omitted)
+    #expect(ppdMax.value == nil)
+    #expect(ppdMax.unit == "%")
+
+    // Seats carry no PMV of their own while inputs are missing.
+    let seats = try #require(result.seatSamples)
+    #expect(seats.allSatisfy { $0.pmv == nil && $0.ppd == nil })
+}
+
 @Test func l1ResultStillDecodesWithoutL2Fields() throws {
     // The L1 fixture predates qualityDetail/seatSamples; decoding must stay backward compatible.
     let data = try Data(contentsOf: fixturesDirectory().appendingPathComponent("result-l1.json"))

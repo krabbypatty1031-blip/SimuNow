@@ -138,3 +138,15 @@ App 内运行 worker 的开发配置（一次性，本机）：`defaults write c
 |---|---|---|
 | Mac App 进程启动 | 通过 | 直接运行 Debug 产物（无签名构建）：进程存活 6 秒并响应正常终止信号；无崩溃日志。Debug 无签名构建不应用 sandbox 描述文件，日志有一条预期内的 sandbox_extension 提示。未做界面交互检查 |
 | iOS App 模拟器启动 | 通过 | iPhone 17 模拟器（已安装运行时）启动 → install → launch 成功分配 PID（28271），5 秒后仍在运行，随后正常 terminate 并关闭模拟器。未做界面交互与真机验证；最低系统（iOS 17）实机仍未验证 |
+
+## 只读 3D 几何预览（2026-10-03）
+
+用户要求在建模阶段提供 3D 视图（ADR-017）。范围：纯几何只读预览，非编辑器、不含场数据。
+
+| 检查 | 结果 | 证据与范围 |
+|---|---|---|
+| 布局数学 | 通过（3 项单测） | 房间/墙/门窗/家具/座位/采样点/风口箭头的域→Apple 坐标映射逐值断言；未知尺寸返回 nil 不猜值；相机轨道数学与距离；布局指纹稳定且随编辑变化（RoomPreviewLayoutTests） |
+| SDK 可用性 | 编译通过（分级） | Xcode 27 实测 RealityView 为 macOS 15+：availability 分级，macOS 15+ 预览、更低系统回退说明、iOS 17 回退说明；最低部署版本不变（ADR-002 预期路径） |
+| `Scripts/check.sh all` | 退出 0 | Python 71、Swift 52+2、契约与双端构建；日志 `Artifacts/3d-preview-check-all.log` |
+| App 启动（含预览代码） | 通过 | Debug 进程存活 6 秒正常终止；预览为手动切换标签，默认俯视编辑不受影响 |
+| 预览视觉效果/手势 | 未自动验证 | RealityKit 画面与拖转/缩放需用户本机切换「3D 预览」标签目验 |

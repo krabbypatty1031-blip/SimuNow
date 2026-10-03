@@ -138,7 +138,35 @@ public struct WorkspaceView: View {
     private func content(_ session: ProjectSession) -> some View {
         switch store.destination ?? .workspace {
         case .workspace:
-            VStack(spacing: 0) {
+            workspaceEditor(session)
+        case .scenarios:
+            ComparisonView(session: session, runStore: store.runStore)
+        case .runs:
+            RunsView(session: session, runStore: store.runStore)
+        case .reports:
+            ReportView(session: session, runStore: store.runStore)
+        }
+    }
+
+    private enum WorkspaceViewMode: Hashable { case plan, preview }
+    @State private var viewMode: WorkspaceViewMode = .plan
+
+    @ViewBuilder
+    private func workspaceEditor(_ session: ProjectSession) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Picker("", selection: $viewMode) {
+                    Text("俯视编辑").tag(WorkspaceViewMode.plan)
+                    Text("3D 预览").tag(WorkspaceViewMode.preview)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 190)
+                Spacer()
+            }
+            .padding(.horizontal, 8).padding(.top, 6)
+            if viewMode == .preview {
+                previewPane(session)
+            } else {
                 TopDownRoomView(session: session)
                 HStack {
                     Button("添加座位") { session.selection = session.addSeat() }
@@ -151,13 +179,28 @@ public struct WorkspaceView: View {
                 }
                 .padding(8)
             }
-        case .scenarios:
-            ComparisonView(session: session, runStore: store.runStore)
-        case .runs:
-            RunsView(session: session, runStore: store.runStore)
-        case .reports:
-            ReportView(session: session, runStore: store.runStore)
         }
+    }
+
+    /// Read-only 3D geometry preview (RealityView on macOS 14+; iOS 17 shows the fallback note).
+    @ViewBuilder
+    private func previewPane(_ session: ProjectSession) -> some View {
+        #if os(macOS)
+        if let room = session.project.geometry.rooms.first,
+           let layout = RoomPreviewLayout.build(room: room,
+                                                obstacles: session.project.geometry.obstacles,
+                                                seats: session.currentScenario?.inputs.usage.seats ?? [],
+                                                devices: session.currentScenario?.inputs.hvac ?? [],
+                                                registry: session.registry) {
+            RoomPreview3D(layout: layout)
+        } else {
+            ContentUnavailableView("几何未完成", systemImage: "cube.transparent",
+                                   description: Text("房间几何未完成或不支持；完成尺寸后可预览。"))
+        }
+        #else
+        ContentUnavailableView("3D 预览在 macOS 提供", systemImage: "cube.transparent",
+                               description: Text("iOS 渲染层（RealityView 需 iOS 18+）在后续阶段决定；当前请在 Mac 上查看。"))
+        #endif
     }
 
     private func save(_ session: ProjectSession) {

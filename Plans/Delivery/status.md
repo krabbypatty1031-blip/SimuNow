@@ -17,6 +17,7 @@
 | P1-01 固定运行环境与能力检查 | 部分完成：manifest、doctor、行为测试已实现；本机（tanchai）无容器工具与 EnergyPlus，引擎安装未授权 | runtime/；verification.md |
 | L1/L2/L3 引擎 | 待开发（阻塞：Colima VM + OpenFOAM 镜像 + EnergyPlus 安装授权） | P1/P3 遗留条件 |
 | P5 方案对比/建议卡/基础 PDF | 已完成（L0 口径；舒适与年度费用不含，见计划） | Comparison/、Reporting/；verification.md P5 节 |
+| 只读 3D 几何预览 | 已完成（macOS 15+ RealityView；更低系统/iOS 回退说明；非编辑器、不含场） | SimuVisualization RoomPreview3D/Layout；ADR-017；verification.md |
 | 场渲染/舒适评价 | 待开发 | P4 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 | iOS 模拟器启动 | 已验证（iPhone 17，install+launch+存活） | verification.md「应用启动验证」 |

@@ -199,8 +199,8 @@ struct DeviceEditorSheet: View {
                         if let origin = try? draft.position.position(), let value = try? port.value(relativeTo: origin) {
                             Text("绝对位置：X \(value.position.x.formatted())，Y \(value.position.y.formatted())，Z \(value.position.z.formatted()) m").font(.caption)
                         }
-                        objectEditorTextField(title: "水平角（°，+X 向 +Y）", text: $port.yaw)
-                        objectEditorTextField(title: "俯仰角（°，水平向 +Z）", text: $port.pitch)
+                        EditorTextField(title: "水平角（°，+X 向 +Y）", text: $port.yaw)
+                        EditorTextField(title: "俯仰角（°，水平向 +Z）", text: $port.pitch)
                         DirectionPreview(yaw: port.yaw, pitch: port.pitch)
                         EditorDisclosure(title: "高级方向与风口参数", fields: ["有效面积", "体积流量", "风速", "空气密度"]) {
                         Button("按当前角度重新生成方向") { port.rebuildDirection = true }

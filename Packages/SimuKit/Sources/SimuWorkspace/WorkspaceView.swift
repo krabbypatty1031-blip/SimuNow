@@ -306,7 +306,7 @@ public struct WorkspaceView: View {
             } }
         }
     }
-    private func sheetFrame<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func sheetFrame<Content: View>(_ title: String, @ViewBuilder content: @escaping () -> Content) -> some View {
         NavigationStack {
             EditorForm { content() }.navigationTitle(title)
                 .sheet(item: $relatedSheet, onDismiss: { focusField = nil; focusEntityID = nil; focusOrdinal = nil }) { destination in

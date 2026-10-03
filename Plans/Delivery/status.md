@@ -30,6 +30,12 @@
 
 ## 下一步
 
+### 当前编译问题修复（2026-10-03）
+
+按本次截图修正 `ScenarioConditionsView.quoteTitle`：从 `Money.known` 关联值读取来源，未知金额保留默认标题。完整 Apple 构建同时发现并修正风口字段的失效函数引用、工作区弹窗内容闭包的 escaping 声明、当前 RoomPlan SDK 委托的 NSCoding 要求；共享测试改用显式谓词闭包以兼容当前 Testing 宏。物理模型、JSON 契约和最低系统未变。
+
+Xcode 27.0 / Apple Swift 6.4 下，`Scripts/check.sh mac`、`Scripts/check.sh ios` 均 exit 0，`Scripts/check.sh test` 的 229 项测试全部通过（206 Core、2 Extension、7 ConsumerWorkflow、14 Consumer）。证据见 [验证记录](verification.md) 的同名条目。这次证明编译与自动回归通过；未执行 GUI/真机扫描/最低系统操作验收，既有平台待验项继续保留。
+
 本次用户进一步授权整合 UI 分支：N5/N6 已提交并推送为 `25c13bf`，UI 原提交为 `3039c19`。在独立工作树解决 6 个冲突文件，保留持续画布、可收属性区、对象层级、按需分析与共享编辑布局，同时接回日常设置、条件建议、固定比较、报告/测量导航及家庭模板。通过 PR 合入 `paco-development`；当前仍需 Apple 平台编译与交互验收。
 
 N1、N2、N3代码已整合，完整契约和两端构建通过，Mac规则/P2编辑/磁盘重开回路有实际证据。N4既有整合证据保留；本轮 N5/N6 代码与核心自动回归已落地，下一步在 Apple 环境执行完整包/双端编译、重开/分享/PDF/扫描/可访问性脚本。当前没有新的 Apple 构建证据。P2/N1/N2遗留的完整移动端、最低系统、可访问性与性能验收纳入本次总审，缺失运行时明确notAvailable，不以构建或控制器单测代替。

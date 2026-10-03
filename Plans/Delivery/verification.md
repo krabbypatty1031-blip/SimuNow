@@ -297,3 +297,18 @@ N4代理提交713e06e精确整合为c502e81，随后根代理修复已实现功�
 | PDF页面/系统分享/RoomPlan/VoiceOver/试用 | notAvailable | Linux 无 Apple UI/扫描/读屏，须执行交接脚本后逐项保存真实证据 |
 
 日志与真实合成 wire、CPU 8/16/32 方格 benchmark 在忽略的 `Artifacts/N5-N6/`。网格只记录合成守恒/散度/数组估算与单次 Debug CPU 时间，不作为真机预算、内存峰值或真实空间场验证。Swift/Python 全部通过后仍不将 N5 标发布就绪，不升级 N6 为通用物理模型。
+
+## 当前编译问题修复（2026-10-03）
+
+本机 Xcode 27.0（27A266a）、Apple Swift 6.4、macOS/iOS Simulator 27.0 SDK；部署最低版本仍为 macOS 14 / iOS 17。截图中的两处 `Money.source` 访问改为匹配 `.known` 读取 `SourceRecord`，未知金额保留默认报价标题，不修改公共模型与 wire 契约。
+
+构建发现的额外阻断同时修正：风口角度字段使用已有 `EditorTextField`；`sheetFrame` 内容声明 `@escaping`；RoomPlan 委托增加唯一 Objective-C 名称和 NSCoding 要求（持有回调的临时 coordinator 不从归档恢复，由 SwiftUI 重建）；已有相机测试将 key path 谓词换成显式闭包，保留原断言语义。
+
+| 命令 | 结果 | 证据 |
+|---|---|---|
+| `Scripts/check.sh mac` | exit 0，BUILD SUCCEEDED | `Artifacts/Compile-Fix-20261003/mac.log` |
+| `Scripts/check.sh ios` | exit 0，BUILD SUCCEEDED，generic iOS Simulator arm64/x86_64 | `Artifacts/Compile-Fix-20261003/ios.log` |
+| `Scripts/check.sh test` | exit 0，229 项通过：Core 206、Extension 2、ConsumerWorkflow 7、Consumer 14 | `Artifacts/Compile-Fix-20261003/test.log` |
+| `git diff --check` | pass | 本次源码与台账差异 |
+
+初始受限执行因 SwiftPM 缓存权限及 sandbox-exec 被拒绝，在获准使用系统构建服务后完成上述验证。没有关闭 App sandbox 或并发检查。未运行 GUI、真机扫描、最低系统或辅助技术验收；构建与自动测试不能替代这些证据。本轮没有提交、推送或发布。

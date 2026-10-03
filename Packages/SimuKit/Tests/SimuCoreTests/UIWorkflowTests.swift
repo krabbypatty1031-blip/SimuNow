@@ -40,7 +40,7 @@ import Testing
     camera.pan(horizontal: .infinity, vertical: 0, roomBounds: bounds)
     #expect(camera == finite)
     camera.pan(horizontal: 1e100, vertical: -1e100, roomBounds: bounds)
-    #expect([camera.target.x, camera.target.y, camera.target.z].allSatisfy(\.isFinite))
+    #expect([camera.target.x, camera.target.y, camera.target.z].allSatisfy { $0.isFinite })
     let margin = RoomCameraState.diagonal(bounds)
     #expect(camera.target.x >= -margin && camera.target.x <= bounds.size.x + margin)
     #expect(camera.ray(x: 50, y: 50, viewportWidth: 100, viewportHeight: 100) != nil)

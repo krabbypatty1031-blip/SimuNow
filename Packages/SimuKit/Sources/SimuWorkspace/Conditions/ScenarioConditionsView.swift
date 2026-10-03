@@ -253,7 +253,8 @@ public struct ScenarioConditionsView: View {
     }
     private func quoteTitle(_ id: UUID) -> String {
         guard let value = project.scenarios.first(where: { $0.id == draft.scenarioID })?.evaluation.cost.quotes.first(where: { $0.id == id }) else { return "待记录对象与来源" }
-        return value.amount.source?.reference ?? value.amount.source?.note ?? "独立报价（未关联设备）"
+        guard case .known(_, let source, _) = value.amount else { return "独立报价（未关联设备）" }
+        return source.reference ?? source.note ?? "独立报价（未关联设备）"
     }
     private var isStale: Bool { project != baseProject }
 

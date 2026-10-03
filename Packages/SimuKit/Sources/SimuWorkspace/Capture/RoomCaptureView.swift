@@ -83,11 +83,16 @@ import simd
         if stopRequested, !context.coordinator.stopped { context.coordinator.stopped = true; view.captureSession.stop() }
     }
     static func dismantleUIView(_ view: RoomCaptureView, coordinator: Coordinator) { view.captureSession.stop() }
+    @objc(SimuNowRoomCaptureCoordinator)
     @MainActor final class Coordinator: NSObject, @preconcurrency RoomCaptureViewDelegate {
         var stopped = false
         let onResult: (RoomCaptureSnapshot, Data) -> Void
         let onError: (String) -> Void
         init(onResult: @escaping (RoomCaptureSnapshot, Data) -> Void, onError: @escaping (String) -> Void) { self.onResult = onResult; self.onError = onError }
+        // RoomPlan's delegate inherits NSCoding in the current SDK. This live
+        // coordinator holds callbacks and must be recreated by SwiftUI.
+        required init?(coder: NSCoder) { return nil }
+        func encode(with coder: NSCoder) {}
         func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: (any Error)?) -> Bool {
             if let error { onError(error.localizedDescription); return false }; return true
         }

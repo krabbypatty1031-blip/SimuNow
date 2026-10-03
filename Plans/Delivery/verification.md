@@ -1,7 +1,19 @@
 # 工程验证记录
 
-日期：2026-10-03（P4-04 全量 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（P4-05 全量 / P4-04 / P4-02 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
+
+## P4-05 全量验证（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` | 通过，107 项（SimuCoreTests 97 + SimuVisualizationTests 10；另含 App 内 L2 接线新增 6 项共 113） | P4-05 b/c 新增：`FieldSliceTests` 3 项（fixture 解码；wire claim 变体 unit K / axisOrder ["x","y"] / interpolated / leftHandedYUp / failed 与 shape 不匹配均拒绝）；`SlicePaletteTests` 3 项（hue 单调蓝→红、clamp 不外推、图例带物理范围与 °C、退化范围单色）；`RoomSceneTests` 7 项（P4-05a） |
+| Python `unittest discover -s Backend/tests` | 通过，75 项（约 21.8s；另含接线新增 `test_l2_staged` 1 项共 76） | P4-05 b/c 新增 `test_field_slice` 5 项（合成 2 单元场掩码/统计/契约字段、z 越界与 spacing≤0 拒绝、quality False 不写文件）；钉版 `test_l2_runner` 追加 576 格点独立复算（格点→foam_xyz→最近单元 T == payload 值，9 位小数；stats 与 values 一致；validCount == 掩码计数） |
+| 钉版切片数值 | 真实收敛场 | `Fixtures/task/field-slice-l2.json`：24×24 格心 @z=1.1 m、576 全有效、23.938–25.876 °C、inputHash = P1 房间输入哈希（`ef2073dc…`，与 result.identity.inputHash 是两个语义层，切片哈希与 quality.json/samples.json 同源） |
+| `Scripts/check.sh mac` | BUILD SUCCEEDED | `FieldSlice`/`SlicePalette`/`RoomWireframeView` 切片叠加与图例；`generate_project.py` Stage WorkerTree 扩为九个 P1 脚本 |
+| `Scripts/check.sh ios` | BUILD SUCCEEDED | `SimuVisualization` 无 macOS 专属 API；iOS 不接本地 OpenFOAM |
+
+不得当作产品功能：切片只随质量通过的 run 出现（quality_pass False 不写文件、视口无 field 不填色）；切片 inputHash 是 P1 房间输入哈希不是草稿快照哈希；切片密度（0.25 m 提示）不进座位数字（座位仍钉最近单元）；App 内 L2 沙盒 docker 可达性未手测（ADR-011），staged 树以 subprocess 集成测试代替验证。
 
 ## P4-04 全量验证（2026-10-03）
 

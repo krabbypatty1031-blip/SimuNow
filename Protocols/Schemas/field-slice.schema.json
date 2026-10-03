@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:simunow:p4:field-slice:1",
+  "title": "field-slice",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "kind", "quantity", "unit", "coordinateSystem", "axisOrder",
+    "sampleMethod", "zM", "originM", "spacingM", "shape", "values", "valid",
+    "stats", "inputHash", "quality"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "temperature_slice" },
+    "quantity": { "type": "string", "const": "air_temperature" },
+    "unit": { "type": "string", "const": "C" },
+    "coordinateSystem": { "type": "string", "const": "rightHandedZUp" },
+    "axisOrder": { "type": "array", "items": { "type": "string" }, "const": ["y", "x"] },
+    "sampleMethod": { "type": "string", "const": "nearest_cell" },
+    "zM": { "type": "number", "description": "Slice height, metres, computation frame." },
+    "originM": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+    },
+    "spacingM": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+    },
+    "shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nx", "ny"],
+      "properties": { "nx": { "type": "integer", "minimum": 1 }, "ny": { "type": "integer", "minimum": 1 } }
+    },
+    "values": {
+      "type": "array",
+      "description": "values[j][i]: outer index j along y, inner index i along x. JSON decimal text; a future binary field must add float format, endianness and payload hash fields.",
+      "items": { "type": "array", "items": { "type": "number" } }
+    },
+    "valid": {
+      "type": "array",
+      "description": "valid[j][i] false marks wall/furniture interiors: neutral display colour, excluded from statistics, never used as 0 air temperature.",
+      "items": { "type": "array", "items": { "type": "boolean" } }
+    },
+    "stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validCount", "minC", "maxC"],
+      "properties": {
+        "validCount": { "type": "integer", "minimum": 0 },
+        "minC": { "type": ["number", "null"] },
+        "maxC": { "type": ["number", "null"] }
+      }
+    },
+    "inputHash": { "type": "string", "minLength": 1, "description": "Hash of the P1 room input this field solved from; identical to the inputHash inside quality.json/samples.json. The draft snapshot hash lives in result.json identity." },
+    "quality": { "enum": ["passed"] }
+  }
+}

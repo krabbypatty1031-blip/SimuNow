@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from field_slice import write_slice
 from foam_io import latest_time, parse_scalar_field, parse_vector_field
 from quality import inlet_conduction_w, mass_energy_from_fluxes
 from room_input import (
@@ -322,6 +323,23 @@ def run_pipeline(room: dict[str, Any], run_dir: Path, timeout: int = 600) -> dic
         and len(seats_out) + len(samples["omitted_seats"]) == len(room["seats"])
     )
     LOGGER.info("quality.pass=%s mass=%s energy=%s", quality["pass"], budget["mass"]["pass"], budget["energy"]["pass"])
+
+    # Seat-height temperature slice for display. Same nearest-cell source of
+    # truth as seat samples; written only for a quality-passed field, so a
+    # failed field never gets a plausible-looking coloured plane.
+    if room["seats"]:
+        write_slice(
+            run_dir,
+            room,
+            z_m=float(room["seats"][0]["z_m"]),
+            spacing_hint_m=0.25,
+            input_hash=digest,
+            quality_pass=quality["pass"],
+            temperature=temperature,
+            cx=cx,
+            cy=cy,
+            cz=cz,
+        )
     (run_dir / "quality.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
     return quality
 

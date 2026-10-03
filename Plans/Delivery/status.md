@@ -1,6 +1,6 @@
 # 实施状态
 
-日期：2026-10-03。当前阶段：**P4 进行中（质量、采样、舒适已通）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）；座位温度 25.08–25.39°C 只在质量通过后出现。P4-03 座位采样逐座位核算（域外座位 omitted + reason）。P4-04 舒适已通：自实现 ISO 7730 附录 D 程序（ADR-010），舒适输入缺项 → PMV 指标 omitted + `reason`，不填 0。尚未做视口与候选对比。Mac App 不能当产品 CFD。
+日期：2026-10-03。当前阶段：**P4 进行中（质量、采样、舒适已通）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）；座位温度 25.08–25.39°C 只在质量通过后出现。P4-03 座位采样逐座位核算（域外座位 omitted + reason）。P4-04 舒适已通：自实现 ISO 7730 附录 D 程序（ADR-010），舒适输入缺项 → PMV 指标 omitted + `reason`，不填 0。P4-05 a/b/c 已通：房间线框（真实几何，不画假房间）+ 质量门控坐姿高度温度切片（无场不画假彩色）。App 内 L2 提交接线进行中（ADR-011）。尚未做候选对比。Mac App 不能当产品 CFD。
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
@@ -38,13 +38,15 @@
 | P4-02 质量门禁 | 钉版求解全管线；五门禁全过；进口面导热实测入账 | 钉版 `test_l2_runner`：state succeeded、quality passed、`checkMesh ok`、`monitorsStable`、质量相对误差 2.35e-6、能量相对误差 0.19%；`test/p1/test_quality.py`（进口面导热 −51.01 W 手算锁定 + 2026-10-03 弱射流回归）；`quality.json` energy.terms_w 含 `q_inlet_cond=-305.9W`；座位 tC 25.08–25.39 仅质量通过时出现；`Fixtures/task/result-l2.json`（钉版真值，固定 UUID）；`L2ResultTests`（门禁缺项不通过；`allGatesPass` 镜像 Python）；`parse_result` 透传 `qualityDetail`/`seatSamples`；schema 同步可选字段 |
 | P4-03 座位采样 | 逐座位核算；域外座位 omitted；座位值钉在求解网格 | `Backend.tests.test_l2_sampling`（合成场：域外座位 omitted + reason；sampled+omitted=座位数；座位值=传入求解网格单元值）；钉版 `test_l2_runner` 追加独立复算最近单元温度 == samples.json；证据 run（5 座位含 x=7 域外）：state succeeded、quality passed、`omitted_seats=[{id:S9-outside, reason:not_in_fluid}]`、4 有效座位照常采样 |
 | P4-04 舒适 | 自实现 ISO 7730 附录 D；缺输入 omitted + 原因；不填 PMV=0 | `Backend.tests.test_comfort` 11 项（附录 D 同算法已发布输出 0.17/5.6 与 0.41/8.5 逐位复现；Table 2 PPD 5/10/26%；温度单调；ta/tr/v/clo/met/rh/pa/PMV 八项适用域守卫）；`evaluate_l2` 上下文 `comfortInputs`（runner 暂不传 → 三条舒适指标 omitted + reason 列出 mrtC/rhPct/clo/met）；部分座位超域聚合只覆盖可评座位并披露；契约 metrics `reason` + 座位 `pmv`/`ppd`（schema + Swift + 透传同步）；`Fixtures/task/result-l2.json` 钉版重生成（座位值逐位同旧 fixture + 舒适 omitted）；`L2ResultTests` 新断言；Python 70 + Swift 94 全绿；mac/ios BUILD SUCCEEDED |
-| L0/L3 与场显示接入 | 进行中 | P4-05 视口；舒适已通 |
+| P4-05a 房间几何视口 | 真实草稿几何线框；不画假房间 | `RoomScene(draft:)` 无 geometry → nil；`RoomWireframeView` Canvas 线框 + 拖拽 yaw；`IsometricProjection` 消费 `CoordinateMapping`；`SimuVisualizationTests` 7 项（office 模板 6×6×2.8、窗/送回风/座位映射 + 投影在界内）；Workspace 视口换新 API |
+| P4-05b/c 场切片 | 质量门控坐姿高度温度切片；无场不画假彩色 | `test/p1/field_slice.py`（`run_room` 质量判定后调用；quality_pass False → 不写文件）；`field-slice.json` unit C / rightHandedZUp / axisOrder ["y","x"] / nearest_cell / valid 掩码 + stats 只算有效格；schema `Protocols/Schemas/field-slice.schema.json`；Swift `FieldSlice` 严格解码（wire claim 变体拒绝）；`SlicePalette` clamp 不外推、invalid 中性灰；`RoomWireframeView` 切片 + 底部 °C 图例；钉版 `Fixtures/task/field-slice-l2.json`（24×24 全有效 23.938–25.876 °C @z=1.1，inputHash=P1 房间哈希）；`test_field_slice` 5 项 + 钉版 576 格点独立复算 + `FieldSliceTests` 3 项 + `SlicePaletteTests` 3 项；Python 75 + Swift 107 全绿；mac/ios BUILD SUCCEEDED |
+| L0/L3 与场显示接入 | 进行中 | P4-05 a/b/c 已通过（房间线框 + 切片）；App 内 L2 提交接线进行中（staged 树九脚本 + `test/engines` 路径 + L2 客户端，ADR-011） |
 | 场渲染/成本/报告 | 待开发 | P5（renderer 预算在 P4-05） |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。P4-03 已通过：座位采样逐座位核算。P4-04 已通过：舒适（ISO 7730 附录 D 自实现，缺输入 omitted + 原因；ADR-010）。下一步 P4-05 视口与场，然后 P4-06 候选对比。未推远程。
+P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。P4-03 已通过：座位采样逐座位核算。P4-04 已通过：舒适（ISO 7730 附录 D 自实现，缺输入 omitted + 原因；ADR-010）。P4-05 a/b/c 已通过：房间线框视口 + 质量门控温度切片（切片 24×24 全有效 23.938–25.876 °C，钉版 576 格点独立复算）。App 内 L2 提交接线进行中（staged 树扩展 + `test/engines` 引擎路径统一 + `L2TaskClient`/`LocalProcessL2Client`，ADR-011；沙盒内 docker 可达性待手测）。然后 P4-06 候选对比。未推远程。
 
 ## P4-02 质量门禁技术记录
 

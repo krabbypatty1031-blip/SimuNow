@@ -113,6 +113,48 @@ class L2RunnerTests(unittest.TestCase):
                         key=lambda i: (centres[i][0] - fx) ** 2 + (centres[i][1] - fy) ** 2 + (centres[i][2] - fz) ** 2,
                     )
                     self.assertAlmostEqual(row["T_C"], temps[index] - 273.15, places=9)
+
+                # P4-05b pin: the slice exists only for the passed field, and
+                # every valid grid value re-derives from the same nearest-cell
+                # lookup - display density cannot change the physics.
+                slice_path = run_dir / "field-slice.json"
+                self.assertTrue(slice_path.is_file(), "quality passed; slice file must exist")
+                payload = json.loads(slice_path.read_text(encoding="utf-8"))
+                self.assertEqual(payload["quality"], "passed")
+                self.assertEqual(payload["unit"], "C")
+                self.assertEqual(payload["coordinateSystem"], "rightHandedZUp")
+                self.assertEqual(payload["axisOrder"], ["y", "x"])
+                self.assertEqual(payload["sampleMethod"], "nearest_cell")
+                nx, ny = payload["shape"]["nx"], payload["shape"]["ny"]
+                self.assertEqual(len(payload["values"]), ny)
+                self.assertTrue(all(len(row) == nx for row in payload["values"]))
+                self.assertEqual(len(payload["valid"]), ny)
+                self.assertEqual(
+                    payload["stats"]["validCount"],
+                    sum(1 for row in payload["valid"] for cell in row if cell),
+                )
+                ox, oy = payload["originM"]["x"], payload["originM"]["y"]
+                sx, sy = payload["spacingM"]["x"], payload["spacingM"]["y"]
+                slice_temps = [
+                    value
+                    for row, row_valid in zip(payload["values"], payload["valid"])
+                    for value, is_valid in zip(row, row_valid)
+                    if is_valid
+                ]
+                self.assertAlmostEqual(payload["stats"]["minC"], min(slice_temps), places=9)
+                self.assertAlmostEqual(payload["stats"]["maxC"], max(slice_temps), places=9)
+                for j in range(ny):
+                    for i in range(nx):
+                        if not payload["valid"][j][i]:
+                            continue
+                        x = ox + i * sx
+                        y = oy + j * sy
+                        fx, fy, fz = foam_xyz(x, y, payload["zM"])
+                        index = min(
+                            range(len(centres)),
+                            key=lambda i: (centres[i][0] - fx) ** 2 + (centres[i][1] - fy) ** 2 + (centres[i][2] - fz) ** 2,
+                        )
+                        self.assertAlmostEqual(payload["values"][j][i], temps[index] - 273.15, places=9)
         finally:
             if previous is None:
                 os.environ.pop("SIMUNOW_ENGINES_ROOT", None)

@@ -21,6 +21,7 @@ __pycache__/
 !/test/p1/quality.py
 !/test/p1/sample_seats.py
 !/test/p1/foam_io.py
+!/test/p1/field_slice.py
 .env
 Artifacts/
 *.simunow/

@@ -115,6 +115,12 @@ enum BundledTemplateJSON {
         "source": "assumed",
         "reference": "representative-day system-on hours, not annual"
       }
+    },
+    "costAssumptions": {
+      "pricePerKWh": 1.2,
+      "currency": "HKD",
+      "source": "assumed",
+      "reference": "比赛演示假设，非真实电价"
     }
   }
 }
@@ -230,6 +236,12 @@ enum BundledTemplateJSON {
         "source": "assumed",
         "reference": "representative-day system-on hours, not annual"
       }
+    },
+    "costAssumptions": {
+      "pricePerKWh": 1.2,
+      "currency": "HKD",
+      "source": "assumed",
+      "reference": "比赛演示假设，非真实电价"
     }
   }
 }

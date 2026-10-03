@@ -28,17 +28,17 @@
 
 ### P5-03a 会计
 
-- [ ] 测试：1033.112 W × 10 h → 10.33112 kWh → 12.397 HKD（1.2 HKD/kWh），币种 HKD
-- [ ] 测试：无电价 → cost_day omitted
-- [ ] 测试：无 p_elec_w → 电量与费用都 omitted
-- [ ] 测试：结果对象不含有值的 `annual_kwh` / `payback_years`
+- [x] 测试：1033.112 W × 10 h → 10.33112 kWh → 12.397 HKD（1.2 HKD/kWh），币种 HKD
+- [x] 测试：无电价 → cost_day omitted
+- [x] 测试：无 p_elec_w → 电量与费用都 omitted
+- [x] 测试：结果对象不含有值的 `annual_kwh` / `payback_years`
 
 通过：日费有来源。失败：把一天乘 365 当全年。
 
 ### P5-03b 分槽与冻结
 
-- [ ] 提交 L2 后任务页仍显示上次同项目 L1 的冷量/电功率（哈希不同则标 stale，不把旧瓦数写成当前）
-- [ ] `pinCurrentAsCandidate` 把当时的 L1 费用快照进 `CandidateRun`；无 L1 则费用 omitted
-- [ ] 对比页并排代表日电费；口径不同不比节省额
+- [x] 提交 L2 后任务页仍显示上次同项目 L1 的冷量/电功率（哈希不同则标 stale，不把旧瓦数写成当前）
+- [x] `pinCurrentAsCandidate` 把当时的 L1 费用快照进 `CandidateRun`；无 L1 则费用 omitted
+- [x] 对比页并排代表日电费；口径不同不比节省额
 
 通过：手测路径下先 L1 再 L2，费用还在。失败：交 L2 后电费变未知且报告缺运行费。

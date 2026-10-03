@@ -19,6 +19,9 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
     /// Geometry snapshot at pin time; the comparison viewport draws this,
     /// never the live draft the user may still be editing.
     public var draft: ProjectDraft
+    /// L1 electric power and representative-day cost frozen at pin time.
+    /// Absent L1 leaves the cost omitted, never 0.
+    public var dayCost: RepresentativeDayCost
 
     public init(
         name: String,
@@ -28,7 +31,8 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         metrics: [ResultMetric],
         slice: FieldSlice? = nil,
         basis: ComparisonBasis,
-        draft: ProjectDraft
+        draft: ProjectDraft,
+        dayCost: RepresentativeDayCost = .omitted(reason: "无 L1，代表日电费省略")
     ) {
         self.name = name
         self.identity = identity
@@ -38,6 +42,7 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         self.slice = slice
         self.basis = basis
         self.draft = draft
+        self.dayCost = dayCost
     }
 
     /// Non-geometry inputs that must match before two candidates may be

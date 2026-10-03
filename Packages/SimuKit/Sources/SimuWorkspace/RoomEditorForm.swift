@@ -11,6 +11,10 @@ public struct RoomEditorForm: View {
     @State private var occupantCount: Double = 0
     @State private var occupiedStart = "08:00"
     @State private var occupiedEnd = "18:00"
+    @State private var tariffPriceText = "1.2"
+    @State private var tariffCurrency = "HKD"
+    @State private var tariffSource: ParameterSource = .assumed
+    @State private var tariffReference = "比赛演示假设，非真实电价"
 
     public init(store: WorkspaceStore) {
         self.store = store
@@ -164,6 +168,38 @@ public struct RoomEditorForm: View {
                     store.applyOccupiedHours(start: occupiedStart, end: occupiedEnd)
                 }
                 .accessibilityLabel("应用代表日占用时段")
+            }
+            Section("演示电价") {
+                Text("代表日电费用这个单价。来源必须写明。这不是真实电价，也不推全年或回收期。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                TextField("电价（每千瓦时）", text: $tariffPriceText)
+                    .accessibilityLabel("演示电价，每千瓦时")
+                TextField("币种", text: $tariffCurrency)
+                    .accessibilityLabel("电价币种")
+                SourcePicker(source: $tariffSource)
+                TextField("出处", text: $tariffReference)
+                    .accessibilityLabel("电价出处")
+                Button("应用电价") {
+                    let trimmedPrice = tariffPriceText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let reference = tariffReference.trimmingCharacters(in: .whitespacesAndNewlines)
+                    store.applyElectricityTariff(CostAssumptions(
+                        pricePerKWh: trimmedPrice.isEmpty ? nil : Double(trimmedPrice),
+                        currency: tariffCurrency.trimmingCharacters(in: .whitespacesAndNewlines),
+                        source: tariffSource,
+                        reference: reference.isEmpty ? nil : reference
+                    ))
+                }
+                .accessibilityLabel("应用演示电价")
+                if let tariff = store.project?.costAssumptions {
+                    Text("来源 \(tariff.source.editorLabel)：\(tariff.reference ?? "无出处")")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("电价来源 \(tariff.source.editorLabel) \(tariff.reference ?? "无出处")")
+                }
+                Text("缺电价、缺电功率或缺占用时段时费用省略，不填 0。改造与设备报价：待报价。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section("计算引擎") {
                 Text(store.engineStatus)
@@ -350,6 +386,17 @@ public struct RoomEditorForm: View {
         occupantCount = store.project?.occupancy?.occupantCount.value ?? 0
         occupiedStart = store.project?.occupancy?.schedule?.start ?? "08:00"
         occupiedEnd = store.project?.occupancy?.schedule?.end ?? "18:00"
+        if let tariff = store.project?.costAssumptions {
+            tariffPriceText = tariff.pricePerKWh.map { String($0) } ?? ""
+            tariffCurrency = tariff.currency
+            tariffSource = tariff.source
+            tariffReference = tariff.reference ?? ""
+        } else {
+            tariffPriceText = ""
+            tariffCurrency = "HKD"
+            tariffSource = .assumed
+            tariffReference = ""
+        }
     }
 
     private func addOpening(kind: OpeningKind) {

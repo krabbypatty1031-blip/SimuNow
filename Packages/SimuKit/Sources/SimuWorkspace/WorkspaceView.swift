@@ -123,7 +123,7 @@ public struct WorkspaceView: View {
 
     @ViewBuilder
     private var runsDetail: some View {
-        if store.activeRun == nil && store.lastResult == nil {
+        if store.activeRun == nil && store.lastL1Result == nil && store.lastL2Result == nil {
             EmptyStateView(
                 "暂无计算任务",
                 symbol: "waveform.path",
@@ -133,7 +133,7 @@ public struct WorkspaceView: View {
             Form {
                 Section("任务") {
                     LabeledContent("状态", value: store.activeRun?.state.rawValue ?? "无")
-                    LabeledContent("质量", value: store.lastResult?.quality.rawValue ?? "未评价")
+                    LabeledContent("质量", value: (store.lastL2Result ?? store.lastL1Result)?.quality.rawValue ?? "未评价")
                     LabeledContent("新鲜度", value: freshnessText)
                     if store.isSubmitting {
                         Text("正在求解…")
@@ -159,10 +159,19 @@ public struct WorkspaceView: View {
                     }
                 }
                 Section("代表日指标") {
+                    LabeledContent("L1 新鲜度", value: l1FreshnessText)
+                    if store.l1Freshness == .stale {
+                        Text("下列瓦数属于上次 L1，不是当前草稿。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     LabeledContent("制冷量", value: store.metricText(named: "q_cool_w"))
                     LabeledContent("电功率", value: store.metricText(named: "p_elec_w"))
+                    LabeledContent("代表日电量", value: store.dayEnergyText())
+                    LabeledContent("代表日电费", value: store.dayCostText())
                     LabeledContent("全年电量", value: store.metricText(named: "annual_kwh"))
-                    Text("制冷量不是电功率。一天不能推全年。围护仍是引擎默认构造。")
+                    LabeledContent("改造报价", value: "待报价")
+                    Text("制冷量不是电功率。代表日电费 = 电功率 ÷ 1000 × 占用小时 × 电价，不是全年电费。改造费待报价，不出回收期。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -172,7 +181,7 @@ public struct WorkspaceView: View {
                     LabeledContent("座位最大风速", value: store.metricText(named: "seat_u_mag_max"))
                     LabeledContent("座位 PMV 最低", value: store.metricText(named: "seat_pmv_min"))
                     LabeledContent("座位 PPD 最高", value: store.metricText(named: "seat_ppd_max"))
-                    if let reason = store.lastResult?.metric(named: "seat_pmv_min")?.reason {
+                    if let reason = store.lastL2Result?.metric(named: "seat_pmv_min")?.reason {
                         Text(reason)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -232,6 +241,14 @@ public struct WorkspaceView: View {
         }
     }
 
+    private var l1FreshnessText: String {
+        switch store.l1Freshness {
+        case .current: "当前输入"
+        case .stale: "输入已改，非当前草稿"
+        case nil: "无结果"
+        }
+    }
+
     /// P4-06 comparison page: pinned candidates share one camera (yaw), one
     /// physical colour range and the same basis; mixed bases are flagged
     /// instead of being shown as a valid comparison.
@@ -255,6 +272,11 @@ public struct WorkspaceView: View {
                         Label("口径一致：人数、占用时段、设定与送风温度相同，只有几何不同。", systemImage: "checkmark.circle")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                        if let savings = store.comparisonSavingsText {
+                            Text(savings)
+                                .font(.footnote)
+                                .accessibilityLabel(savings)
+                        }
                     }
                     if let range = store.comparisonPaletteRange {
                         Text(String(format: "共用色标 %.1f – %.1f °C（跨候选联合范围，不各自归一化）", range.minC, range.maxC))
@@ -297,6 +319,12 @@ public struct WorkspaceView: View {
                 LabeledContent("状态", value: record.state.rawValue)
                 LabeledContent("质量", value: record.quality.rawValue)
                 LabeledContent("新鲜度", value: store.candidateFreshness(record) == .current ? "当前输入" : "输入已改")
+            }
+            .font(.footnote)
+            HStack(spacing: 12) {
+                LabeledContent("L1 电功率", value: record.dayCost.powerText)
+                LabeledContent("代表日电量", value: record.dayCost.energyText)
+                LabeledContent("代表日电费", value: record.dayCost.costText)
             }
             .font(.footnote)
             HStack(spacing: 12) {

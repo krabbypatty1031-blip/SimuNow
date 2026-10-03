@@ -4,6 +4,7 @@
 `schemaVersion` 1 只有项目身份和坐标元数据，不是完整可求解模型。
 `schemaVersion` 2 增加 `geometry` / `occupancy` / `hvac` 三分区；开口与风口用墙面局部坐标 `s0`/`s1` 加 `z0`/`z1`；送风同时给速度与体积流量。
 `occupancy.comfort`（`mrtC` / `rhPct` / `clo` / `met`）可选；缺任一键则 L2 PMV omitted + reason，不填 0。教室模板另披露「儿童人群未单独评价」。
+`costAssumptions`（`pricePerKWh` / `currency` / `source` / `reference`）可选。缺电价、缺 `p_elec_w` 或缺占用时段时代表日电费 omitted，不填 0。默认演示价 1.2 HKD/kWh，source=`assumed`。不含有值的 `annual_kwh` 或 `payback_years`。改造费为「待报价」。
 不确定量可带可选 `reference` 与 `uncertainty`，空字符串不当作出处。
 三分区齐全时 `hasCompletePhysicalModel` 为真，仍不表示引擎已接入。
 JSON 使用 Swift Codable camelCase，任务消息的 CodingKeys 显式写出。worker `doctor` 仍是独立探测，snake_case。P3-01 事件流是 JSONL，乱序 sequence / 截断行 / 错 runID 必须拒绝。

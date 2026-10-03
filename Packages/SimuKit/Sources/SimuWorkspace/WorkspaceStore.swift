@@ -23,7 +23,13 @@ public final class WorkspaceStore {
     /// In-app L2 client; unconfigured until the user picks an engine tree.
     public var l2Client: any L2TaskClient
     public var activeRun: RunReceipt?
-    public var lastResult: SimulationResult?
+    /// Last finished L1. L2 submit must not clear this slot.
+    public var lastL1Result: SimulationResult?
+    /// Last finished L2. L1 submit must not clear this slot.
+    public var lastL2Result: SimulationResult?
+    /// Latest finished run for older call sites. Prefer the explicit slots.
+    /// L2 wins when both exist so a CFD submit does not pretend to be the L1 watts.
+    public var lastResult: SimulationResult? { lastL2Result ?? lastL1Result }
     /// Seat-height temperature slice from the latest quality-passed L2 run.
     /// Quality-failed runs produce nil, never a fabricated field.
     public var lastFieldSlice: FieldSlice?
@@ -57,9 +63,20 @@ public final class WorkspaceStore {
         l2Client.isConfigured && isPhysicalModelComplete && !isSubmitting
     }
 
+    public func freshness(of result: SimulationResult?) -> ResultFreshness? {
+        guard let result, let hash = currentInputHash() else { return nil }
+        return result.identity.freshness(relativeTo: hash)
+    }
+
+    /// L1 freshness is independent of L2. A stale L1 must not be labelled current.
+    public var l1Freshness: ResultFreshness? { freshness(of: lastL1Result) }
+
+    public var l2Freshness: ResultFreshness? { freshness(of: lastL2Result) }
+
+    /// Freshness of the run the pin gate uses: L2 when that slot is filled, otherwise L1.
     public var resultFreshness: ResultFreshness? {
-        guard let lastResult, let hash = currentInputHash() else { return nil }
-        return lastResult.identity.freshness(relativeTo: hash)
+        if lastL2Result != nil { return l2Freshness }
+        return l1Freshness
     }
 
     public func currentInputHash() -> String? {
@@ -318,9 +335,9 @@ public final class WorkspaceStore {
             let receipt = try await l1Client.submitL1(request, snapshot: snapshot)
             activeRun = receipt
             runEvents = (try? await l1Client.loadEvents(runID: receipt.identity.runID)) ?? []
-            lastResult = try await l1Client.loadResult(runID: receipt.identity.runID)
-            if let lastResult {
-                lastBoundary = try? L2BoundaryMapping.map(draft: project, l1: lastResult)
+            lastL1Result = try await l1Client.loadResult(runID: receipt.identity.runID)
+            if let lastL1Result {
+                lastBoundary = try? L2BoundaryMapping.map(draft: project, l1: lastL1Result)
             }
             if receipt.state == .failed {
                 runMessage = "代表日 L1 失败。冷量未写成 0。"
@@ -358,7 +375,7 @@ public final class WorkspaceStore {
             let receipt = try await l2Client.submitL2(request, snapshot: snapshot)
             activeRun = receipt
             runEvents = (try? await l2Client.loadEvents(runID: receipt.identity.runID)) ?? []
-            lastResult = try await l2Client.loadResult(runID: receipt.identity.runID)
+            lastL2Result = try await l2Client.loadResult(runID: receipt.identity.runID)
             // The slice only exists for a quality-passed field; nil is honest.
             lastFieldSlice = try await l2Client.loadFieldSlice(runID: receipt.identity.runID)
             if receipt.state == .failed {
@@ -383,17 +400,30 @@ public final class WorkspaceStore {
     /// a copy; later edits never mutate it.
     public var candidateRuns: [CandidateRun] = []
 
+    /// The run pin freezes: the current L2 when one exists, otherwise the
+    /// current finished L1. Pinning never clears the other slot.
+    public var pinnableResult: SimulationResult? { lastL2Result ?? lastL1Result }
+
     /// Pinning requires a finished, current result. A stale result belongs to
     /// an older input and must not be labelled with the current draft.
     public var canPinCandidate: Bool {
-        lastResult != nil && resultFreshness == .current && !isSubmitting
+        guard let result = pinnableResult else { return false }
+        return freshness(of: result) == .current && !isSubmitting
+    }
+
+    /// Writes the inspector tariff onto the draft. A nil price stays omitted.
+    public func applyElectricityTariff(_ tariff: CostAssumptions) {
+        guard var draft = project else { return }
+        draft.costAssumptions = tariff
+        project = draft
     }
 
     /// Freeze the latest result as a comparison candidate. The basis (people,
     /// hours, setpoints, supply temperature) is copied from the draft at pin
     /// time; only fresh results may pin, so basis and run cannot drift apart.
+    /// Day cost is the L1 power at this moment. No L1 leaves it omitted.
     public func pinCurrentAsCandidate(named name: String? = nil) {
-        guard canPinCandidate, let result = lastResult, let project else { return }
+        guard canPinCandidate, let result = pinnableResult, let project else { return }
         let basis = CandidateRun.ComparisonBasis(
             occupantCount: project.occupancy?.occupantCount.value ?? 0,
             occupiedStart: project.occupancy?.schedule?.start
@@ -409,11 +439,60 @@ public final class WorkspaceStore {
             state: result.state,
             quality: result.quality,
             metrics: result.metrics,
-            slice: lastFieldSlice,
+            slice: lastL2Result == nil ? nil : lastFieldSlice,
             basis: basis,
-            draft: project
+            draft: project,
+            dayCost: frozenDayCost(project: project)
         )
         candidateRuns.append(record)
+    }
+
+    /// Side-by-side HKD difference of two L1 day costs. Hidden when the
+    /// candidates do not share a basis, so a mismatch never shows a savings figure.
+    public var comparisonSavingsText: String? {
+        guard basisMismatchText == nil else { return nil }
+        let priced = candidateRuns.filter { $0.dayCost.cost != nil && $0.dayCost.electricPowerW != nil }
+        guard let high = priced.max(by: { ($0.dayCost.cost ?? 0) < ($1.dayCost.cost ?? 0) }),
+              let low = priced.min(by: { ($0.dayCost.cost ?? 0) < ($1.dayCost.cost ?? 0) }),
+              high.identity.runID != low.identity.runID,
+              let saved = CostAccounting.savingsHKD(high.dayCost, low.dayCost, basisMismatch: nil),
+              saved != 0 else {
+            return nil
+        }
+        return String(format: "代表日电费相差 %.3f HKD（两次 L1 电功率之差，不是系数估算）", saved)
+    }
+
+    /// Day cost of the stored L1 watts. Hours come from that run's schedule
+    /// when it has one, so a later draft edit does not rewrite the old day.
+    public func frozenDayCost(project: ProjectDraft) -> RepresentativeDayCost {
+        guard let l1 = lastL1Result else {
+            return .omitted(reason: "无 L1，代表日电费省略")
+        }
+        let metric = l1.metric(named: "p_elec_w")
+        let watts = metric?.omitted == false ? metric?.value : nil
+        let start: String?
+        let end: String?
+        if let schedule = l1.schedule {
+            start = schedule.start
+            end = schedule.end
+        } else if l1Freshness == .current {
+            start = project.occupancy?.schedule?.start ?? project.hvac?.schedule?.start
+            end = project.occupancy?.schedule?.end ?? project.hvac?.schedule?.end
+        } else {
+            start = nil
+            end = nil
+        }
+        return CostAccounting.representativeDay(
+            electricPowerW: watts,
+            occupiedStart: start,
+            occupiedEnd: end,
+            tariff: project.costAssumptions
+        )
+    }
+
+    public var liveDayCost: RepresentativeDayCost {
+        guard let project else { return .omitted(reason: "无项目") }
+        return frozenDayCost(project: project)
     }
 
     public func removeCandidate(runID: UUID) {
@@ -556,22 +635,58 @@ public final class WorkspaceStore {
     }
     #endif
 
+    /// Physics snapshot. The demo tariff is applied after L1, so it is not
+    /// part of the run hash: editing the price must not mark watts stale.
     private func encodeSnapshot(_ draft: ProjectDraft) -> Data {
+        var physics = draft
+        physics.costAssumptions = nil
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return (try? encoder.encode(draft)) ?? Data()
+        return (try? encoder.encode(physics)) ?? Data()
     }
 
+    private static let l1MetricNames: Set<String> = ["q_cool_w", "p_elec_w", "annual_kwh"]
+
     public func metricText(named name: String) -> String {
-        guard let metric = lastResult?.metric(named: name), let value = metric.value, !metric.omitted else {
-            return lastResult == nil ? "无结果" : "未知"
+        if Self.l1MetricNames.contains(name) {
+            return formatMetric(lastL1Result, name: name, markStale: l1Freshness == .stale)
         }
-        return "\(value) \(metric.unit)"
+        return formatMetric(lastL2Result, name: name, markStale: false)
+    }
+
+    public func dayEnergyText() -> String {
+        annotated(liveDayCost.energyText, hasResult: lastL1Result != nil, hasValue: liveDayCost.energyKWh != nil)
+    }
+
+    public func dayCostText() -> String {
+        annotated(liveDayCost.costText, hasResult: lastL1Result != nil, hasValue: liveDayCost.cost != nil)
+    }
+
+    /// Stale L1 numbers stay visible but are not described as the current draft.
+    private func annotated(_ text: String, hasResult: Bool, hasValue: Bool) -> String {
+        if !hasResult { return "无结果" }
+        if !hasValue || text == "未知" { return "未知" }
+        if l1Freshness == .stale {
+            return "\(text)（输入已改，非当前草稿）"
+        }
+        return text
+    }
+
+    private func formatMetric(_ result: SimulationResult?, name: String, markStale: Bool) -> String {
+        guard let metric = result?.metric(named: name), let value = metric.value, !metric.omitted else {
+            return result == nil ? "无结果" : "未知"
+        }
+        let text = "\(value) \(metric.unit)"
+        if markStale {
+            return "\(text)（输入已改，非当前草稿）"
+        }
+        return text
     }
 
     private func resetRunState() {
         activeRun = nil
-        lastResult = nil
+        lastL1Result = nil
+        lastL2Result = nil
         lastFieldSlice = nil
         lastBoundary = nil
         runEvents = []

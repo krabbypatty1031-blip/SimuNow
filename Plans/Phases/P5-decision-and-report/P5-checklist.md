@@ -32,8 +32,8 @@
 
 ## P5-03 费用
 
-- [ ] P5-03a 代表日 kWh 与 HKD；缺项 omitted
-- [ ] P5-03b `lastL1Result` / `lastL2Result` 分槽；pin 冻结费用
+- [x] P5-03a 代表日 kWh 与 HKD；缺项 omitted
+- [x] P5-03b `lastL1Result` / `lastL2Result` 分槽；pin 冻结费用
 
 ## P5-04 建议与 PDF
 

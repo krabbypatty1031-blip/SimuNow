@@ -11,6 +11,8 @@ IDENTITY_KEYS = (
     "coordinateSystem",
 )
 PHYSICAL_KEYS = ("geometry", "occupancy", "hvac")
+# Tariff is not a solver input. Keep it on the draft so a saved package round-trips.
+OPTIONAL_KEYS = ("costAssumptions",)
 
 
 def parse_project(payload: dict) -> dict:
@@ -26,6 +28,9 @@ def parse_project(payload: dict) -> dict:
         raise ValueError("coordinateSystem must be rightHandedZUp")
     draft = {key: payload[key] for key in IDENTITY_KEYS}
     for key in PHYSICAL_KEYS:
+        if key in payload:
+            draft[key] = payload[key]
+    for key in OPTIONAL_KEYS:
         if key in payload:
             draft[key] = payload[key]
     return draft

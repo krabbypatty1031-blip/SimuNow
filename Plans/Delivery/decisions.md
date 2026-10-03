@@ -129,7 +129,7 @@
 备选：(a) 无电价就不算费——对比页缺运行费；(b) 编一个「市场电价」不写来源——违反费用红线；(c) 明确的演示假设，可编辑，必须带 source/reference。
 选择：(c)。默认：`1.2 HKD/kWh`，source=`assumed`，reference=`比赛演示假设，非真实电价`。代表日电量 = `p_elec_w / 1000 × 占用小时`（办公室模板 08:00–18:00 → 10 h）；代表日电费 = 电量 × 单价。缺 `p_elec_w`、缺占用时段或电价 → 费用 omitted，不填 0。改造/设备报价无来源 → 「待报价」，不出回收期、不出全年费。改设定后的节电必须来自新的 L1 run，不得乘系数。
 影响：`CostAssumptions` 进草稿或工作区状态，不写死 Desktop 路径；`CandidateRun` 冻结 pin 当时的 L1 电功率与代表日费用。
-验证：待 P5-03 测试（有电价算出日费；缺电价 omitted；不出现年费/回收期字段有值）。
+验证：P5-03 `CostAccountingTests` 与 `Backend.tests.test_costing`（1033.112 W × 10 h → 10.33112 kWh → 12.397 HKD；缺电价只省略电费；缺电功率电量与电费都 omitted；结果对象无有值的 `annual_kwh` / `payback_years`）。电价不进物理输入哈希，改价不把 L1 瓦数标成 stale。
 
 ## ADR-015：PDF 由证据包出数字，模型 API 只写叙述（已接受）
 

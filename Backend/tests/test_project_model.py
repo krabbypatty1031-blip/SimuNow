@@ -101,6 +101,26 @@ class ProjectModelTests(unittest.TestCase):
             self.assertIn(key, comfort["required"])
             self.assertIn(key, comfort["properties"])
 
+    def test_schema_cost_assumptions_are_optional(self):
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        self.assertNotIn("costAssumptions", schema["required"])
+        self.assertIn("costAssumptions", schema["properties"])
+        cost = schema["$defs"]["costAssumptions"]
+        self.assertIn("currency", cost["required"])
+        self.assertIn("source", cost["required"])
+        self.assertNotIn("pricePerKWh", cost["required"])
+        self.assertNotIn("payback_years", cost["properties"])
+        self.assertNotIn("annual_kwh", cost["properties"])
+
+    def test_v2_fixture_does_not_invent_a_tariff(self):
+        from simunow_worker.models.project import parse_project
+
+        payload = json.loads((FIXTURES / "project-v2-office.json").read_text(encoding="utf-8"))
+        draft = parse_project(payload)
+        self.assertNotIn("costAssumptions", draft)
+        kept = parse_project({**payload, "costAssumptions": {"pricePerKWh": 1.2, "currency": "HKD", "source": "assumed"}})
+        self.assertEqual(kept["costAssumptions"]["pricePerKWh"], 1.2)
+
     def test_v2_fixture_does_not_invent_comfort_zeros(self):
         from simunow_worker.models.project import parse_project
 

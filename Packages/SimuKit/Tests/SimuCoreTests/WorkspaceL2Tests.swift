@@ -116,6 +116,36 @@ actor RecordingL2Client: L2TaskClient {
     #expect(store.resultFreshness == .stale)
 }
 
+/// L2 must not wipe the last L1 cooling and electric power on the same project.
+@MainActor
+@Test func submitL2LeavesPreviousL1WattsInPlace() async throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let l1 = try L1Accounting.evaluate(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        draft: draft,
+        context: L1DayContext(weatherPath: "weather/HK.epw", weatherHash: "h", coolingLoadW: 6000)
+    )
+    let l2 = SimulationResult(
+        identity: RunIdentity(scenarioID: draft.id, inputHash: "pending"),
+        state: .succeeded,
+        quality: .passed,
+        metrics: [
+            ResultMetric(name: "seat_t_c_min", value: 25.08, unit: "C", method: "steady_cfd", fidelity: .l2, omitted: false)
+        ]
+    )
+    let l1Client = RecordingL1Client()
+    await l1Client.prepare(result: l1)
+    let l2Client = RecordingL2Client()
+    await l2Client.prepare(result: l2)
+    let store = WorkspaceStore(l1Client: l1Client, l2Client: l2Client)
+    store.loadOfficeTemplate()
+    await store.submitL1()
+    await store.submitL2()
+    #expect(store.lastL1Result?.metric(named: "q_cool_w")?.value == 6000)
+    #expect(store.lastL1Result?.metric(named: "p_elec_w")?.value == 2000)
+    #expect(store.lastL2Result?.metric(named: "seat_t_c_min")?.value == 25.08)
+}
+
 @MainActor
 @Test func failedL2RunKeepsSeatMetricsOmittedAndLoadsNoSlice() async throws {
     let draft = try ProjectTemplates.bundled(named: "office").project

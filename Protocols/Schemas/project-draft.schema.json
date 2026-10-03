@@ -39,7 +39,8 @@
     },
     "geometry": { "$ref": "#/$defs/geometry" },
     "occupancy": { "$ref": "#/$defs/occupancy" },
-    "hvac": { "$ref": "#/$defs/hvac" }
+    "hvac": { "$ref": "#/$defs/hvac" },
+    "costAssumptions": { "$ref": "#/$defs/costAssumptions" }
   },
   "if": {
     "properties": {
@@ -221,6 +222,19 @@
         "s1": { "$ref": "#/$defs/quantity" },
         "z0": { "$ref": "#/$defs/quantity" },
         "z1": { "$ref": "#/$defs/quantity" }
+      }
+    },
+    "costAssumptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["currency", "source"],
+      "properties": {
+        "pricePerKWh": { "type": "number", "minimum": 0 },
+        "currency": { "type": "string", "minLength": 1 },
+        "source": {
+          "enum": ["scan", "measured", "manufacturer", "user", "preset", "assumed"]
+        },
+        "reference": { "type": "string", "minLength": 1 }
       }
     }
   }

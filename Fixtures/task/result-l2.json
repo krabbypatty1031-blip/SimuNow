@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "runID": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "scenarioID": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "inputHash": "ef2073dc8a395c0c010a7e57ee206486ceff01fc55daea78c32eae7e86c808aa"
+  },
+  "state": "succeeded",
+  "quality": "passed",
+  "qualityDetail": {
+    "checkMesh": "ok",
+    "solverEnded": true,
+    "monitorsStable": true,
+    "massRelativeError": 2.351851851898921e-06,
+    "massGate": 0.01,
+    "energyRelativeError": 0.001885597795282524,
+    "energyGate": 0.05
+  },
+  "supplyTemperatureC": 16.0,
+  "setpointC": 26.0,
+  "seatSamples": [
+    {
+      "id": "S1",
+      "x": 1.5,
+      "y": 1.5,
+      "z": 1.1,
+      "tC": 25.079600000000028,
+      "uMag": 0.026380645037807876,
+      "lowSpeedAbsoluteError": true
+    },
+    {
+      "id": "S2",
+      "x": 1.5,
+      "y": 4.5,
+      "z": 1.1,
+      "tC": 25.09086000000002,
+      "uMag": 0.025807106231529025,
+      "lowSpeedAbsoluteError": true
+    },
+    {
+      "id": "S3",
+      "x": 4.5,
+      "y": 1.5,
+      "z": 1.1,
+      "tC": 25.386230000000012,
+      "uMag": 0.030565793494985213,
+      "lowSpeedAbsoluteError": true
+    },
+    {
+      "id": "S4",
+      "x": 4.5,
+      "y": 4.5,
+      "z": 1.1,
+      "tC": 25.375370000000032,
+      "uMag": 0.033790965998616626,
+      "lowSpeedAbsoluteError": true
+    }
+  ],
+  "metrics": [
+    {
+      "name": "seat_t_c_min",
+      "value": 25.079600000000028,
+      "unit": "C",
+      "method": "openfoam_cell_sample",
+      "fidelity": "l2",
+      "omitted": false
+    },
+    {
+      "name": "seat_t_c_max",
+      "value": 25.386230000000012,
+      "unit": "C",
+      "method": "openfoam_cell_sample",
+      "fidelity": "l2",
+      "omitted": false
+    },
+    {
+      "name": "seat_u_mag_max",
+      "value": 0.033790965998616626,
+      "unit": "m/s",
+      "method": "openfoam_cell_sample",
+      "fidelity": "l2",
+      "omitted": false
+    }
+  ]
+}

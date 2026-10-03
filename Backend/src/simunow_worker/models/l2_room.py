@@ -28,6 +28,24 @@ def _assumed(value: float, unit: str) -> dict:
     return {"value": value, "unit": unit, "source": "assumed"}
 
 
+def _wall_span(wall: str, size: tuple[float, float, float]) -> float:
+    """Length of the wall a patch sits on. xMin/xMax run along y; yMin/yMax along x."""
+    return size[1] if wall in ("xMin", "xMax") else size[0]
+
+
+def _band_scale(patch: dict, wall: str, size: tuple[float, float, float]) -> float:
+    """Patch width / full wall span.
+
+    The P1 case writer can only make full-wall bands. Scaling velocity and
+    flux by this ratio preserves the project's supply m3/s and window W;
+    the geometry simplification is recorded in assumptions instead of
+    silently changing the physics.
+    """
+    span = _wall_span(wall, size)
+    width = patch["s1"]["value"] - patch["s0"]["value"]
+    return width / span
+
+
 def project_to_l2_room(draft: dict) -> dict:
     """Build a P1-shaped L2 room. Supply T is the coil, not the zone setpoint."""
     geometry = draft.get("geometry")
@@ -49,6 +67,8 @@ def project_to_l2_room(draft: dict) -> dict:
     supply_flow = hvac["supplyAirflowM3s"]["value"]
     supply_wall = hvac["supply"]["wall"]
     window_wall = window["wall"]
+    supply_scale = _band_scale(hvac["supply"], supply_wall, size)
+    window_scale = _band_scale(window, window_wall, size)
     return {
         "name": draft.get("name", "room"),
         "kind": "room",
@@ -63,6 +83,8 @@ def project_to_l2_room(draft: dict) -> dict:
             "omitted: envelope_u_value",
             "P1 first-version L2 case has no furniture boxes",
             "wall temperatures are not invented from UA",
+            "supply band spans the full wall; velocity scaled to preserve project supply m3/s",
+            "window band spans the full wall; flux scaled to preserve total window W",
         ],
         "size": {
             "x_m": _qty(geometry["sizeX"]),
@@ -84,7 +106,12 @@ def project_to_l2_room(draft: dict) -> dict:
         },
         "supply": {
             "t_c": _qty(hvac["supplyTemperatureC"]),
-            "u_m_s": _qty(hvac["supplySpeedMs"]),
+            # Band velocity preserves the project's declared supply airflow.
+            "u_m_s": {
+                "value": hvac["supplySpeedMs"]["value"] * supply_scale,
+                "unit": "m/s",
+                "source": "project",
+            },
             "x_m": {"value": _WALL_X[supply_wall](size), "unit": "m", "source": "project"},
             "z0_m": _qty(hvac["supply"]["z0"]),
             "z1_m": _qty(hvac["supply"]["z1"]),
@@ -98,7 +125,18 @@ def project_to_l2_room(draft: dict) -> dict:
             "x_m": {"value": _WALL_X[window_wall](size), "unit": "m", "source": "project"},
             "z0_m": _qty(window["z0"]),
             "z1_m": _qty(window["z1"]),
-            **({"q_w_m2": _qty(window["heatFluxWm2"])} if window.get("heatFluxWm2") else {}),
+            # Band flux preserves the project window's total watts.
+            **(
+                {
+                    "q_w_m2": {
+                        "value": window["heatFluxWm2"]["value"] * window_scale,
+                        "unit": "W/m2",
+                        "source": "project",
+                    }
+                }
+                if window.get("heatFluxWm2")
+                else {}
+            ),
         },
         "gains": {
             "n_people": _qty(occupancy["occupantCount"]),

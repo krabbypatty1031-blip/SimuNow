@@ -50,6 +50,15 @@
 影响：本机闭环只在 Mac；EnergyPlus 二进制仍由用户提供，不进 Git。`cs.disable-library-validation` 仅用于加载用户引擎。
 验证：`WorkerStagingTests`；沙盒 App 手测办公室 L1 `succeeded`；entitlement 中 sandbox 仍为 true。
 
+## ADR-009：L2 能量门禁计入实测进口面导热（已接受）
+
+日期：2026-10-03。
+背景：P4-02 钉版办公室弱射流（带速 0.1 m/s）求解收敛、监测稳定、质量守恒，但能量收支差 23.4%。诊断：fixedValue 进口面在热分层天花板下从近壁单元导热吸热，钉版 run 实测 −305.9 W；P1 大流量（1.2 m/s）下同一机制仅 ~−7 W（能量误差 0.41%），此前可忽略。
+备选：(a) 放宽能量门禁——否，门禁是硬约束；(b) 改房间几何让热分层碰不到进口带——否，为过门禁改物理属造假；(c) 把进口面导热实测并计入收支。
+选择：(c)。`foam_io` 解析 polyMesh + `writeCellCentres` 的 C 场，`quality.inlet_conduction_w` 逐进口面算 ρcp·(ν/Pr)·A·snGrad，预算 `q_extracted = h_out − h_in − q_inlet_cond`；层流假设被显式守卫（非层流拒绝估算，不猜 0）。计入后能量误差 0.19%，门禁保持 5%。
+影响：`test/p1/{run_room,quality,sample_seats,foam_io}.py` 随 P4-02 进库（run-l2 依赖）；弱射流房间整体偏冷约 2.3 K 属该供应模型的真实后果，座位结果随 quality 披露，不包装为实测。湍流模型启用后需补 alphat 边界项再复算。
+验证：`test/p1/test_quality.py`（合成 case 手算 −51.0087 W + 2026-10-03 真实数字回归：计入过 / 不计 23% 挂）；钉版 `test_l2_runner` 质量 passed、`quality.json` `terms_w.q_inlet_cond=-305.9`。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。

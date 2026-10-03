@@ -1,17 +1,19 @@
-"""Write an L2 OpenFOAM case from a P2 snapshot.
+"""Run an L2 OpenFOAM steady case from a P2 snapshot.
 
-Does not invent seat temperatures when the engine is missing. This step does not
-run the solver.
+Writes the case first so a missing engine still leaves evidence, then runs the
+P1 pipeline (mesh, solve, checks, sampling). Seat temperatures come only from
+a quality-passed field; nothing is invented when the engine is missing.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
-from .models.l2_accounting import evaluate_l2
+from .models.l2_accounting import evaluate_l2, quality_detail
 from .models.l2_room import project_to_l2_room
 from .models.task import validate_request
 from .task_runner import _emit, _event
@@ -32,9 +34,11 @@ def _import_p1():
     p1 = _repo_root() / "test" / "p1"
     if str(p1) not in sys.path:
         sys.path.insert(0, str(p1))
+    import run_room
     import write_openfoam_room as writer
+    from room_input import RoomError
 
-    return writer
+    return run_room, writer, RoomError
 
 
 def _engines_root() -> Path | None:
@@ -54,6 +58,41 @@ def _openfoam_wrapper(root: Path) -> Path | None:
 
 def _write_result(run_dir: Path, result: dict) -> None:
     (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _seat_rows(run_dir: Path) -> list[dict] | None:
+    """Map P1 samples.json onto the contract seat rows (Z-up, °C, m/s)."""
+    path = run_dir / "samples.json"
+    if not path.is_file():
+        return None
+    try:
+        samples = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    rows = []
+    for seat in samples.get("seats", []):
+        row = {
+            "id": str(seat["id"]),
+            "x": float(seat["x"]),
+            "y": float(seat["y"]),
+            "z": float(seat["z"]),
+            "tC": float(seat["T_C"]),
+            "uMag": float(seat["U_mag"]),
+        }
+        if seat.get("abs_error_m_s"):
+            row["lowSpeedAbsoluteError"] = True
+        rows.append(row)
+    return rows or None
+
+
+def _quality_json(run_dir: Path) -> dict | None:
+    path = run_dir / "quality.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
 
 
 def run_l2_task(argv: list[str] | None = None) -> int:
@@ -84,23 +123,60 @@ def run_l2_task(argv: list[str] | None = None) -> int:
         return 1
 
     (run_dir / "l2-room.json").write_text(json.dumps(room, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    writer = _import_p1()
+    run_room, writer, room_error = _import_p1()
     writer.write_openfoam_room(room, run_dir / "case")
-    _emit(_event(request, 1, "progress", "meshing", {"fraction": 0.2, "monitor": "blockMeshDict"}))
+    _emit(_event(request, 1, "progress", "meshing", {"fraction": 0.15, "monitor": "blockMeshDict"}))
 
     engines = _engines_root()
     wrapper = _openfoam_wrapper(engines) if engines else None
     if wrapper is None:
-        result = evaluate_l2(identity, draft, {"seatTemperatures": None})
-        result["state"] = "failed"
+        result = evaluate_l2(
+            identity,
+            draft,
+            {"qualityDetail": None, "seatSamples": None, "pipelineCompleted": False},
+        )
         _write_result(run_dir, result)
         _emit(_event(request, 2, "failed", "failed", {"message": "OpenFOAM not configured"}))
         sys.stderr.write("run-l2 failed: OpenFOAM not configured; no invented seat temperature\n")
         return 1
 
-    result = evaluate_l2(identity, draft, {"seatTemperatures": None})
-    result["state"] = "failed"
+    _emit(_event(request, 2, "progress", "solving", {"fraction": 0.35, "monitor": "buoyantBoussinesqSimpleFoam"}))
+    try:
+        run_room.run_pipeline(room, run_dir, timeout=600)
+    except (room_error, subprocess.TimeoutExpired, OSError, KeyError, ValueError) as exc:
+        # The case and logs stay in the run directory as failure evidence.
+        result = evaluate_l2(
+            identity,
+            draft,
+            {"qualityDetail": quality_detail(_quality_json(run_dir)), "seatSamples": None, "pipelineCompleted": False},
+        )
+        _write_result(run_dir, result)
+        _emit(_event(request, 3, "failed", "failed", {"message": f"l2 pipeline failed: {exc}"}))
+        sys.stderr.write("run-l2 failed: %s\n" % exc)
+        return 1
+
+    _emit(_event(request, 3, "progress", "checking", {"fraction": 0.9, "monitor": "quality"}))
+    result = evaluate_l2(
+        identity,
+        draft,
+        {
+            "qualityDetail": quality_detail(_quality_json(run_dir)),
+            "seatSamples": _seat_rows(run_dir),
+            "pipelineCompleted": True,
+        },
+    )
     _write_result(run_dir, result)
-    _emit(_event(request, 2, "failed", "failed", {"message": "OpenFOAM solve is not wired"}))
-    sys.stderr.write("run-l2 failed: solver not wired; case written without invented temperatures\n")
-    return 1
+    detail = result.get("qualityDetail")
+    if result["quality"] == "passed":
+        _emit(_event(request, 4, "quality", "checking", {"message": "quality passed"}))
+        _emit(_event(request, 5, "completed", "succeeded", {"message": "l2 completed; quality passed"}))
+        sys.stderr.write(
+            "run-l2 completed: mass_rel=%s energy_rel=%s\n"
+            % (detail.get("massRelativeError"), detail.get("energyRelativeError"))
+        )
+    else:
+        # The task ran to completion; a failed field is reported, never used as valid values.
+        _emit(_event(request, 4, "quality", "checking", {"message": "quality failed; field not valid for evaluation"}))
+        _emit(_event(request, 5, "completed", "succeeded", {"message": "l2 finished with failed quality; seats omitted"}))
+        sys.stderr.write("run-l2 finished with failed quality; seat values omitted\n")
+    return 0

@@ -55,8 +55,31 @@ class L2RoomMappingTests(unittest.TestCase):
         draft = deepcopy(OFFICE)
         draft["hvac"]["supplySpeedMs"]["value"] = 0.8
         changed = project_to_l2_room(draft)
-        self.assertEqual(changed["supply"]["u_m_s"]["value"], 0.8)
+        # Full-wall band: velocity scales by patch_span/wall_span to keep the
+        # project supply m3/s, so the case value is not the project value.
+        size_y = 6.0
+        supply_span = 3.25 - 2.75
+        self.assertAlmostEqual(changed["supply"]["u_m_s"]["value"], 0.8 * supply_span / size_y)
+        self.assertGreater(baseline["supply"]["u_m_s"]["value"], changed["supply"]["u_m_s"]["value"])
         self.assertNotEqual(input_hash(baseline), input_hash(changed))
+
+    def test_band_scaling_preserves_project_supply_flow_and_window_watts(self):
+        # The P1 case writer can only make full-wall bands. Totals stay physical
+        # by scaling velocity/flux; the geometry simplification is recorded.
+        room = project_to_l2_room(OFFICE)
+        size_y = 6.0
+        supply_span = 3.25 - 2.75
+        window_span = 3.75 - 2.25
+        self.assertAlmostEqual(room["supply"]["u_m_s"]["value"], 1.2 * supply_span / size_y)
+        self.assertAlmostEqual(room["window"]["q_w_m2"]["value"], 80.0 * window_span / size_y)
+        self.assertIn(
+            "supply band spans the full wall; velocity scaled to preserve project supply m3/s",
+            room["assumptions"],
+        )
+        self.assertIn(
+            "window band spans the full wall; flux scaled to preserve total window W",
+            room["assumptions"],
+        )
 
     def test_incomplete_draft_is_rejected(self):
         with self.assertRaises(ValueError):

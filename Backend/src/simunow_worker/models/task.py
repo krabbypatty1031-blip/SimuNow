@@ -116,6 +116,10 @@ def parse_result(payload: dict) -> dict:
         "schedule",
         "hvacSchedule",
         "scheduleHash",
+        # L2 evidence: gate detail and seat samples ride with the result;
+        # seats exist only when the quality gates passed.
+        "qualityDetail",
+        "seatSamples",
     ):
         if key in payload:
             result[key] = payload[key]

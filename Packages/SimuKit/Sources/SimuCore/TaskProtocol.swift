@@ -198,11 +198,15 @@ public struct SimulationResult: Codable, Equatable, Sendable {
     public var schedule: ResultPeriod?
     public var hvacSchedule: ResultPeriod?
     public var scheduleHash: String?
+    /// L2 runs attach gate evidence and seat samples; L1 runs predate them.
+    public var qualityDetail: QualityDetail?
+    public var seatSamples: [SeatSample]?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, identity, state, quality, metrics
         case period, weatherPath, weatherHash, supplyTemperatureC, setpointC
         case schedule, hvacSchedule, scheduleHash
+        case qualityDetail, seatSamples
     }
 
     public init(
@@ -218,7 +222,9 @@ public struct SimulationResult: Codable, Equatable, Sendable {
         setpointC: Double? = nil,
         schedule: ResultPeriod? = nil,
         hvacSchedule: ResultPeriod? = nil,
-        scheduleHash: String? = nil
+        scheduleHash: String? = nil,
+        qualityDetail: QualityDetail? = nil,
+        seatSamples: [SeatSample]? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.identity = identity
@@ -233,6 +239,8 @@ public struct SimulationResult: Codable, Equatable, Sendable {
         self.schedule = schedule
         self.hvacSchedule = hvacSchedule
         self.scheduleHash = scheduleHash
+        self.qualityDetail = qualityDetail
+        self.seatSamples = seatSamples
     }
 
     public func metric(named name: String) -> ResultMetric? {

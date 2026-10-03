@@ -27,8 +27,8 @@
 
 ## P4-02 质量
 
-- [ ] P4-02a quality.json：checkMesh / 残差 / 监测 / 质量 / 能量
-- [ ] P4-02b 失败不可当有效结果；不把 0 当通过
+- [x] P4-02a quality.json：checkMesh / 残差 / 监测 / 质量 / 能量（能量收支含实测进口面导热项；P1 脚本 `test/p1/{run_room,quality,sample_seats,foam_io}.py` 进库）
+- [x] P4-02b 失败不可当有效结果；不把 0 当通过（quality 三轴独立：state / quality / seatSamples；`Fixtures/task/result-l2.json` 为钉版真实 run）
 
 ## P4-03 采样
 

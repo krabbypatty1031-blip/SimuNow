@@ -1,7 +1,22 @@
 # 工程验证记录
 
-日期：2026-10-03（P3 全量）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
+日期：2026-10-03（P4-02 全量 / P3）/ 2026-10-02（P0–P1）；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
 工程最低 macOS14/iOS17、Swift6模式；最低系统实机运行尚待验证。
+
+## P4-02 全量验证（2026-10-03）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `Scripts/check.sh test` | 通过，93 项 | 含 `L2ResultTests`：门禁缺项不通过、`allGatesPass` 镜像 Python、`result-l2.json` 解码、`result-l1.json` 向后兼容 |
+| Python `unittest discover -s Backend/tests` | 通过，55 项（约 20.6s） | 含钉版 `test_l2_runner` 全管线：state succeeded、quality passed、`checkMesh ok`、`monitorsStable`、座位 tC>15、`seat_t_c_min` 非 omitted |
+| `python3 test/p1/test_quality.py` | 通过，5 项 | 进口面导热合成 case 手算 −51.0087 W；湍流/计数不匹配/缺 patch 拒绝；2026-10-03 弱射流回归：计入过、不计 23% 挂 |
+| `python3 test/p1/test_room.py` | 通过，8 项 | 预算新必填 `q_inlet_cond_w` 后全绿 |
+| 钉版 L2 管线数值 | quality passed | 质量相对误差 2.35e-6；能量相对误差 **0.19%**（计入门禁前假象 23.4%）；`terms_w.q_inlet_cond = −305.9 W`；座位 25.08 / 25.09 / 25.39 / 25.38 °C，uMag 0.026–0.034 m/s 全带 `lowSpeedAbsoluteError` |
+| `Fixtures/task/result-l2.json` | 钉版真值 | 固定 UUID（aaaa…/cccc…）；真实收敛场数值，非手编 |
+| `Scripts/check.sh mac` | BUILD SUCCEEDED | `SimulationResult` 加可选 `qualityDetail`/`seatSamples` 后两端编译兼容 |
+| `Scripts/check.sh ios` | BUILD SUCCEEDED | 同上 |
+
+不得当作产品功能：稳态场不推降温时间；座位温度是模型值非实测满意率；进口面导热使弱射流房间偏冷约 2.3 K，属该供应模型后果；带缩放（送风/窗）为整墙跨度假设。
 
 ## P3 全量验证（2026-10-03）
 

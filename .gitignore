@@ -9,7 +9,7 @@ xcuserdata/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-# Engine artifacts stay local. Re-include the three P1 IDF helpers the Mac WorkerTree copies.
+# Engine artifacts stay local. Re-include the P1 helpers the Mac WorkerTree copies and the L2 pipeline needs.
 /test/*
 !/test/p1/
 /test/p1/*
@@ -17,6 +17,10 @@ __pycache__/
 !/test/p1/run_l1.py
 !/test/p1/room_input.py
 !/test/p1/write_openfoam_room.py
+!/test/p1/run_room.py
+!/test/p1/quality.py
+!/test/p1/sample_seats.py
+!/test/p1/foam_io.py
 .env
 Artifacts/
 *.simunow/

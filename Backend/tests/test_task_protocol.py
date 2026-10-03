@@ -70,6 +70,20 @@ class TaskProtocolTests(unittest.TestCase):
         self.assertEqual(result["period"]["kind"], "representative_day")
         self.assertEqual(result["weatherPath"], "weather/CHN_Hong.Kong.SAR.450070_CityUHK.epw")
 
+    def test_l2_result_keeps_quality_detail_and_seat_samples(self):
+        # The L2 fixture is a real pinned run: seats exist only because the
+        # gates passed; parse_result must not drop that evidence.
+        payload = json.loads((FIXTURES / "result-l2.json").read_text(encoding="utf-8"))
+        result = parse_result(payload)
+        self.assertEqual(result["quality"], "passed")
+        self.assertEqual(result["qualityDetail"]["checkMesh"], "ok")
+        self.assertTrue(result["qualityDetail"]["solverEnded"])
+        self.assertEqual(len(result["seatSamples"]), 4)
+        first = result["seatSamples"][0]
+        self.assertEqual(first["id"], "S1")
+        self.assertGreater(first["tC"], 15)
+        self.assertIn("lowSpeedAbsoluteError", first)
+
 
 if __name__ == "__main__":
     unittest.main()

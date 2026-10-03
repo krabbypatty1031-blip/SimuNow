@@ -59,6 +59,38 @@
       }
     },
     "scheduleHash": { "type": "string" },
+    "qualityDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "L2 gate evidence. Optional fields: a missing or partial log is evidence of nothing.",
+      "properties": {
+        "checkMesh": { "type": "string" },
+        "solverEnded": { "type": "boolean" },
+        "monitorsStable": { "type": "boolean" },
+        "massRelativeError": { "type": "number" },
+        "massGate": { "type": "number" },
+        "energyRelativeError": { "type": "number" },
+        "energyGate": { "type": "number" }
+      }
+    },
+    "seatSamples": {
+      "type": "array",
+      "description": "Present only when quality passed; a failed field omits seats instead of filling 0.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "x", "y", "z", "tC", "uMag"],
+        "properties": {
+          "id": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" },
+          "tC": { "type": "number" },
+          "uMag": { "type": "number" },
+          "lowSpeedAbsoluteError": { "type": "boolean" }
+        }
+      }
+    },
     "metrics": {
       "type": "array",
       "items": {

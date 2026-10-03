@@ -48,15 +48,53 @@ class L2RunnerTests(unittest.TestCase):
                 code = run_l2_task(["--request", str(request), "--snapshot", str(snapshot), "--run-dir", str(run_dir)])
                 self.assertEqual(code, 1)
                 result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
-                seat = next(item for item in result["metrics"] if item["name"] == "seat_t_c")
-                self.assertTrue(seat["omitted"])
-                self.assertIsNone(seat["value"])
+                seat_min = next(item for item in result["metrics"] if item["name"] == "seat_t_c_min")
+                self.assertTrue(seat_min["omitted"])
+                self.assertIsNone(seat_min["value"])
                 self.assertEqual(result["state"], "failed")
+                self.assertEqual(result["quality"], "notEvaluated")
                 self.assertEqual(result["supplyTemperatureC"], 16)
                 self.assertEqual(result["setpointC"], 26)
                 self.assertTrue((run_dir / "case" / "system" / "blockMeshDict").is_file())
         finally:
             if previous is not None:
+                os.environ["SIMUNOW_ENGINES_ROOT"] = previous
+
+    def test_pinned_engines_run_l2_pipeline_with_quality(self):
+        wrapper = ROOT / "test" / "engines" / "openfoam.sh"
+        if not wrapper.is_file():
+            self.skipTest("pinned OpenFOAM missing")
+        previous = os.environ.get("SIMUNOW_ENGINES_ROOT")
+        os.environ["SIMUNOW_ENGINES_ROOT"] = str(ROOT / "test" / "engines")
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                folder = Path(tmp)
+                request, snapshot, run_dir = _write_job(folder, OFFICE)
+                code = run_l2_task(["--request", str(request), "--snapshot", str(snapshot), "--run-dir", str(run_dir)])
+                self.assertEqual(
+                    code,
+                    0,
+                    (run_dir / "result.json").read_text(encoding="utf-8") if (run_dir / "result.json").is_file() else "no result",
+                )
+                result = json.loads((run_dir / "result.json").read_text(encoding="utf-8"))
+                self.assertEqual(result["state"], "succeeded")
+                self.assertEqual(result["quality"], "passed")
+                self.assertEqual(result["qualityDetail"]["checkMesh"], "ok")
+                self.assertTrue(result["qualityDetail"]["monitorsStable"])
+                self.assertTrue((run_dir / "quality.json").is_file())
+                self.assertTrue((run_dir / "samples.json").is_file())
+                seats = result["seatSamples"]
+                self.assertEqual(len(seats), 4)
+                for seat in seats:
+                    self.assertGreater(seat["tC"], 15.0, "a seat colder than the 16C supply is not room air")
+                    self.assertGreater(seat["uMag"], 0.0)
+                seat_min = next(item for item in result["metrics"] if item["name"] == "seat_t_c_min")
+                self.assertFalse(seat_min["omitted"])
+                self.assertEqual(seat_min["value"], min(seat["tC"] for seat in seats))
+        finally:
+            if previous is None:
+                os.environ.pop("SIMUNOW_ENGINES_ROOT", None)
+            else:
                 os.environ["SIMUNOW_ENGINES_ROOT"] = previous
 
 

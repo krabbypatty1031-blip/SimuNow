@@ -1,6 +1,6 @@
 # 实施状态
 
-日期：2026-10-03。当前阶段：**P4 进行中（几何与 case）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；缺引擎时 `run-l2` 失败且座位温度 omitted。尚未求解、采样、舒适或视口。Mac App 不能当产品 CFD。
+日期：2026-10-03。当前阶段：**P4 进行中（质量已通）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）；座位温度 25.08–25.39°C 只在质量通过后出现。尚未做采样补充测试、舒适、视口与候选对比。Mac App 不能当产品 CFD。
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
@@ -35,13 +35,18 @@
 | P3-11 沙盒 App L1 | 包内 WorkerTree + 系统 Python + 用户引擎 | `WorkerStagingTests`；`/usr/bin/python3` doctor；App 资源跑通 `q_cool_w>0`；sandbox 仍 true |
 | P3 手测 | 沙盒 Mac 提交办公室代表日 L1 成功 | 冷量 3099.335 W；电功率 1033.112 W = 冷量/COP；全年未知；送风 16 ≠ 设定 26；回风 RET1；新风 0.02 / 回风 0.088 m³/s；新鲜度「当前输入」 |
 | P4-01 几何与 case | 草稿→L2 房间；可写 case；缺引擎不编造温度 | `L2RoomMappingTests`；Python `test_l2_room` / `test_l2_runner`；office 送风 16≠26；人数≠座位；`run-l2` failed + `seat_t_c` omitted |
-| L0/L3 与场显示接入 | 进行中 | P4-02 起质量；视口仍空 |
+| P4-02 质量门禁 | 钉版求解全管线；五门禁全过；进口面导热实测入账 | 钉版 `test_l2_runner`：state succeeded、quality passed、`checkMesh ok`、`monitorsStable`、质量相对误差 2.35e-6、能量相对误差 0.19%；`test/p1/test_quality.py`（进口面导热 −51.01 W 手算锁定 + 2026-10-03 弱射流回归）；`quality.json` energy.terms_w 含 `q_inlet_cond=-305.9W`；座位 tC 25.08–25.39 仅质量通过时出现；`Fixtures/task/result-l2.json`（钉版真值，固定 UUID）；`L2ResultTests`（门禁缺项不通过；`allGatesPass` 镜像 Python）；`parse_result` 透传 `qualityDetail`/`seatSamples`；schema 同步可选字段 |
+| L0/L3 与场显示接入 | 进行中 | P4-03 起采样；视口仍空 |
 | 场渲染/舒适/成本/报告 | 待开发 | P4/P5 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 
 ## 下一步
 
-P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。下一步 P4-02 质量门禁，然后才是求解与视口。未推远程。
+P4 在 `p4-cfd-and-results` 上开工。P4-01 已通过：映射、写 case、缺 OpenFOAM 不编造座位温度。P4-02 已通过：质量门禁（含进口面导热的能量收支）。下一步 P4-03 采样补充测试（实体外座位拒绝），然后 P4-04 舒适与 P4-05 视口。未推远程。
+
+## P4-02 质量门禁技术记录
+
+弱射流发现：0.1 m/s 带送风下，`buoyantBoussinesqSimpleFoam` 的 fixedValue 进口面在热分层天花板下像热汇——钉版办公室 run 实测进口面导热 **−305.9 W**（P1 1.2 m/s 大流量下仅 ~−7 W，能量误差 0.41% 可忽略）。原预算漏掉此项时收敛场的能量误差假象为 23.4%；把实测项计入后 **0.19%**，门禁不放宽（仍 5%）。进口面导热由网格 + 终场解析（`foam_io` polyMesh 解析 + `writeCellCentres` 的 C 场），不假设 0；湍流模型非层流时拒绝估算。带缩放假设（送风带整墙跨度、速度缩放保持项目 m³/s；窗带整墙跨度、热流缩放保持总 W）见 `l2_room.py` assumptions。
 
 ## P3 阶段结论
 

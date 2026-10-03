@@ -28,18 +28,18 @@ struct FurniturePlanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("家具类型", selection: $pendingKind) {
+            Picker(store.copy.planKindPickerLabel, selection: $pendingKind) {
                 ForEach(FurnitureKind.allCases, id: \.self) { kind in
-                    Text(kind.title).tag(kind)
+                    Text(store.copy.furnitureKindTitle(kind)).tag(kind)
                 }
             }
             .pickerStyle(.segmented)
-            .accessibilityLabel("要在空白处拖入的家具类型")
+            .accessibilityLabel(store.copy.planKindPickerAccessibility)
 
             planCanvas
                 .frame(minHeight: 300)
                 .accessibilityLabel(accessibilityText)
-                .accessibilityHint("在空白处拖入\(pendingKind.title)，或按住已有家具拖动换位置，松手时合法才生效")
+                .accessibilityHint(store.copy.planDragHint(kind: store.copy.furnitureKindTitle(pendingKind)))
 
             Text(store.furniturePlacementMessage ?? hint)
                 .font(.footnote)
@@ -92,7 +92,7 @@ struct FurniturePlanView: View {
     }
 
     private func draw(in context: inout GraphicsContext, size: CGSize) {
-        guard let scene = store.project.flatMap(RoomScene.init(draft:)),
+        guard let scene = store.project.flatMap({ RoomScene.init(draft: $0, copy: store.copy) }),
             let t = transform(scene: scene, in: size) else {
             return
         }
@@ -281,7 +281,7 @@ struct FurniturePlanView: View {
     // MARK: - Drag logic
 
     private func onChanged(_ value: DragGesture.Value, in size: CGSize) {
-        guard let scene = store.project.flatMap(RoomScene.init(draft:)),
+        guard let scene = store.project.flatMap({ RoomScene.init(draft: $0, copy: store.copy) }),
             let t = transform(scene: scene, in: size) else {
             return
         }
@@ -393,20 +393,26 @@ struct FurniturePlanView: View {
     // MARK: - Copy
 
     private var hint: String {
-        "在空白处按下并拖动，松手时放入\(pendingKind.title)；按住已有家具可拖动换位置。虚线蓝带是送风墙，橙带是回风墙，家具不能挡住它们或窗户。"
+        store.copy.planGestureHint(kind: store.copy.furnitureKindTitle(pendingKind))
     }
 
     private var accessibilityText: String {
-        guard let scene = store.project.flatMap(RoomScene.init(draft:)) else {
-            return "还没有房间尺寸，不能布置家具"
+        // Scene display names follow the active UI language, so the plan
+        // view and the 3D viewport name a piece identically.
+        guard let scene = store.project.flatMap({ RoomScene.init(draft: $0, copy: store.copy) }) else {
+            return store.copy.planNoRoomYet
         }
-        var text = "俯视图，房间 \(UserFacingCopy.displayNumber(scene.sizeXM)) × \(UserFacingCopy.displayNumber(scene.sizeYM)) 米"
+        let copy = store.copy
+        var text = copy.planRoomAccessibility(
+            x: UserFacingCopy.displayNumber(scene.sizeXM),
+            y: UserFacingCopy.displayNumber(scene.sizeYM)
+        )
         if !scene.furniture.isEmpty {
-            text += "，已放 \(scene.furniture.map(\.displayName).joined(separator: "、"))"
+            text += copy.planFurniturePlaced(scene.furniture.map(\.displayName).joined(separator: copy.listSeparator))
         } else {
-            text += "，还没有家具"
+            text += copy.planNoFurniturePlaced
         }
-        text += "。用数值编辑器可精确放置。"
+        text += copy.planNumericEditorHintSuffix
         return text
     }
 }

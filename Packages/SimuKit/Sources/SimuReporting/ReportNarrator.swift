@@ -48,29 +48,49 @@ public protocol ReportGenerator: Sendable {
 
 /// Drops any paragraph whose numbers are not already in the evidence pack.
 /// Run-ID prefixes are not treated as invented measurements.
+/// Rejected paragraphs are omitted. The old banner is never written into a
+/// report, PDF, or UI string in either language.
 public enum NarrationGuard: Sendable {
+    /// Historical token. Must never appear in a generated report or PDF.
     public static let rejection = "叙述未采用（含证据外数字）"
 
-    public static func filter(_ report: GeneratedReport, evidence: ReportEvidence) -> GeneratedReport {
-        GeneratedReport(
-            title: sanitize(report.title, evidence: evidence),
-            summary: sanitize(report.summary, evidence: evidence),
-            sections: report.sections.map { section in
-                ReportSection(
-                    heading: sanitize(section.heading, evidence: evidence),
-                    body: sanitize(section.body, evidence: evidence)
-                )
-            },
-            caveats: report.caveats.map { sanitize($0, evidence: evidence) }
+    public static func filter(
+        _ report: GeneratedReport,
+        evidence: ReportEvidence,
+        language: AppLanguage = .default
+    ) -> GeneratedReport {
+        let title = kept(report.title, evidence: evidence) ?? ""
+        let summary = kept(report.summary, evidence: evidence) ?? ""
+        var sections: [ReportSection] = []
+        for (index, section) in report.sections.enumerated() {
+            guard let body = kept(section.body, evidence: evidence),
+                  !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
+            let heading = canonicalHeading(section.heading, index: index, language: language)
+            sections.append(ReportSection(heading: heading, body: body))
+        }
+        let caveats = report.caveats.compactMap { kept($0, evidence: evidence) }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return GeneratedReport(
+            title: title,
+            summary: summary,
+            sections: sections,
+            caveats: caveats
         )
     }
 
     /// Keep the paragraph only when every extracted number is listed, or sits inside a run-ID prefix.
     static func sanitize(_ paragraph: String, evidence: ReportEvidence) -> String {
+        kept(paragraph, evidence: evidence) ?? ""
+    }
+
+    /// Nil means the paragraph invented a number and must not be shown.
+    static func kept(_ paragraph: String, evidence: ReportEvidence) -> String? {
         let allowed = numericValues(in: evidence)
         let masked = maskRunIDPrefixes(paragraph, evidence: evidence)
         guard let expression = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#) else {
-            return rejection
+            return nil
         }
         let range = NSRange(masked.startIndex..<masked.endIndex, in: masked)
         let tokens = expression.matches(in: masked, range: range).compactMap { match -> String? in
@@ -80,10 +100,36 @@ public enum NarrationGuard: Sendable {
         for token in tokens {
             guard let value = Decimal(string: token, locale: Locale(identifier: "en_US_POSIX")),
                   allowed.contains(value) else {
-                return rejection
+                return nil
             }
         }
         return paragraph
+    }
+
+    /// ADR-021 headings only. Prompt text and mixed-language titles are remapped
+    /// to the four user-facing headings in the current UI language.
+    static func canonicalHeading(_ heading: String, index: Int, language: AppLanguage) -> String {
+        let trimmed = heading.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = sectionHeadings(for: language)
+        for lang in AppLanguage.allCases {
+            let source = sectionHeadings(for: lang)
+            if let match = source.firstIndex(of: trimmed) {
+                return target[match]
+            }
+        }
+        if index >= 0, index < target.count {
+            return target[index]
+        }
+        return ""
+    }
+
+    static func sectionHeadings(for language: AppLanguage) -> [String] {
+        [
+            ReportWriterSkill.planSummaryHeading(for: language),
+            ReportWriterSkill.energyHeading(for: language),
+            ReportWriterSkill.comfortHeading(for: language),
+            ReportWriterSkill.adviceHeading(for: language),
+        ]
     }
 
     /// JSON numbers, plus the two-decimal display form the rest of the UI uses.

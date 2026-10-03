@@ -20,19 +20,16 @@ private typealias PlatformColor = NSColor
 enum RoomFlowMeshes {
     static let groupName = "simunow.flow"
 
-    static func addOverlay(_ flow: FlowOverlay, to root: Entity, scene: RoomScene) {
+    static func addOverlay(_ flow: FlowOverlay, to root: Entity, scene: RoomScene, copy: UserFacingCopy = .english) {
         guard flow.quality == "passed" else { return }
         let maxMag = flow.stats.maxMag ?? flow.glyphs.map(\.mag).max() ?? 0
         let group = Entity()
         group.name = groupName
-        // 「送风」/「回风」 name where the mesh actually injects and
-        // extracts air — the full-span band at the terminal height, not
-        // the schematic AC box.
         if let supply = scene.supply {
-            group.addChild(terminalLabel(supply, scene: scene, text: "送风", color: rgba(0.45, 0.82, 1.0)))
+            group.addChild(terminalLabel(supply, scene: scene, text: copy.supplyLabel, color: rgba(0.45, 0.82, 1.0)))
         }
         if let returnAir = scene.returnAir {
-            group.addChild(terminalLabel(returnAir, scene: scene, text: "回风", color: rgba(1.0, 0.72, 0.32)))
+            group.addChild(terminalLabel(returnAir, scene: scene, text: copy.returnLabel, color: rgba(1.0, 0.72, 0.32)))
         }
         for glyph in flow.glyphs {
             group.addChild(arrow(glyph, maxMag: maxMag, scene: scene))
@@ -172,7 +169,7 @@ enum RoomFlowMeshes {
         let anchor = RoomDisplayLayout.terminalLabelAnchor(patch, scene: scene)
         let display = RoomDisplayLayout.centeredDisplay(anchor, scene: scene)
         let container = Entity()
-        container.name = "simunow.flow.label." + (text == "送风" ? "supply" : "return")
+        container.name = "simunow.flow.label." + (text == UserFacingCopy.english.supplyLabel || text == UserFacingCopy.chinese.supplyLabel ? "supply" : "return")
         container.position = SIMD3(display.x, display.y, display.z)
         container.orientation = labelFacing(patch.wall)
         if let mesh = textMesh(text) {

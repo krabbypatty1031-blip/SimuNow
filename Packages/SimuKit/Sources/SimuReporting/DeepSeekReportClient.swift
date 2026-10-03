@@ -10,6 +10,7 @@ public struct DeepSeekReportClient: ReportGenerator {
 
     public var baseURL: URL
     public var model: String
+    public var language: AppLanguage
     public var keyProvider: @Sendable () -> String?
     public var log: @Sendable (String) -> Void
     public var transport: @Sendable (URLRequest) async throws -> (Data, URLResponse)
@@ -17,23 +18,25 @@ public struct DeepSeekReportClient: ReportGenerator {
     public init(
         baseURL: URL = DeepSeekReportClient.officialBaseURL,
         model: String = DeepSeekReportClient.officialModel,
+        language: AppLanguage = .default,
         keyProvider: @escaping @Sendable () -> String? = DeepSeekReportClient.keyFromEnvironmentOrKeychain,
         log: @escaping @Sendable (String) -> Void = { _ in },
         transport: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil
     ) {
         self.baseURL = baseURL
         self.model = model
+        self.language = language
         self.keyProvider = keyProvider
         self.log = log
         self.transport = transport ?? Self.urlSessionTransport
     }
 
     /// Nil when neither `DEEPSEEK_API_KEY` nor `SIMUNOW_REPORT_API_KEY` is set.
-    public static func configuredFromEnvironment() -> DeepSeekReportClient? {
+    public static func configuredFromEnvironment(language: AppLanguage = .default) -> DeepSeekReportClient? {
         guard let key = keyFromEnvironmentOrKeychain(), !key.isEmpty else {
             return nil
         }
-        return DeepSeekReportClient(keyProvider: { key })
+        return DeepSeekReportClient(language: language, keyProvider: { key })
     }
 
     public func generate(_ evidence: ReportEvidence) async -> GeneratedReport? {
@@ -46,7 +49,7 @@ public struct DeepSeekReportClient: ReportGenerator {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            request.httpBody = try JSONEncoder().encode(ChatRequest(model: model, evidence: evidence))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(model: model, evidence: evidence, language: language))
             let (data, response) = try await transport(request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 log("DeepSeek 请求失败，不能生成对比说明")
@@ -63,7 +66,10 @@ public struct DeepSeekReportClient: ReportGenerator {
         }
     }
 
-    /// Environment first (`DEEPSEEK_API_KEY`, then `SIMUNOW_REPORT_API_KEY`), then keychain.
+    /// Environment first (`DEEPSEEK_API_KEY`, then `SIMUNOW_REPORT_API_KEY`),
+    /// then keychain `app.simunow.report`, then the generic Application Support
+    /// file `SimuNow/deepseek_api_key` so a GUI launch that does not inherit a
+    /// LaunchAgent env can still find a local key. The value is never logged.
     public static func keyFromEnvironmentOrKeychain() -> String? {
         for name in ["DEEPSEEK_API_KEY", "SIMUNOW_REPORT_API_KEY"] {
             if let env = ProcessInfo.processInfo.environment[name]?
@@ -74,6 +80,7 @@ public struct DeepSeekReportClient: ReportGenerator {
         }
         return keychainKey(account: "DEEPSEEK_API_KEY")
             ?? keychainKey(account: "SIMUNOW_REPORT_API_KEY")
+            ?? applicationSupportKeyFile()
     }
 
     /// Official path is `/chat/completions` on `api.deepseek.com`.
@@ -87,6 +94,21 @@ public struct DeepSeekReportClient: ReportGenerator {
 
     private static func urlSessionTransport(_ request: URLRequest) async throws -> (Data, URLResponse) {
         try await URLSession.shared.data(for: request)
+    }
+
+    private static func applicationSupportKeyFile() -> String? {
+        let url = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("SimuNow", isDirectory: true)
+            .appendingPathComponent("deepseek_api_key", isDirectory: false)
+        guard let url,
+              let text = try? String(contentsOf: url, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return nil
+        }
+        return text
     }
 
     private static func keychainKey(account: String) -> String? {
@@ -135,6 +157,7 @@ public struct DeepSeekReportClient: ReportGenerator {
 private struct ChatRequest: Encodable {
     var model: String
     var evidence: ReportEvidence
+    var language: AppLanguage
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -143,7 +166,7 @@ private struct ChatRequest: Encodable {
         try container.encode(ResponseFormat(), forKey: .responseFormat)
         let evidenceJSON = String(decoding: try JSONEncoder().encode(evidence), as: UTF8.self)
         let messages = [
-            ChatMessage(role: "system", content: ReportWriterSkill.systemPrompt),
+            ChatMessage(role: "system", content: ReportWriterSkill.systemPrompt(for: language)),
             ChatMessage(role: "user", content: evidenceJSON),
         ]
         try container.encode(messages, forKey: .messages)

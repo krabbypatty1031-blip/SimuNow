@@ -21,14 +21,25 @@ public struct ListedAssumption: Equatable, Identifiable, Sendable {
     public var uncertainty: Double?
     public var unit: String?
     public var note: String?
+    public var copy: UserFacingCopy = .english
 
     public var id: String { path }
 
     /// Missing literature is unknown, not zero. Uncertainty is labeled in the quantity's unit.
+    /// Stored tokens stay as written in JSON; this string is display-layer only.
     public var provenanceText: String {
-        var text = note ?? reference ?? "未知 / 无出处"
+        var text: String
+        if let note {
+            text = copy.displayStoredNote(note)
+        } else if let reference {
+            text = copy.displayStoredNote(reference)
+        } else if let source {
+            text = copy.sourceTitle(source)
+        } else {
+            text = copy.unknownProvenance
+        }
         if let uncertainty, let unit {
-            text += " · 不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))"
+            text += " · \(copy.uncertainty) \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))"
         }
         return text
     }
@@ -82,13 +93,14 @@ public enum WallPatchOwner: Equatable, Sendable {
     case supply
     case returnTerminal
 
-    /// Room-language name for the refusal message; never a raw id.
-    public var displayName: String {
+    /// Room-language name for the refusal message; never a raw id. Takes the
+    /// active copy so the refusal follows the UI language (2026-10-04).
+    public func displayName(for copy: UserFacingCopy) -> String {
         switch self {
-        case .opening(_, .window): "窗户"
-        case .opening(_, .door): "门"
-        case .supply: "送风口"
-        case .returnTerminal: "回风口"
+        case .opening(_, .window): copy.openingKindTitle(.window)
+        case .opening(_, .door): copy.openingKindTitle(.door)
+        case .supply: copy.terminalTitle(isSupply: true)
+        case .returnTerminal: copy.terminalTitle(isSupply: false)
         }
     }
 }

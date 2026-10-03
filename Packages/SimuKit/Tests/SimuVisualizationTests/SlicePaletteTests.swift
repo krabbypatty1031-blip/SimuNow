@@ -31,8 +31,8 @@ import SimuVisualization
 @Test func slicePaletteLegendStatesSeatHeightAndColdWarm() {
     let palette = SlicePalette(minC: 23.9, maxC: 25.9)
     #expect(palette.legendText.contains("23.9"))
-    #expect(palette.legendText.contains("坐姿高度"))
-    #expect(palette.legendText.contains("蓝凉红热"))
+    #expect(palette.legendText.contains("Seat-height"))
+    #expect(palette.legendText.contains("blue cool, red warm"))
     #expect(!palette.legendText.contains("L2"))
 }
 

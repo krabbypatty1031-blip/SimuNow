@@ -9,9 +9,19 @@ public enum WorkerTreeStaging {
     }
 
     public static func applicationSupportRuntime() throws -> URL {
+        try applicationSupportSubfolder("runtime")
+    }
+
+    /// Unsaved in-app runs live here so Colima (home-dir bind only) can see
+    /// the OpenFOAM case. TemporaryDirectory is outside $HOME and mounts empty.
+    public static func applicationSupportRuns() throws -> URL {
+        try applicationSupportSubfolder("runs")
+    }
+
+    private static func applicationSupportSubfolder(_ name: String) throws -> URL {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        let dest = root.appendingPathComponent("SimuNow/runtime", isDirectory: true)
+        let dest = root.appendingPathComponent("SimuNow/\(name)", isDirectory: true)
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
         return dest
     }

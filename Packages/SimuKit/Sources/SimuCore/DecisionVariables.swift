@@ -39,13 +39,16 @@ public enum DecisionVariables: Sendable {
 
     /// Keep every pinned candidate. The first mismatch against the lead
     /// candidate is the warning text; later mismatches stay visible in the list.
-    public static func review(_ candidates: [CandidateRun]) -> CandidateReview {
+    public static func review(
+        _ candidates: [CandidateRun],
+        copy: UserFacingCopy = .english
+    ) -> CandidateReview {
         guard let lead = candidates.first else {
             return CandidateReview(candidates: [])
         }
         var warning: String?
         for other in candidates.dropFirst() {
-            if let mismatch = CandidateRun.basisMismatch(lead.basis, other.basis) {
+            if let mismatch = CandidateRun.basisMismatch(lead.basis, other.basis, copy: copy) {
                 warning = mismatch
                 break
             }

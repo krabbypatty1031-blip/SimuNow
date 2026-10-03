@@ -142,7 +142,7 @@ private func repoRoot() -> URL {
     #expect(store.canSubmitL1)
     #expect(store.engineFolderName == source.lastPathComponent)
     #expect(store.engineStatus.contains(source.lastPathComponent))
-    #expect(store.engineStatus.contains("可以估算这一天用电"))
+    #expect(store.engineStatus.contains("This day's electricity use can be estimated"))
     #expect(!store.engineStatus.contains("/Users/"))
     #expect(WorkerTreeStaging.isWorkerPresent(in: runtime))
 }

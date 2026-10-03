@@ -45,9 +45,11 @@ public struct SimulationViewport: View {
         self.onTapSurface = onTapSurface
     }
 
+    @Environment(\.userFacingCopy) private var copy
+
     public var body: some View {
         // No geometry means no honest room box; a fake room is never drawn.
-        if let scene = draft.flatMap(RoomScene.init(draft:)) {
+        if let scene = draft.flatMap({ RoomScene(draft: $0, copy: copy) }) {
             // RealityView is macOS 15 / iOS 18. Older systems keep the Canvas
             // wireframe so the deployment floor stays macOS 14 / iOS 17.
             if #available(macOS 15.0, iOS 18.0, *) {
@@ -73,9 +75,9 @@ public struct SimulationViewport: View {
             }
         } else {
             EmptyStateView(
-                "布置房间",
+                copy.destinationTitle("workspace"),
                 symbol: "cube.transparent",
-                message: "先填写房间的长宽高。没有完整房间时不会画示意图。"
+                message: copy.viewportEmptyMessage
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityIdentifier("simulationViewport")

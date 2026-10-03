@@ -53,7 +53,9 @@ import SimuReporting
     #expect(system.contains(ChatWriterSkill.systemPrompt))
     #expect(system.contains(ChatWriterSkill.contextHeading))
     #expect(system.contains("当前草稿：房间"))
-    #expect(system.contains("已冻结的对比证据"))
+    // Wire language is the shipped default (Chinese), so assert the frozen
+    // evidence note through the constant rather than an English literal.
+    #expect(system.contains(ChatWriterSkill.frozenEvidenceNote))
     #expect(system.contains(pair_low_name_sentinel))
     let roles = messages.dropFirst().compactMap { $0["role"] as? String }
     #expect(roles == ["user", "assistant", "user"])
@@ -161,7 +163,7 @@ import SimuReporting
 @Test func chatDraftSummaryCarriesFurnitureKindsAndCounts() throws {
     var draft = ProjectDraft(name: "办公室")
     _ = draft.applyRoomSize(x: 6, y: 6, z: 2.8, source: .user)
-    #expect(ChatContextBuilder.draftSummary(for: draft)?.contains("家具") == false)
+    #expect(ChatContextBuilder.draftSummary(for: draft)?.contains("Furniture") == false)
     // Default kind is desk; the second box names chair explicitly.
     _ = draft.upsertObstacle(
         ObstacleBox(id: "F1", origin: Position3D(x: 1, y: 1, z: 0), size: Position3D(x: 1.2, y: 0.7, z: 0.75))
@@ -169,8 +171,12 @@ import SimuReporting
     _ = draft.upsertObstacle(
         ObstacleBox(id: "F2", origin: Position3D(x: 3, y: 1, z: 0), size: Position3D(x: 0.5, y: 0.5, z: 0.9), kind: .chair)
     )
+    // draftSummary defaults to the English copy; the Chinese wording is
+    // asserted on the explicit Chinese copy below.
     let summary = try #require(ChatContextBuilder.draftSummary(for: draft))
-    #expect(summary.contains("家具 2 件：桌子×1、椅子×1"))
+    #expect(summary.contains("Furniture 2: Desk×1, Chair×1"))
+    let chineseSummary = try #require(ChatContextBuilder.draftSummary(for: draft, copy: .chinese))
+    #expect(chineseSummary.contains("家具 2 件：桌子×1、椅子×1"))
 }
 
 /// The store flow: context freezes the pinned evidence, a stubbed reply
@@ -198,7 +204,7 @@ import SimuReporting
     // The context froze the pinned evidence, not the live draft.
     let context = try #require(contexts.withLock { $0.first })
     #expect(context.evidence?.pairDiff?.firstName == pair.low.name)
-    #expect(context.draftSummary?.contains("设定温度") == true)
+    #expect(context.draftSummary?.contains("Setpoint") == true)
 
     // A stubbed reply with a figure the project does not hold must not
     // bypass the guard — the turn carries the note as display metadata

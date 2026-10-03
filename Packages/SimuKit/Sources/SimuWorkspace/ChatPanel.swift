@@ -34,7 +34,7 @@ public struct ChatPanel: View {
             ChatAvatar()
             Text("SNer")
                 .font(.headline)
-                .accessibilityLabel("咨询对话")
+                .accessibilityLabel(store.copy.consultConversation)
             Spacer()
             Button {
                 dismiss()
@@ -43,7 +43,7 @@ public struct ChatPanel: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("关闭咨询")
+            .accessibilityLabel(store.copy.closeConsult)
             .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 14)
@@ -58,12 +58,12 @@ public struct ChatPanel: View {
             // (user request 2026-10-04): the default copy names the
             // consultant instead of describing the panel.
             ContentUnavailableView {
-                Label("Hi，我是 SNer", systemImage: "bubble")
+                Label(store.copy.consultGreeting, systemImage: "bubble")
             } description: {
                 if store.isChatAssistantConfigured {
-                    Text("欢迎来问我 SimuNow 的相关问题，比如怎么用，或者某个数字是什么意思。")
+                    Text(store.copy.consultWelcome)
                 } else {
-                    Text("欢迎来问我 SimuNow 的相关问题。还没有配置 DeepSeek 密钥，暂时不能对话；其余功能不受影响，数字都在对比页和检查器里。")
+                    Text(store.copy.consultWelcomeNoKey)
                 }
             }
         } else {
@@ -71,21 +71,21 @@ public struct ChatPanel: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         ForEach(store.chatTurns) { turn in
-                            ChatBubble(turn: turn)
+                            ChatBubble(turn: turn, copy: store.copy)
                                 .id(turn.id)
                         }
                         if let streaming = store.chatStreamingText {
                             // The half-typed reply, caret blinking at the tail.
-                            AssistantMessage(text: streaming, showsCaret: true)
+                            AssistantMessage(text: streaming, showsCaret: true, copy: store.copy)
                                 .id("streaming")
                         } else if store.isChatThinking {
                             // Waiting for the first word, not a pretend reply.
                             HStack(spacing: 8) {
                                 ChatAvatar()
-                                Text("正在思考…")
+                                Text(store.copy.consultThinking)
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
-                                    .accessibilityLabel("正在生成回答")
+                                    .accessibilityLabel(store.copy.consultThinkingAccessibility)
                             }
                             .id("thinking")
                         }
@@ -114,13 +114,13 @@ public struct ChatPanel: View {
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField("问一问，比如：全年电费怎么算的？", text: $draftText, axis: .vertical)
+            TextField(store.copy.consultPlaceholder, text: $draftText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .focused($inputFocused)
                 .onSubmit(send)
                 .disabled(store.isChatThinking || store.chatStreamingText != nil)
-                .accessibilityLabel("咨询输入")
+                .accessibilityLabel(store.copy.consultInputAccessibility)
             Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
@@ -128,7 +128,7 @@ public struct ChatPanel: View {
             .buttonStyle(.plain)
             .foregroundStyle(canSend ? Color.accentColor : Color.secondary.opacity(0.5))
             .disabled(!canSend)
-            .accessibilityLabel("发送咨询")
+            .accessibilityLabel(store.copy.sendConsult)
             if !store.chatTurns.isEmpty {
                 Button {
                     store.clearChat()
@@ -136,7 +136,7 @@ public struct ChatPanel: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("清空对话")
+                .accessibilityLabel(store.copy.clearConsult)
             }
         }
         .padding(12)
@@ -209,6 +209,7 @@ private struct RobotMark: View {
 struct AssistantMessage: View {
     let text: String
     var showsCaret = false
+    var copy: UserFacingCopy
     @State private var caretVisible = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -236,7 +237,7 @@ struct AssistantMessage: View {
             Spacer(minLength: 24)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("SNer 说：\(text)")
+        .accessibilityLabel(copy.snerrSaid(text))
     }
 
     private var caretOpacity: Double {
@@ -249,6 +250,7 @@ struct AssistantMessage: View {
 /// from the left with an avatar and bare text.
 struct ChatBubble: View {
     let turn: ChatTurn
+    var copy: UserFacingCopy
 
     var body: some View {
         if turn.role == .user {
@@ -262,20 +264,23 @@ struct ChatBubble: View {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Color.accentColor.opacity(0.18))
                     )
-                    .accessibilityLabel("我说：\(turn.text)")
+                    .accessibilityLabel(copy.userSaid(turn.text))
             }
         } else {
             // The guard's caution note (if any) renders as a secondary line
             // under the reply — it is display metadata, not the model's own
             // words, so it never re-enters the history as a style to copy.
             VStack(alignment: .leading, spacing: 6) {
-                AssistantMessage(text: turn.text)
+                AssistantMessage(text: turn.text, copy: copy)
                 if turn.hasCautionNote {
-                    Text(ChatGuard.cautionNote)
+                    // Same wording and language the guard appended to the
+                    // reply text; the panel re-renders it, not a new sentence.
+                    let note = ChatGuard.cautionNote(for: copy.language)
+                    Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
-                        .accessibilityLabel("提示 \(ChatGuard.cautionNote)")
+                        .accessibilityLabel(copy.cautionNoteAccessibility(note))
                 }
             }
         }

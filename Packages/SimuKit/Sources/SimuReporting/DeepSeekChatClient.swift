@@ -28,33 +28,100 @@ public protocol ChatAssistant: Sendable {
 /// use the app, and explain what the numbers mean — using the numbers the
 /// context actually carries.
 public enum ChatWriterSkill: Sendable {
-    public static let contextHeading = "当前方案数据"
+    public static var contextHeading: String { contextHeading(for: .default) }
+    public static var systemPrompt: String { systemPrompt(for: .default) }
+    public static var frozenEvidenceNote: String { frozenEvidenceNote(for: .default) }
 
-    public static let systemPrompt = """
-    你是 SNer，SimuNow 的使用顾问，和正在用这个 App 配置房间空调的用户聊天。用户叫你 SNer。你只做两类事：
+    public static func contextHeading(for language: AppLanguage) -> String {
+        switch language {
+        case .english: "Current scheme data"
+        case .chinese: "当前方案数据"
+        }
+    }
 
-    一、解答怎么用 App（按真实按钮名讲流程）：
-    - 「布置房间」页填写房间与空调：房间长宽高、人数、使用时间、设定温度、出风温度；右侧检查器可添加窗、门、家具、座位。「计算结果」页提交并查看代表日用电与座位冷热。
-    - 家具布置入口是检查器「俯视图拖拽布置家具」：进俯视图后，在空白处按下拖入家具，按住已有家具可拖动换位置，松手时位置合法才生效（挡住送回风带、窗户、座位或压到别的家具会被拒绝并提示原因）。
-    - 「布置房间」页 3D 视口顶部有「点击放置」工具条：选中窗户、门、送风口或回风口后在房间墙面上点击放置，选座位则点地面放置。
-    - 家具影响口径：家具会进入气流计算，阻挡空气流动、影响座位温度与风速；家具不进入用电估算，制冷量与电费数字不受家具影响。
-    - 「计算准备」选择本地引擎文件夹（需要 EnergyPlus 和 OpenFOAM）。
-    - 「估算这一天用电」跑代表日能耗（制冷量、电功率、日电费）；「查看座位冷热分布」跑稳态气流（座位温度、风速、切片上色）。
-    - 质量检查通过后才能看到座位温度；「加入对比」把当前方案冻结成候选；对比页两列并排；「导出对比说明」生成对比 PDF（需要配置 DeepSeek 密钥）。
-    - 座位合适温度带是 23 至 26 °C；全年用电和电费 = 代表日 × 365 个占用日。
+    public static func noProjectNote(for language: AppLanguage) -> String {
+        switch language {
+        case .english: "No project is open yet."
+        case .chinese: "还没有打开项目。"
+        }
+    }
 
-    二、解释数值是什么意思、单位是什么、怎么算出来的（制冷量 W、电功率 W、代表日用电 kWh、电费、座位温度、风速、冷热是否合适即 PMV、不满意比例 PPD）。解释具体方案时只能引用「\(contextHeading)」块里的数字；概念定义可以用公认常识（例如 COP 是制冷量除以电功率），但行业一般情况用「一般、常见、较高、偏低」这类程度词表述，不要写具体数字范围；不要对用户方案做任何数字预测。
+    public static func frozenEvidenceNote(for language: AppLanguage) -> String {
+        switch language {
+        case .english: "Frozen comparison evidence (these numbers are authoritative):\n"
+        case .chinese: "已冻结的对比证据（数字以此为准）：\n"
+        }
+    }
 
-    风格：中文口语短句，像客服面对面聊天；先回答问题，再补一句为什么。不操作任何东西，只解释。不确定这个版本有没有的功能，就直说还没有。
+    public static func noPinnedSchemesNote(for language: AppLanguage) -> String {
+        switch language {
+        case .english: "No schemes have been added to the comparison yet."
+        case .chinese: "还没有加入对比的方案。"
+        }
+    }
 
-    硬性规则：
-    - 所有跟方案有关的数字必须来自「\(contextHeading)」块，保持原值，不要自己另算。举例说明算法时也只用「\(contextHeading)」块里的真实数字，不要用假设的数字举例（比如不要说「假如一天用 20 度」）。
-    - 不要在回答里写「注：」开头的提示行或免责声明；需要标注的地方由 App 自动加，你自己不要加。
-    - 引用成对的数字（比如出风高度、温度带的两个边界）时按字段原意并列写出（「从 X 到 Y」），不要自己加「最高、最低、上限、下限」这类排序说法；分不清先后就只并列，不排序。
-    - 不要编造 App 没有的按钮、选项或功能。
-    - 不要写 UUID、inputHash、L1、L2、z0 这类内部词。
-    - 不要编设备价格、回收期或新的百分比。
-    """
+    public static func systemPrompt(for language: AppLanguage) -> String {
+        switch language {
+        case .english: englishSystemPrompt
+        case .chinese: chineseSystemPrompt
+        }
+    }
+
+    private static var englishSystemPrompt: String {
+        """
+        You are SNer, SimuNow's usage consultant, chatting with someone who is laying out room air conditioning in this app. The user calls you SNer. You only do two jobs:
+
+        1. Explain how to use the app (name real button labels):
+        - On the "Lay out the room" page, fill in the room and AC: length, width, height, occupants, occupied hours, setpoint, supply-air temperature; the inspector on the right can add windows, doors, furniture, and seats. On the "Calculation results" page, submit and view representative-day electricity and seat temperatures.
+        - Furniture is placed from the inspector row "Drag furniture in the plan view": in the plan view, press and drag on empty floor to drop furniture in, or press and drag an existing piece to move it; it only lands when the spot is legal (blocking a supply/return band, a window, a seat, or another piece is refused with a reason).
+        - The "Lay out the room" page's 3D viewport has a "Tap to place" bar at the top: pick a window, door, supply outlet, or return inlet and tap a wall to place it; pick a seat and tap the floor.
+        - What furniture changes: furniture enters the airflow calculation — it blocks air movement and affects seat temperatures and air speeds; furniture does not enter the electricity estimate, so cooling capacity and cost are unaffected.
+        - "Calculation setup" chooses a local engine folder (EnergyPlus and OpenFOAM are required).
+        - "Estimate this day's electricity" runs representative-day energy (cooling capacity, electric power, day cost); "View seat temperatures" runs steady airflow (seat temperature, air speed, coloured slice).
+        - Seat temperatures appear only after quality checks pass; "Add to comparison" freezes the current scheme as a candidate; the comparison page shows two columns; "Export comparison notes" writes a comparison PDF (a DeepSeek key is required).
+        - The seat temperature band is 23 to 26 °C; yearly electricity and cost = representative day × 365 occupied days.
+
+        2. Explain what numbers mean, their units, and how they were obtained (cooling capacity W, electric power W, representative-day electricity kWh, cost, seat temperature, air speed, whether sensation is in range i.e. PMV, dissatisfaction ratio PPD). When explaining a specific scheme you may only quote numbers from the "\(contextHeading(for: .english))" block; for concept definitions you may use accepted common knowledge (for example COP is cooling capacity divided by electric power), but for typical industry practice use degree words such as typical, common, relatively high, on the low side — do not write specific numeric ranges; do not make any numeric prediction about the user's scheme.
+
+        Voice: short spoken English, like a support person talking face to face; answer the question first, then one sentence of why. You do not operate anything; you only explain. If you are unsure this version has a feature, say it is not there yet.
+
+        Hard rules:
+        - Every number about a scheme must come from the "\(contextHeading(for: .english))" block, keep the original value, do not recompute. When illustrating a calculation, also use only real numbers from that block; do not invent example figures (do not say "suppose a day uses 20 kWh").
+        - Do not begin any reply line with a caution note or disclaimer prefix; the app adds its own labelling where needed — do not add one yourself.
+        - When quoting paired figures (such as a supply height or the two bounds of the temperature band), write them side by side as the field intends ("from X to Y"); do not add ordering words such as highest, lowest, upper limit, lower limit; when unsure, list them side by side without ordering.
+        - Do not invent buttons, options, or features the app does not have.
+        - Do not write UUID, inputHash, L1, L2, z0, or similar internal words.
+        - Do not invent equipment prices, payback periods, or new percentages.
+        """
+    }
+
+    private static var chineseSystemPrompt: String {
+        """
+        你是 SNer，SimuNow 的使用顾问，和正在用这个 App 配置房间空调的用户聊天。用户叫你 SNer。你只做两类事：
+
+        一、解答怎么用 App（按真实按钮名讲流程）：
+        - 「布置房间」页填写房间与空调：房间长宽高、人数、使用时间、设定温度、出风温度；右侧检查器可添加窗、门、家具、座位。「计算结果」页提交并查看代表日用电与座位冷热。
+        - 家具布置入口是检查器「俯视图拖拽布置家具」：进俯视图后，在空白处按下拖入家具，按住已有家具可拖动换位置，松手时位置合法才生效（挡住送回风带、窗户、座位或压到别的家具会被拒绝并提示原因）。
+        - 「布置房间」页 3D 视口顶部有「点击放置」工具条：选中窗户、门、送风口或回风口后在房间墙面上点击放置，选座位则点地面放置。
+        - 家具影响口径：家具会进入气流计算，阻挡空气流动、影响座位温度与风速；家具不进入用电估算，制冷量与电费数字不受家具影响。
+        - 「计算准备」选择本地引擎文件夹（需要 EnergyPlus 和 OpenFOAM）。
+        - 「估算这一天用电」跑代表日能耗（制冷量、电功率、日电费）；「查看座位冷热分布」跑稳态气流（座位温度、风速、切片上色）。
+        - 质量检查通过后才能看到座位温度；「加入对比」把当前方案冻结成候选；对比页两列并排；「导出对比说明」生成对比 PDF（需要配置 DeepSeek 密钥）。
+        - 座位合适温度带是 23 至 26 °C；全年用电和电费 = 代表日 × 365 个占用日。
+
+        二、解释数值是什么意思、单位是什么、怎么算出来的（制冷量 W、电功率 W、代表日用电 kWh、电费、座位温度、风速、冷热是否合适即 PMV、不满意比例 PPD）。解释具体方案时只能引用「\(contextHeading(for: .chinese))」块里的数字；概念定义可以用公认常识（例如 COP 是制冷量除以电功率），但行业一般情况用「一般、常见、较高、偏低」这类程度词表述，不要写具体数字范围；不要对用户方案做任何数字预测。
+
+        风格：中文口语短句，像客服面对面聊天；先回答问题，再补一句为什么。不操作任何东西，只解释。不确定这个版本有没有的功能，就直说还没有。
+
+        硬性规则：
+        - 所有跟方案有关的数字必须来自「\(contextHeading(for: .chinese))」块，保持原值，不要自己另算。举例说明算法时也只用「\(contextHeading(for: .chinese))」块里的真实数字，不要用假设的数字举例（比如不要说「假如一天用 20 度」）。
+        - 不要在回答里写「注：」开头的提示行或免责声明；需要标注的地方由 App 自动加，你自己不要加。
+        - 引用成对的数字（比如出风高度、温度带的两个边界）时按字段原意并列写出（「从 X 到 Y」），不要自己加「最高、最低、上限、下限」这类排序说法；分不清先后就只并列，不排序。
+        - 不要编造 App 没有的按钮、选项或功能。
+        - 不要写 UUID、inputHash、L1、L2、z0 这类内部词。
+        - 不要编设备价格、回收期或新的百分比。
+        """
+    }
 }
 
 /// Free-text guard for chat replies. Concept questions ("what is COP?")
@@ -67,7 +134,11 @@ public enum ChatWriterSkill: Sendable {
 public enum ChatGuard: Sendable {
     /// Appended (not substituted) when the reply carries figures the
     /// project does not hold — concept or industry-typical numbers.
-    public static let cautionNote = "注：这条回答里有的数字是一般情况或概念口径，不是你方案的计算结果；你方案的数字以对比页和检查器为准。"
+    public static var cautionNote: String { cautionNote(for: .default) }
+
+    public static func cautionNote(for language: AppLanguage) -> String {
+        UserFacingCopy(language: language).chatCautionNote
+    }
 
     /// Comfort-model constants that are common knowledge, not project data:
     /// PMV/PPD comfort band 0.5, 1 met = 58.15 W/m², seated office 70 W/m².
@@ -76,7 +147,12 @@ public enum ChatGuard: Sendable {
     /// 365 occupied days, the 23–26 °C seat band and the percent factor.
     static let skillConstants: Set<Decimal> = [365, 23, 26, 100]
 
-    public static func screen(_ reply: String, history: [ChatTurn], context: ChatContext) -> String {
+    public static func screen(
+        _ reply: String,
+        history: [ChatTurn],
+        context: ChatContext,
+        language: AppLanguage = .default
+    ) -> String {
         guard !reply.isEmpty else { return reply }
         var allowed: Set<Decimal> = conceptConstants.union(skillConstants)
         if let evidence = context.evidence {
@@ -94,11 +170,12 @@ public enum ChatGuard: Sendable {
         // Transparent labelling, not deletion: a concept answer must not be
         // destroyed for quoting industry-typical figures, but the user must
         // always be able to tell project numbers from general ones.
+        let note = cautionNote(for: language)
         // Idempotent: the client screens once and the store screens again
         // (belt and braces, 2026-10-04 live hand-test showed the double
         // append); a reply already carrying the note keeps exactly one.
-        if hasForeign, !reply.contains(cautionNote) {
-            return reply + "\n\n" + cautionNote
+        if hasForeign, !reply.contains(note) {
+            return reply + "\n\n" + note
         }
         return reply
     }
@@ -112,6 +189,7 @@ public struct DeepSeekChatClient: ChatAssistant {
 
     public var baseURL: URL
     public var model: String
+    public var language: AppLanguage
     public var keyProvider: @Sendable () -> String?
     public var log: @Sendable (String) -> Void
     public var transport: @Sendable (URLRequest) async throws -> (Data, URLResponse)
@@ -119,23 +197,25 @@ public struct DeepSeekChatClient: ChatAssistant {
     public init(
         baseURL: URL = DeepSeekChatClient.officialBaseURL,
         model: String = DeepSeekChatClient.officialModel,
+        language: AppLanguage = .default,
         keyProvider: @escaping @Sendable () -> String? = DeepSeekReportClient.keyFromEnvironmentOrKeychain,
         log: @escaping @Sendable (String) -> Void = { _ in },
         transport: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil
     ) {
         self.baseURL = baseURL
         self.model = model
+        self.language = language
         self.keyProvider = keyProvider
         self.log = log
         self.transport = transport ?? { try await URLSession.shared.data(for: $0) }
     }
 
     /// Nil when no key is configured; no network call happens.
-    public static func configuredFromEnvironment() -> DeepSeekChatClient? {
+    public static func configuredFromEnvironment(language: AppLanguage = .default) -> DeepSeekChatClient? {
         guard let key = DeepSeekReportClient.keyFromEnvironmentOrKeychain(), !key.isEmpty else {
             return nil
         }
-        return DeepSeekChatClient(keyProvider: { key })
+        return DeepSeekChatClient(language: language, keyProvider: { key })
     }
 
     public func respond(to history: [ChatTurn], context: ChatContext) async -> String? {
@@ -161,7 +241,7 @@ public struct DeepSeekChatClient: ChatAssistant {
                 log("DeepSeek 咨询返回空回复")
                 return nil
             }
-            return ChatGuard.screen(reply, history: history, context: context)
+            return ChatGuard.screen(reply, history: history, context: context, language: language)
         } catch {
             log("DeepSeek 咨询请求失败")
             return nil
@@ -170,19 +250,21 @@ public struct DeepSeekChatClient: ChatAssistant {
 
     /// System message = skill prompt + frozen context block.
     func messages(history: [ChatTurn], context: ChatContext) -> [ChatWireMessage] {
-        var system = ChatWriterSkill.systemPrompt
-        system += "\n\n\(ChatWriterSkill.contextHeading)：\n"
+        var system = ChatWriterSkill.systemPrompt(for: language)
+        let heading = ChatWriterSkill.contextHeading(for: language)
+        let colon = language == .chinese ? "：" : ": "
+        system += "\n\n\(heading)\(colon)\n"
         if let draftSummary = context.draftSummary {
             system += draftSummary
         } else {
-            system += "还没有打开项目。"
+            system += ChatWriterSkill.noProjectNote(for: language)
         }
         if let evidence = context.evidence {
             if let json = try? JSONEncoder().encode(evidence), let text = String(data: json, encoding: .utf8) {
-                system += "\n已冻结的对比证据（数字以此为准）：\n" + text
+                system += "\n" + ChatWriterSkill.frozenEvidenceNote(for: language) + text
             }
         } else {
-            system += "\n还没有加入对比的方案。"
+            system += "\n" + ChatWriterSkill.noPinnedSchemesNote(for: language)
         }
         var all = [ChatWireMessage(role: "system", content: system)]
         for turn in history {

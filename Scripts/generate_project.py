@@ -98,7 +98,10 @@ def generate():
         optimization = 'ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ENABLE_TESTABILITY = YES; DEBUG_INFORMATION_FORMAT = dwarf; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";' if mode == "Debug" else 'ONLY_ACTIVE_ARCH = NO; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";'
         project_configs.append(obj(f"project-{mode}", f"isa = XCBuildConfiguration; baseConfigurationReference = {configs['Shared']}; buildSettings = {{ {optimization} }}; name = {mode};"))
     project_config_list = obj("project-config-list", f"isa = XCConfigurationList; buildConfigurations = ({','.join(project_configs)},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;")
-    project_id = obj("project", f'isa = PBXProject; attributes = {{ BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2700; }}; buildConfigurationList = {project_config_list}; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hans"; hasScannedForEncodings = 0; knownRegions = ("zh-Hans", en, Base,); mainGroup = {main_group}; packageReferences = ({local_package},); productRefGroup = {product_group}; projectDirPath = ""; projectRoot = ""; targets = ({",".join(targets)},);')
+    # developmentRegion stays zh-Hans (Chinese-first app, merge decision
+    # 2026-10-04); the in-app English locale is a language toggle, not the
+    # project's development region.
+    project_id = obj("project", f'isa = PBXProject; attributes = {{ BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2700; }}; buildConfigurationList = {project_config_list}; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hans"; hasScannedForEncodings = 0; knownRegions = (en, "zh-Hans", Base,); mainGroup = {main_group}; packageReferences = ({local_package},); productRefGroup = {product_group}; projectDirPath = ""; projectRoot = ""; targets = ({",".join(targets)},);')
     project_dir = ROOT / "SimuNow.xcodeproj"
     project_dir.mkdir(exist_ok=True)
     text = "// !$*UTF8*$!\n{\n\tarchiveVersion = 1;\n\tclasses = {};\n\tobjectVersion = 56;\n\tobjects = {\n" + "\n".join(objects) + f"\n\t}};\n\trootObject = {project_id};\n}}\n"

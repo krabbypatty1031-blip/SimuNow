@@ -5,7 +5,7 @@ import SimuWorkspace
 struct SimuNowiOSApp: App {
     var body: some Scene {
         WindowGroup {
-            WorkspaceView(store: WorkspaceStore())
+            WorkspaceView(store: WorkspaceStore.makeAppStore())
         }
     }
 }

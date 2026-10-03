@@ -8,13 +8,16 @@ import UniformTypeIdentifiers
 /// Platform file panels. Core I/O never sees these URLs as model fields.
 @MainActor
 enum ProjectLocationPicker {
-    static func requestSaveURL(suggestedName: String = "Project.simunow") -> URL? {
+    static func requestSaveURL(
+        suggestedName: String = "Project.simunow",
+        copy: UserFacingCopy = .english
+    ) -> URL? {
         #if os(macOS)
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = suggestedName
-        panel.prompt = "保存"
-        panel.message = "保存为 .simunow 目录包，内含 project.json"
+        panel.prompt = copy.savePanelPrompt
+        panel.message = copy.savePanelMessage
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         if url.pathExtension == ProjectPackage.packageExtension {
             return url
@@ -25,14 +28,14 @@ enum ProjectLocationPicker {
         #endif
     }
 
-    static func requestOpenURL() -> URL? {
+    static func requestOpenURL(copy: UserFacingCopy = .english) -> URL? {
         #if os(macOS)
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "打开"
-        panel.message = "打开 .simunow 包或其中的 project.json"
+        panel.prompt = copy.openPanelPrompt
+        panel.message = copy.openPanelMessage
         guard panel.runModal() == .OK else { return nil }
         return panel.url
         #else
@@ -40,14 +43,14 @@ enum ProjectLocationPicker {
         #endif
     }
 
-    static func requestEvidencePDFURL() -> URL? {
+    static func requestEvidencePDFURL(copy: UserFacingCopy = .english) -> URL? {
         #if os(macOS)
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
         panel.allowedContentTypes = [.pdf]
-        panel.nameFieldStringValue = "对比说明.pdf"
-        panel.prompt = "导出"
-        panel.message = "由 DeepSeek 根据已加入对比的方案写说明。数字来自计算结果，不会按当前房间重算。"
+        panel.nameFieldStringValue = copy.evidencePDFFilename
+        panel.prompt = copy.export
+        panel.message = copy.evidencePDFPanelMessage
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         if url.pathExtension.lowercased() == "pdf" {
             return url

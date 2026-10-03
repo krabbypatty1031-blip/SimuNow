@@ -32,6 +32,7 @@ public struct RoomRealityView: View {
     /// handle, so the copy still resolves the same content.
     @State private var realityContent: RealityViewCameraContent?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.userFacingCopy) private var copy
 
     public init(
         scene: RoomScene,
@@ -70,12 +71,12 @@ public struct RoomRealityView: View {
             fieldHash: field?.inputHash,
             paletteKey: palette.map { "\($0.minC):\($0.maxC)" },
             flowHash: flow?.inputHash,
-            seatKey: seatSamples.map { samples in
+            seatKey: (seatSamples.map { samples in
                 samples
                     .map { "\($0.id):\($0.tC)" }
                     .sorted()
                     .joined(separator: ",")
-            }
+            } ?? "") + "|lang:" + copy.language.rawValue
         )
     }
 
@@ -101,7 +102,8 @@ public struct RoomRealityView: View {
                 field: field,
                 palette: palette,
                 flow: flow,
-                seatSamples: seatSamples
+                seatSamples: seatSamples,
+                copy: copy
             )
             RoomEntityBuilder.applyOrbit(root, scene: scene, orbit: orbit)
             content.add(root)
@@ -163,8 +165,8 @@ public struct RoomRealityView: View {
         }
         .accessibilityLabel(Text(accessibilityText))
         .accessibilityHint(Text(isPlacing
-            ? "已开启点击放置：点房间墙面放窗户、门或风口，点地面放座位；拖动仍可旋转房间"
-            : "拖动旋转房间，捏合缩放"))
+            ? copy.placementModeHint
+            : copy.orbitRoomHint))
         .accessibilityIdentifier("roomRealityView")
     }
 
@@ -225,21 +227,22 @@ public struct RoomRealityView: View {
     }
 
     private var accessibilityText: String {
-        var text = scene.accessibilitySummary
+        var text = scene.accessibilitySummary(copy: copy)
         if let field, field.quality == "passed", let minC = field.stats.minC, let maxC = field.stats.maxC {
-            text += "，坐姿高度温度切片 \(UserFacingCopy.displayNumber(minC)) 到 \(UserFacingCopy.displayNumber(maxC)) 摄氏度（质量通过）"
+            text += copy.sliceAccessibility(
+                min: UserFacingCopy.displayNumber(minC),
+                max: UserFacingCopy.displayNumber(maxC)
+            )
         }
         if let flow, flow.quality == "passed", let maxMag = flow.stats.maxMag {
-            text += "，稳态气流箭头、流线和循环圆点，最大风速 \(UserFacingCopy.displayNumber(maxMag)) 米每秒，圆点是示意流向，不是开机降温"
+            text += copy.flowAccessibility(max: UserFacingCopy.displayNumber(maxMag))
         }
-        // Per-seat L2 temperatures reach VoiceOver users too; the in-scene
-        // flat labels are 3D graphics they cannot read.
         let seatTemps = scene.seats.compactMap { seat -> String? in
             guard let sample = seatSamples?.first(where: { $0.id == seat.id }) else { return nil }
-            return "\(seat.displayName) \(UserFacingCopy.displayNumber(sample.tC)) 摄氏度"
+            return copy.seatTemperatureLabel(name: seat.displayName, value: UserFacingCopy.displayNumber(sample.tC))
         }
         if !seatTemps.isEmpty {
-            text += "，座位气温 " + seatTemps.joined(separator: "、")
+            text += copy.seatTemperaturesAccessibility(seatTemps.joined(separator: copy.listSeparator))
         }
         return text
     }

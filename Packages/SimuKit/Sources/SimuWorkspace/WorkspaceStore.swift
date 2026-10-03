@@ -44,25 +44,81 @@ public final class WorkspaceStore {
     /// Placement rules are user-facing, so the wording is room language.
     public var furniturePlacementMessage: String?
     public var isSubmitting = false
-    public var engineStatus = "还不能估算。请在「计算准备」里选择计算文件夹。"
+    public var engineStatus = UserFacingCopy.english.engineStatusNeedFolder
     public var pendingRepositoryRoot: URL?
     public var pendingEnginesRoot: URL?
     /// Folder basename only. Full paths stay out of the inspector.
     public var engineFolderName: String? {
         pendingEnginesRoot?.lastPathComponent
     }
+    /// UI language. Tests construct with English; production goes through
+    /// makeAppStore, which loads the saved choice (shipped default: Chinese).
+    public var language: AppLanguage = .english {
+        didSet {
+            guard language != oldValue else { return }
+            if persistsLanguageChanges {
+                language.persist()
+            }
+            refreshLocalizedStatus()
+        }
+    }
+    public var copy: UserFacingCopy { UserFacingCopy(language: language) }
+    /// Tests leave this false so they do not write UserDefaults.
+    public var persistsLanguageChanges = false
 
     public init(
         simulationClient: any SimulationClient = UnconfiguredSimulationClient(),
         l1Client: (any L1TaskClient)? = nil,
-        l2Client: (any L2TaskClient)? = nil
+        l2Client: (any L2TaskClient)? = nil,
+        language: AppLanguage = .english
     ) {
         self.simulationClient = simulationClient
         self.l1Client = l1Client ?? UnconfiguredL1TaskClient()
         self.l2Client = l2Client ?? UnconfiguredL2TaskClient()
+        self.language = language
+        let copy = UserFacingCopy(language: language)
+        engineStatus = copy.engineStatusNeedFolder
         if l1Client != nil {
-            engineStatus = self.l1Client.isConfigured ? "可以估算这一天用电。" : "还不能估算。请在「计算准备」里选择计算文件夹。"
+            engineStatus = self.l1Client.isConfigured ? copy.engineStatusReadyL1 : copy.engineStatusNeedFolder
         }
+    }
+
+    /// Production entry: restore the saved language, defaulting to the
+    /// shipped default (Chinese, merge decision 2026-10-04).
+    public static func makeAppStore() -> WorkspaceStore {
+        let store = WorkspaceStore(language: AppLanguage.load())
+        store.persistsLanguageChanges = true
+        return store
+    }
+
+    /// Re-speak live status after the language changes. Frozen run reasons stay as stored.
+    private func refreshLocalizedStatus() {
+        #if os(macOS)
+        if let engines = pendingEnginesRoot {
+            let name = engines.lastPathComponent
+            if let repo = pendingRepositoryRoot {
+                if l1Client.isConfigured && l2Client.isConfigured {
+                    engineStatus = copy.engineSelectedReadyBoth(name)
+                } else if l1Client.isConfigured {
+                    engineStatus = copy.engineSelectedReadyL1(name)
+                } else {
+                    engineStatus = engineNotReadyMessage(
+                        folderName: name,
+                        repositoryRoot: repo,
+                        enginesRoot: engines
+                    )
+                }
+            } else {
+                engineStatus = copy.engineSelectedNeedCopy(name)
+            }
+            return
+        }
+        if pendingRepositoryRoot != nil {
+            engineStatus = copy.needEngineFolderAfterCopy
+            return
+        }
+        #endif
+        engineStatus = l1Client.isConfigured ? copy.engineStatusReadyL1 : copy.engineStatusNeedFolder
     }
 
     public var canSubmitL1: Bool {
@@ -100,13 +156,13 @@ public final class WorkspaceStore {
     }
 
     public func applyRoomSize(x: Double, y: Double, z: Double) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyRoomSize(x: x, y: y, z: z, source: .user)
         project = draft
     }
 
     public func applyNorthYawDegrees(_ value: Double) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyNorthYawDegrees(value, source: .user)
         project = draft
     }
@@ -128,7 +184,7 @@ public final class WorkspaceStore {
     }
 
     public func upsertOpening(_ opening: Opening) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.upsertOpening(opening)
         project = draft
     }
@@ -149,7 +205,7 @@ public final class WorkspaceStore {
         source: ParameterSource,
         heatFluxWm2: PhysicalQuantity? = nil
     ) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         // heatFluxWm2 nil = keep the stored flux (the editor has no flux field);
         // non-nil = explicit write (addOpening's template-level 80 W/m2).
         fieldIssues = draft.applyOpening(
@@ -167,7 +223,7 @@ public final class WorkspaceStore {
     }
 
     public func upsertObstacle(_ box: ObstacleBox) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.upsertObstacle(box)
         project = draft
     }
@@ -183,7 +239,7 @@ public final class WorkspaceStore {
         }
         let box = ObstacleBox(id: id, origin: origin, size: size, kind: kind)
         if let rejection = FurniturePlacement.rejection(for: box, in: current, ignoring: id) {
-            furniturePlacementMessage = rejection.rawValue
+            furniturePlacementMessage = copy.furniturePlacementRejection(rejection)
             return
         }
         furniturePlacementMessage = nil
@@ -198,13 +254,13 @@ public final class WorkspaceStore {
     }
 
     public func upsertSeat(_ seat: Seat) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.upsertSeat(seat)
         project = draft
     }
 
     public func applySeat(id: String, position: Position3D, source: ParameterSource) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applySeat(id: id, position: position, source: source)
         project = draft
     }
@@ -216,7 +272,7 @@ public final class WorkspaceStore {
     }
 
     public func installDefaultSplitAC() {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.installDefaultSplitAC()
         project = draft
     }
@@ -234,7 +290,7 @@ public final class WorkspaceStore {
         z1: Double,
         source: ParameterSource
     ) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applySupplyTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
         project = draft
     }
@@ -247,7 +303,7 @@ public final class WorkspaceStore {
         z1: Double,
         source: ParameterSource
     ) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyReturnTerminal(wall: wall, s0: s0, s1: s1, z0: z0, z1: z1, source: source)
         project = draft
     }
@@ -259,14 +315,15 @@ public final class WorkspaceStore {
     public enum ViewportPlacementChoice: Equatable, Sendable {
         case window, door, supplyTerminal, returnTerminal, seat
 
-        /// Room-language label for the placement toolbar.
-        public var title: String {
+        /// Room-language label for the placement toolbar; follows the
+        /// active UI language (2026-10-04 bilingual pass).
+        public func title(for copy: UserFacingCopy) -> String {
             switch self {
-            case .window: "放窗户"
-            case .door: "放门"
-            case .supplyTerminal: "放送风口"
-            case .returnTerminal: "放回风口"
-            case .seat: "放座位"
+            case .window: copy.placeWindowTitle
+            case .door: copy.placeDoorTitle
+            case .supplyTerminal: copy.placeSupplyTitle
+            case .returnTerminal: copy.placeReturnTitle
+            case .seat: copy.placeSeatTitle
             }
         }
     }
@@ -286,7 +343,7 @@ public final class WorkspaceStore {
     ) -> String? {
         viewportPlacementMessage = nil
         guard var draft = project, let geometry = draft.geometry else {
-            viewportPlacementMessage = "先填写房间尺寸，再点击放置。"
+            viewportPlacementMessage = copy.placeNeedRoomSizeFirst
             return viewportPlacementMessage
         }
         let sizeXM = geometry.sizeX.value
@@ -296,7 +353,7 @@ public final class WorkspaceStore {
         switch choice {
         case .window, .door:
             guard case .wall(let wall, let sM, let zM) = surface else {
-                viewportPlacementMessage = "窗户和门只能放在墙面上；点一下房间的一面墙。"
+                viewportPlacementMessage = copy.placeOpeningsNeedWall
                 return viewportPlacementMessage
             }
             let patch: WallPatchScene?
@@ -311,13 +368,15 @@ public final class WorkspaceStore {
                 )
             }
             guard let patch else {
-                viewportPlacementMessage = "这面墙放不下默认尺寸的\(choice == .window ? "窗户" : "门")。"
+                viewportPlacementMessage = copy.placeWallTooShort(
+                    kind: choice == .window ? copy.openingKindTitle(.window) : copy.openingKindTitle(.door)
+                )
                 return viewportPlacementMessage
             }
             if let conflict = draft.conflictingWallPatch(
                 wall: wall, s0: patch.s0M, s1: patch.s1M, z0: patch.z0M, z1: patch.z1M
             ) {
-                viewportPlacementMessage = "这里会与\(conflict.displayName)重叠；挪开一点再放。"
+                viewportPlacementMessage = copy.placeOverlaps(what: conflict.displayName(for: copy))
                 return viewportPlacementMessage
             }
             let id = ProjectDraft.nextPrefixedID(
@@ -345,7 +404,7 @@ public final class WorkspaceStore {
 
         case .supplyTerminal, .returnTerminal:
             guard case .wall(let wall, let sM, let zM) = surface else {
-                viewportPlacementMessage = "风口只能放在墙面上；点一下房间的一面墙。"
+                viewportPlacementMessage = copy.placeTerminalsNeedWall
                 return viewportPlacementMessage
             }
             // Placing a terminal on an HVAC-less draft installs the default
@@ -365,7 +424,7 @@ public final class WorkspaceStore {
                 )
             }
             guard let patch else {
-                viewportPlacementMessage = "这面墙放不下默认尺寸的风口。"
+                viewportPlacementMessage = copy.placeWallTooShortForVent
                 return viewportPlacementMessage
             }
             // Moving a terminal excludes its own current position, but the
@@ -379,7 +438,7 @@ public final class WorkspaceStore {
                 z1: patch.z1M,
                 excluding: excluding
             ) {
-                viewportPlacementMessage = "这里会与\(conflict.displayName)重叠；挪开一点再放。"
+                viewportPlacementMessage = copy.placeOverlaps(what: conflict.displayName(for: copy))
                 return viewportPlacementMessage
             }
             if choice == .supplyTerminal {
@@ -398,7 +457,7 @@ public final class WorkspaceStore {
 
         case .seat:
             guard case .floor(let xM, let yM) = surface else {
-                viewportPlacementMessage = "座位放在地面上；点一下房间地面。"
+                viewportPlacementMessage = copy.placeSeatsNeedFloor
                 return viewportPlacementMessage
             }
             let position = PlacementGeometry.seatPosition(
@@ -407,7 +466,7 @@ public final class WorkspaceStore {
             // The sample point must sit in the fluid domain: not inside a
             // furniture box, not against a wall.
             guard geometry.containsSeat(Seat(id: "probe", position: position, source: .user)) else {
-                viewportPlacementMessage = "座位不能放在家具上或太靠墙；点地面的空处。"
+                viewportPlacementMessage = copy.placeSeatSpotBlocked
                 return viewportPlacementMessage
             }
             let existing = draft.occupancy?.seats.map(\.id) ?? []
@@ -420,37 +479,37 @@ public final class WorkspaceStore {
     }
 
     public func applyOccupantCount(_ value: Double) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyOccupantCount(value, source: .user)
         project = draft
     }
 
     public func applyOccupiedHours(start: String, end: String) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyOccupiedHours(start: start, end: end, source: .user)
         project = draft
     }
 
     public func applyOutdoorAirM3s(_ value: Double) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applyOutdoorAirM3s(value, source: .user)
         project = draft
     }
 
     public func applySupplySpeedMs(_ value: Double) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applySupplySpeedMs(value, source: .user)
         project = draft
     }
 
     public func applySupplyAirflowM3s(_ value: Double) {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.applySupplyAirflowM3s(value, source: .user)
         project = draft
     }
 
     public func recomputeSupplyAirflowFromSpeedAndArea() {
-        var draft = project ?? ProjectDraft(name: "未命名房间")
+        var draft = project ?? ProjectDraft(name: copy.untitledRoom)
         fieldIssues = draft.recomputeSupplyAirflowFromSpeedAndArea()
         project = draft
     }
@@ -483,7 +542,7 @@ public final class WorkspaceStore {
 
     public func savePackage(to url: URL) {
         guard let project else {
-            packageError = "没有可保存的项目。请先填写房间或打开一个包。"
+            packageError = copy.nothingToSave
             return
         }
         let accessed = url.startAccessingSecurityScopedResource()
@@ -538,11 +597,11 @@ public final class WorkspaceStore {
     /// Submit an immutable representative-day L1. Does not invent watts if the client fails.
     public func submitL1() async {
         guard let project else {
-            runMessage = "还没有房间。"
+            runMessage = copy.noRoomYet
             return
         }
         guard canSubmitL1 else {
-            runMessage = l1Client.isConfigured ? "房间还不完整，或正在估算。" : "还不能估算。请在「计算准备」里选择计算文件夹。"
+            runMessage = l1Client.isConfigured ? copy.roomIncompleteOrBusy : copy.engineStatusNeedFolder
             return
         }
         isSubmitting = true
@@ -567,7 +626,7 @@ public final class WorkspaceStore {
                 lastBoundary = try? L2BoundaryMapping.map(draft: project, l1: lastL1Result)
             }
             if receipt.state == .failed {
-                runMessage = "这一天的用电还算不出来，不会用 0 代替。"
+                runMessage = copy.l1FailedNoZero
             }
         } catch {
             runMessage = error.localizedDescription
@@ -579,11 +638,11 @@ public final class WorkspaceStore {
     /// seat metrics omitted and load no slice; nothing is invented.
     public func submitL2() async {
         guard let project else {
-            runMessage = "还没有房间。"
+            runMessage = copy.noRoomYet
             return
         }
         guard canSubmitL2 else {
-            runMessage = l2Client.isConfigured ? "房间还不完整，或正在估算。" : "还不能查看座位冷热。请在「计算准备」里选择计算文件夹。"
+            runMessage = l2Client.isConfigured ? copy.roomIncompleteOrBusy : copy.cannotViewSeatsNeedFolder
             return
         }
         isSubmitting = true
@@ -607,7 +666,7 @@ public final class WorkspaceStore {
             lastFieldSlice = try await l2Client.loadFieldSlice(runID: receipt.identity.runID)
             lastFlowOverlay = try await l2Client.loadFlowOverlay(runID: receipt.identity.runID)
             if receipt.state == .failed {
-                runMessage = "座位冷热还看不出来，不会写成 0 度。"
+                runMessage = copy.l2FailedNoZero
             }
         } catch {
             runMessage = error.localizedDescription
@@ -639,34 +698,34 @@ public final class WorkspaceStore {
     public var reportMessage: String?
 
     /// Button copy stays this phrase. A missing API key must not rename it to 「生成报告」.
-    public static let evidenceExportLabel = "导出对比说明"
-    public static let missingDeepSeekStatus = "未配置 DeepSeek，不能生成对比说明"
-    public static let generateFailedStatus = "DeepSeek 未能生成说明，对照表未导出。"
-    public static let exportedStatus = "已导出对比说明"
-    public static let blockedExportStatus = "还没有通过检查的方案，不能导出对比报告。"
+    public static var evidenceExportLabel: String { UserFacingCopy.english.evidenceExportLabel }
+    public static var missingDeepSeekStatus: String { UserFacingCopy.english.missingDeepSeekStatus }
+    public static var generateFailedStatus: String { UserFacingCopy.english.generateFailedStatus }
+    public static var exportedStatus: String { UserFacingCopy.english.exportedStatus }
+    public static var blockedExportStatus: String { UserFacingCopy.english.blockedExportStatus }
 
     /// DeepSeek writes the readable body from the frozen evidence pack.
     /// Missing key or a failed request does not invent a stand-in PDF.
     public func writeEvidencePDF(to url: URL) async throws {
         guard let evidence = reportEvidence, evidence.isComparisonReportable else {
-            reportMessage = Self.blockedExportStatus
+            reportMessage = copy.blockedExportStatus
             throw EvidencePDFError.notExportable
         }
         guard let generator = resolvedReportGenerator() else {
-            reportMessage = Self.missingDeepSeekStatus
+            reportMessage = copy.missingDeepSeekStatus
             throw EvidencePDFError.generatorUnavailable
         }
         guard let report = await generator.generate(evidence) else {
-            reportMessage = Self.generateFailedStatus
+            reportMessage = copy.generateFailedStatus
             throw EvidencePDFError.generatorUnavailable
         }
-        try EvidencePDFAssembler.write(evidence: evidence, report: report, to: url)
-        reportMessage = Self.exportedStatus
+        try EvidencePDFAssembler.write(evidence: evidence, report: report, copy: copy, to: url)
+        reportMessage = copy.exportedStatus
     }
 
     public var reportEvidence: ReportEvidence? {
         guard !candidateRuns.isEmpty else { return nil }
-        return ReportEvidence.build(from: candidateRuns)
+        return ReportEvidence.build(from: candidateRuns, copy: copy)
     }
 
     /// Quality-failed packs can be read. Export also needs DeepSeek.
@@ -677,17 +736,17 @@ public final class WorkspaceStore {
     public var isReportGeneratorConfigured: Bool {
         if reportGenerator != nil { return true }
         guard allowEnvironmentGenerator else { return false }
-        return DeepSeekReportClient.configuredFromEnvironment() != nil
+        return DeepSeekReportClient.configuredFromEnvironment(language: language) != nil
     }
 
     /// Empty pin list stays an empty state. Failed-only packs explain why export is hidden.
     public var reportStatusLine: String? {
         guard let evidence = reportEvidence else { return nil }
         if !evidence.isComparisonReportable {
-            return reportMessage ?? Self.blockedExportStatus
+            return reportMessage ?? copy.blockedExportStatus
         }
         if !isReportGeneratorConfigured {
-            return reportMessage ?? Self.missingDeepSeekStatus
+            return reportMessage ?? copy.missingDeepSeekStatus
         }
         return reportMessage
     }
@@ -695,7 +754,7 @@ public final class WorkspaceStore {
     private func resolvedReportGenerator() -> (any ReportGenerator)? {
         if let reportGenerator { return reportGenerator }
         guard allowEnvironmentGenerator else { return nil }
-        return DeepSeekReportClient.configuredFromEnvironment()
+        return DeepSeekReportClient.configuredFromEnvironment(language: language)
     }
 
     /// Card run IDs jump back to the comparison page, which still shows the frozen record.
@@ -721,20 +780,20 @@ public final class WorkspaceStore {
     /// (tests set this so the flow completes in one runloop tick).
     public var chatTypingIntervalMs = 14
     /// Fixed replies so the user is never left without a spoken answer.
-    public static let chatMissingKeyText = "还没有配置 DeepSeek 密钥，暂时不能对话。其余功能不受影响：数字都在对比页和检查器里。"
-    public static let chatFailedText = "这次没有拿到可用回答，请再问一次。"
-    public static let chatEmptyText = "先打开一个项目，或问一些使用上的问题也可以。"
+    public static var chatMissingKeyText: String { UserFacingCopy.english.chatMissingKeyText }
+    public static var chatFailedText: String { UserFacingCopy.english.chatFailedText }
+    public static var chatEmptyText: String { UserFacingCopy.english.chatEmptyText }
 
     public var isChatAssistantConfigured: Bool {
         if chatAssistant != nil { return true }
         guard allowEnvironmentChatAssistant else { return false }
-        return DeepSeekChatClient.configuredFromEnvironment() != nil
+        return DeepSeekChatClient.configuredFromEnvironment(language: language) != nil
     }
 
     private func resolvedChatAssistant() -> (any ChatAssistant)? {
         if let chatAssistant { return chatAssistant }
         guard allowEnvironmentChatAssistant else { return nil }
-        return DeepSeekChatClient.configuredFromEnvironment()
+        return DeepSeekChatClient.configuredFromEnvironment(language: language)
     }
 
     /// One consult round: freeze the user's words, snapshot the context,
@@ -746,12 +805,12 @@ public final class WorkspaceStore {
         guard !trimmed.isEmpty else { return }
         chatTurns.append(ChatTurn(role: .user, text: trimmed))
         let context = ChatContext(
-            draftSummary: ChatContextBuilder.draftSummary(for: project),
+            draftSummary: ChatContextBuilder.draftSummary(for: project, copy: copy),
             evidence: reportEvidence
         )
         guard let assistant = resolvedChatAssistant() else {
             chatStreamingText = nil
-            chatTurns.append(ChatTurn(role: .assistant, text: Self.chatMissingKeyText))
+            chatTurns.append(ChatTurn(role: .assistant, text: copy.chatMissingKeyText))
             return
         }
         isChatThinking = true
@@ -759,8 +818,8 @@ public final class WorkspaceStore {
         let reply = await assistant.respond(to: chatTurns, context: context)
         // Screen locally too: a stubbed or future client must not bypass
         // the same free-text guard the DeepSeek client applies.
-        let screened = reply.map { ChatGuard.screen($0, history: chatTurns, context: context) }
-        let final = (screened ?? nil).flatMap { $0.isEmpty ? nil : $0 } ?? Self.chatFailedText
+        let screened = reply.map { ChatGuard.screen($0, history: chatTurns, context: context, language: language) }
+        let final = (screened ?? nil).flatMap { $0.isEmpty ? nil : $0 } ?? copy.chatFailedText
         // Typewriter reveal: the reply appears character by character, the
         // way a live assistant types. `clearChat` mid-reveal empties the
         // streaming text; the guard on each tick stops the loop then.
@@ -783,9 +842,12 @@ public final class WorkspaceStore {
         // history the next round's model reads, or the model starts copying
         // the note style into its own replies. The note becomes display
         // metadata on the turn instead.
-        let hasCaution = final.hasSuffix(ChatGuard.cautionNote)
+        // The client screens with the panel's language, so the strip must
+        // compare the same wording — AppLanguage.default is NOT assumed here.
+        let note = ChatGuard.cautionNote(for: copy.language)
+        let hasCaution = final.hasSuffix(note)
         let body = hasCaution
-            ? String(final.dropLast(ChatGuard.cautionNote.count))
+            ? String(final.dropLast(note.count))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             : final
         chatTurns.append(
@@ -836,7 +898,7 @@ public final class WorkspaceStore {
             supplyTemperatureC: project.hvac?.supplyTemperatureC.value ?? 0
         )
         let record = CandidateRun(
-            name: name?.isEmpty == false ? name! : "方案 \(candidateRuns.count + 1)",
+            name: name?.isEmpty == false ? name! : copy.defaultSchemeName(candidateRuns.count + 1),
             identity: result.identity,
             state: result.state,
             quality: result.quality,
@@ -867,7 +929,7 @@ public final class WorkspaceStore {
               saved != 0 else {
             return nil
         }
-        return "这一天预计费用相差 \(UserFacingCopy.displayNumber(saved)) \(currency)（按两次估算的用电功率相减，不是系数）"
+        return copy.comparisonSavings(UserFacingCopy.displayNumber(saved), currency: currency)
     }
 
     /// Day cost of the stored L1 watts. Hours come from that run's schedule
@@ -928,7 +990,7 @@ public final class WorkspaceStore {
         let bases = candidateRuns.map(\.basis)
         guard let first = bases.first else { return nil }
         for other in bases.dropFirst() {
-            if let reason = CandidateRun.basisMismatch(first, other) {
+            if let reason = CandidateRun.basisMismatch(first, other, copy: copy) {
                 return reason
             }
         }
@@ -968,7 +1030,9 @@ public final class WorkspaceStore {
     /// the number) so the long sentence is said once per card, not per number.
     /// The guard stays: `candidateL1Freshness` is the truth the badge reads.
     private func annotatedL1(_ record: CandidateRun, text: String, hasValue: Bool) -> String {
-        guard hasValue, text != "未知" else { return text }
+        guard hasValue, text != "未知", text != UserFacingCopy.english.unknown else {
+            return (text == "未知" || text == UserFacingCopy.english.unknown) ? copy.unknown : text
+        }
         return text
     }
 
@@ -985,27 +1049,27 @@ public final class WorkspaceStore {
 
     public func chooseRepositoryRoot() {
         guard let url = ProjectLocationPicker.requestDirectoryURL(
-            message: "选择含计算程序的文件夹。App 已自带时不必选。",
-            prompt: "选择程序副本"
+            message: copy.chooseProgramCopyPanelMessage,
+            prompt: copy.chooseProgramCopyPrompt
         ) else {
-            engineStatus = "没有选择程序副本。"
+            engineStatus = copy.cancelledProgramCopy
             return
         }
         pendingRepositoryRoot = url
         if let engines = pendingEnginesRoot {
             applyEnginesOnly(engines)
         } else {
-            engineStatus = "已选程序副本，还需要计算文件夹。"
+            engineStatus = copy.needEngineFolderAfterCopy
         }
     }
 
     public func chooseEnginesRoot() {
         guard let url = ProjectLocationPicker.requestDirectoryURL(
-            message: "选择计算文件夹，只需选一次。",
-            prompt: "选择计算文件夹"
+            message: copy.chooseEngineFolderPanelMessage,
+            prompt: copy.chooseEngineFolderPrompt
         ) else {
             // Cancel used to return with the idle sentence unchanged.
-            engineStatus = "没有选择文件夹。"
+            engineStatus = copy.cancelledFolder
             return
         }
         applyEnginesOnly(url)
@@ -1016,7 +1080,7 @@ public final class WorkspaceStore {
         pendingEnginesRoot = enginesRoot
         let name = enginesRoot.lastPathComponent
         guard let source = workerSourceRoot() else {
-            engineStatus = "已选「\(name)」，还缺程序副本。"
+            engineStatus = copy.engineSelectedNeedCopy(name)
             return
         }
         do {
@@ -1035,7 +1099,7 @@ public final class WorkspaceStore {
             l1Client = UnconfiguredL1TaskClient()
             l2Client = UnconfiguredL2TaskClient()
             // Staging errors can mention filenames; never echo a home path.
-            engineStatus = "已选「\(name)」，程序副本复制失败。请再选一次。"
+            engineStatus = copy.engineSelectedCopyFailed(name)
         }
     }
 
@@ -1044,8 +1108,14 @@ public final class WorkspaceStore {
         pendingEnginesRoot = enginesRoot
         _ = repositoryRoot.startAccessingSecurityScopedResource()
         _ = enginesRoot.startAccessingSecurityScopedResource()
-        let runRoot = (packageURL ?? FileManager.default.temporaryDirectory)
-            .appendingPathComponent("runs", isDirectory: true)
+        let runRoot: URL
+        if let packageURL {
+            runRoot = packageURL.appendingPathComponent("runs", isDirectory: true)
+        } else if let support = try? WorkerTreeStaging.applicationSupportRuns() {
+            runRoot = support
+        } else {
+            runRoot = FileManager.default.temporaryDirectory.appendingPathComponent("runs", isDirectory: true)
+        }
         let client = LocalProcessL1Client(
             repositoryRoot: repositoryRoot,
             enginesRoot: enginesRoot,
@@ -1061,14 +1131,14 @@ public final class WorkspaceStore {
         l2Client = l2
         let name = enginesRoot.lastPathComponent
         if client.isConfigured && l2.isConfigured {
-            engineStatus = "已选「\(name)」，可以估算用电，也可以查看座位冷热。"
+            engineStatus = copy.engineSelectedReadyBoth(name)
         } else if client.isConfigured {
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = "已选「\(name)」，可以估算这一天用电。座位冷热还需要气流计算程序。"
+            engineStatus = copy.engineSelectedReadyL1(name)
         } else {
             l1Client = UnconfiguredL1TaskClient()
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = Self.engineNotReadyMessage(
+            engineStatus = engineNotReadyMessage(
                 folderName: name,
                 repositoryRoot: repositoryRoot,
                 enginesRoot: enginesRoot
@@ -1077,7 +1147,7 @@ public final class WorkspaceStore {
     }
 
     /// Say what the picked folder is missing. Do not repeat the idle prompt.
-    private static func engineNotReadyMessage(
+    private func engineNotReadyMessage(
         folderName: String,
         repositoryRoot: URL,
         enginesRoot: URL
@@ -1085,15 +1155,15 @@ public final class WorkspaceStore {
         let energyPlus = LocalEngineProbe.energyPlusURL(in: enginesRoot)
         let worker = LocalEngineProbe.workerURL(in: repositoryRoot)
         if !FileManager.default.fileExists(atPath: energyPlus.path) {
-            return "已选「\(folderName)」，里面没有能耗计算程序。"
+            return copy.engineFolderMissingEnergy(folderName)
         }
         if !LocalEngineProbe.hasExecuteBit(at: energyPlus.path) {
-            return "已选「\(folderName)」，能耗计算程序还不能运行。"
+            return copy.engineFolderEnergyNotRunnable(folderName)
         }
         if !FileManager.default.fileExists(atPath: worker.path) {
-            return "已选「\(folderName)」，还缺程序副本。"
+            return copy.engineSelectedNeedCopy(folderName)
         }
-        return "已选「\(folderName)」，还不能估算。"
+        return copy.engineFolderCannotEstimate(folderName)
     }
 
     private func workerSourceRoot() -> URL? {
@@ -1136,8 +1206,8 @@ public final class WorkspaceStore {
     /// the number) so the long sentence is said once per card, not per number.
     /// The guard stays: `l1Freshness` is the truth the badge reads.
     private func annotated(_ text: String, hasResult: Bool, hasValue: Bool) -> String {
-        if !hasResult { return "无结果" }
-        if !hasValue || text == "未知" { return "未知" }
+        if !hasResult { return copy.noResult }
+        if !hasValue || text == "未知" || text == UserFacingCopy.english.unknown { return copy.unknown }
         return text
     }
 
@@ -1145,7 +1215,7 @@ public final class WorkspaceStore {
     /// `l1Freshness` stays the independent truth the badge reads.
     private func formatMetric(_ result: SimulationResult?, name: String) -> String {
         guard let metric = result?.metric(named: name), let value = metric.value, !metric.omitted else {
-            return result == nil ? "无结果" : "未知"
+            return result == nil ? copy.noResult : copy.unknown
         }
         return UserFacingCopy.displayQuantity(value, unit: metric.unit)
     }
@@ -1164,9 +1234,7 @@ public final class WorkspaceStore {
 
     private func presentPackageError(_ error: Error) {
         if let packageError = error as? ProjectPackageError {
-            let description = packageError.errorDescription ?? "项目包错误"
-            let recovery = packageError.recoverySuggestion ?? ""
-            self.packageError = "\(description)。\(recovery)"
+            self.packageError = copy.packageErrorText(packageError)
         } else {
             packageError = error.localizedDescription
         }
@@ -1180,13 +1248,10 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
 
-    public var title: String {
-        switch self {
-        case .workspace: "布置房间"
-        case .scenarios: "方案对比"
-        case .runs: "计算结果"
-        case .reports: "导出报告"
-        }
+    public var title: String { title(UserFacingCopy.english) }
+
+    public func title(_ copy: UserFacingCopy) -> String {
+        copy.destinationTitle(rawValue)
     }
 
     public var symbol: String {

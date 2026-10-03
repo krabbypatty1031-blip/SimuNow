@@ -55,7 +55,8 @@ enum RoomEntityBuilder {
         field: FieldSlice?,
         palette: SlicePalette?,
         flow: FlowOverlay? = nil,
-        seatSamples: [SeatSample]? = nil
+        seatSamples: [SeatSample]? = nil,
+        copy: UserFacingCopy = .english
     ) async -> Entity {
         let root = Entity()
         root.name = rootName
@@ -80,7 +81,7 @@ enum RoomEntityBuilder {
             await addSlice(image, field: field, to: root, scene: scene)
         }
         if let flow {
-            RoomFlowMeshes.addOverlay(flow, to: root, scene: scene)
+            RoomFlowMeshes.addOverlay(flow, to: root, scene: scene, copy: copy)
         }
         for seat in scene.seats {
             addOccupiedSeat(seat, to: root, scene: scene)

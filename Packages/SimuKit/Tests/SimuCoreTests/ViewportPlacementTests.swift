@@ -42,7 +42,7 @@ private func makeOfficeStore() -> WorkspaceStore {
     let reason = store.placeFromViewport(.window, on: .wall(.xMax, sM: 3.0, zM: 1.55))
     #expect(reason != nil)
     #expect(store.viewportPlacementMessage == reason)
-    #expect(reason?.contains("重叠") == true)
+    #expect(reason?.contains("overlap") == true)
     // Refused tap leaves the draft untouched.
     #expect(store.project?.geometry?.openings.count == before)
 }
@@ -77,7 +77,7 @@ private func makeOfficeStore() -> WorkspaceStore {
     // (s 3, z 1.55) lands inside it.
     let reason = store.placeFromViewport(.supplyTerminal, on: .wall(.xMax, sM: 3.0, zM: 1.55))
     #expect(reason != nil)
-    #expect(reason?.contains("窗户") == true)
+    #expect(reason?.contains("window") == true)
     #expect(store.project?.hvac?.supply == supplyBefore)
 }
 
@@ -88,7 +88,7 @@ private func makeOfficeStore() -> WorkspaceStore {
     // overlaps it (return patch s 2.7–3.3, z 2.47–2.67).
     let reason = store.placeFromViewport(.returnTerminal, on: .wall(.xMin, sM: 3.0, zM: 2.57))
     #expect(reason != nil)
-    #expect(reason?.contains("送风口") == true)
+    #expect(reason?.contains("Supply outlet") == true)
     #expect(store.project?.hvac?.returnTerminal == returnBefore)
 }
 
@@ -113,7 +113,7 @@ private func makeOfficeStore() -> WorkspaceStore {
     let seatsBefore = store.project?.occupancy?.seats.count ?? 0
     let reason = store.placeFromViewport(.seat, on: .wall(.xMin, sM: 3.0, zM: 1.5))
     #expect(reason != nil)
-    #expect(reason?.contains("地面") == true)
+    #expect(reason?.contains("floor") == true)
     #expect(store.project?.occupancy?.seats.count == seatsBefore)
 }
 

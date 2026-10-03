@@ -78,6 +78,7 @@ public struct RoomScene: Equatable, Sendable {
 
     public init?(
         draft: ProjectDraft,
+        copy: UserFacingCopy = .english
     ) {
         guard let geometry = draft.geometry else {
             return nil
@@ -100,7 +101,7 @@ public struct RoomScene: Equatable, Sendable {
                 origin: box.origin,
                 size: box.size,
                 kind: box.kind,
-                displayName: UserFacingCopy.furnitureTitle(kind: box.kind, index: index)
+                displayName: copy.furnitureTitle(kind: box.kind, index: index)
             )
         }
         let draftSeats = draft.occupancy?.seats ?? []
@@ -108,7 +109,7 @@ public struct RoomScene: Equatable, Sendable {
             SeatScene(
                 id: seat.id,
                 position: seat.position,
-                displayName: UserFacingCopy.seatTitle(seat: seat, seats: draftSeats, geometry: geometry)
+                displayName: copy.seatTitle(seat: seat, seats: draftSeats, geometry: geometry)
             )
         }
     }
@@ -172,30 +173,38 @@ public struct RoomScene: Equatable, Sendable {
     ]
 
     /// VoiceOver reads the real parts; no metric value is claimed here.
-    public var accessibilitySummary: String {
+    public func accessibilitySummary(copy: UserFacingCopy = .english) -> String {
         var parts: [String] = []
-        parts.append("房间 \(formatMetres(sizeXM)) × \(formatMetres(sizeYM)) × \(formatMetres(sizeZM)) 米")
+        parts.append(copy.roomSizeAccessibility(
+            x: formatMetres(sizeXM),
+            y: formatMetres(sizeYM),
+            z: formatMetres(sizeZM)
+        ))
         if !windows.isEmpty {
-            parts.append("\(windows.count) 扇窗")
+            parts.append(copy.windowCount(windows.count))
         }
         if !doors.isEmpty {
-            parts.append("\(doors.count) 扇门")
+            parts.append(copy.doorCount(doors.count))
         }
         if !furniture.isEmpty {
-            parts.append("\(furniture.count) 件家具")
+            parts.append(copy.furnitureCount(furniture.count))
         }
         if supply != nil {
-            parts.append(UserFacingCopy.terminalTitle(isSupply: true))
+            parts.append(copy.terminalTitle(isSupply: true))
         }
         if returnAir != nil {
-            parts.append(UserFacingCopy.terminalTitle(isSupply: false))
+            parts.append(copy.terminalTitle(isSupply: false))
         }
         if seats.isEmpty {
-            parts.append("还没有座位")
+            parts.append(copy.noSeatsYet)
         } else {
-            parts.append(seats.map(\.displayName).joined(separator: "、"))
+            parts.append(seats.map(\.displayName).joined(separator: copy.listSeparator))
         }
-        return parts.joined(separator: "，")
+        return parts.joined(separator: copy.language == .chinese ? "，" : ", ")
+    }
+
+    public var accessibilitySummary: String {
+        accessibilitySummary(copy: .english)
     }
 
     private func formatMetres(_ value: Double) -> String {

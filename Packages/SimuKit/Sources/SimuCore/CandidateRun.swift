@@ -87,24 +87,28 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
         }
     }
 
-    /// nil when the two bases match; otherwise a Chinese reason naming the
+    /// nil when the two bases match; otherwise a reason naming the
     /// mismatched fields. Different bases cannot be shown as a valid
     /// comparison, and the UI must say so instead of hiding the difference.
-    public static func basisMismatch(_ a: ComparisonBasis, _ b: ComparisonBasis) -> String? {
+    public static func basisMismatch(
+        _ a: ComparisonBasis,
+        _ b: ComparisonBasis,
+        copy: UserFacingCopy = .english
+    ) -> String? {
         var mismatches: [String] = []
         if a.occupantCount != b.occupantCount {
-            mismatches.append("人数")
+            mismatches.append(copy.mismatchOccupants)
         }
         if a.occupiedStart != b.occupiedStart || a.occupiedEnd != b.occupiedEnd {
-            mismatches.append("占用时段")
+            mismatches.append(copy.mismatchHours)
         }
         if a.setpointC != b.setpointC {
-            mismatches.append("设定温度")
+            mismatches.append(copy.mismatchSetpoint)
         }
         if a.supplyTemperatureC != b.supplyTemperatureC {
-            mismatches.append("送风温度")
+            mismatches.append(copy.mismatchSupply)
         }
         guard !mismatches.isEmpty else { return nil }
-        return "\(mismatches.joined(separator: "、"))不同，不能直接比"
+        return copy.basisMismatch(mismatches)
     }
 }

@@ -74,6 +74,16 @@
 
 影响：预览不含任何气流/温度场，界面常驻文字声明；布局数学（RoomPreviewLayout）为纯函数可测。P4 场视口仍按原计划在渲染层统一接入（切片/流线届时复用坐标与布局基础）。证据：RoomPreviewLayoutTests（几何映射/拒绝未知尺寸/相机数学/指纹稳定性）、`check.sh all` 全绿、App 启动验证。
 
+## ADR-018：P1-01 运行时自包含安装与探针修正（已接受）
+
+日期：2026-10-03；任务 P1-01 收尾。触发：用户授权安装引擎，要求下载物便于清理。
+
+选择：所有工具与数据放入 `Backend/RuntimeLocal/`（gitignore 已排除）：colima/lima/docker CLI 二进制、LIMA_HOME（VM 与 guest 镜像与容器层）、DOCKER_CONFIG、EnergyPlus 解压目录；`env.sh` 提供 source 入口。清理 = 停 VM 后删除 RuntimeLocal 与 ~/.colima（colima 小体量 profile 固定位于后者，实测 COLIMA_HOME 不影响 profile 位置）。版本严格按 manifest：colima 0.10.3、limactl 2.1.4（对上游 SHA256SUMS 校验）、docker 29.6.2、OpenFOAM digest 不变、EnergyPlus 26.1.0（SHA-256 匹配）。
+
+执行中发现并修复两个 doctor 真实 bug（此前只有模拟探针覆盖）：① inventory 版本正则不匹配 `colima version v0.10.3` 的 v 前缀（`\b` 在 v 与数字间无边界）；② OpenFOAM 探针把 bashrc 路径作为位置参数传入容器，OpenFOAM 配置链会对 `$1` 指向自身的 bashrc 递归 source（~11 秒后 SIGSEGV）——改为脚本内嵌字面路径。同时修正 manifest 的 `version_command`：该 v2506 镜像不含 `foamVersion`，版本/发行方改从 `buoyantSimpleFoam` 横幅解析（schema 与 manifest 同步）。
+
+影响：strict doctor 在本机 exit 0 / status=ready，容器/架构/镜像身份/版本/最小启动/清理全部真实验证；P1-01 完成。VM 配置 4 核/6 GiB 为研发初始值，非物理最低要求（P1-05 实测再定）。证据：Artifacts/P1-01/ 与 verification.md。
+
 ## 待决定
 
 - P1：固定路线的执行验证；候选求解器的基准适用性、网格与湍流，EnergyPlus 设备模型。

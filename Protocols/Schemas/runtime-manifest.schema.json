@@ -212,7 +212,7 @@
               "pattern": "^/usr/lib/openfoam/openfoam[0-9]{4}/etc/bashrc$"
             },
             "version_command": {
-              "const": "foamVersion"
+              "const": "buoyantSimpleFoam"
             },
             "solver_candidate": {
               "const": "buoyantSimpleFoam"

@@ -32,7 +32,7 @@ class FakeProbe:
             "docker_version": CommandResult("ok", 0, "Docker version 29.6.2, build public"),
             "info": CommandResult("ok", 0, json.dumps({"os": "linux", "architecture": "aarch64", "memory_bytes": 8589934592, "server_version": "29.6.2"})),
             "inspect": CommandResult("ok", 0, json.dumps({"os": "linux", "architecture": "arm64", "digests": [load_manifest()["engines"]["openfoam"]["image"]]})),
-            "run": CommandResult("ok", 0, "aarch64\nOpenFOAM-v2506\nVersion: v2506\nWebsite: www.openfoam.com\nUsage: buoyantSimpleFoam -help"),
+            "run": CommandResult("ok", 0, "aarch64\nOpenFOAM: The Open Source CFD Toolbox\nVersion:  2506\nWebsite:  www.openfoam.com\nUsage: buoyantSimpleFoam -help"),
             "rm": CommandResult("process_failed", 1, stderr="No such container: ephemeral"),
             "file": CommandResult("ok", 0, "Mach-O 64-bit executable arm64"),
             "ep": CommandResult("ok", 0, "EnergyPlus, Version 26.1.0-6f2e40d102"),
@@ -143,6 +143,13 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(self.report()["container"]["state"], "version_mismatch")
         self.probe.results["colima"] = CommandResult("ok", 0, "colima version 0.9.0")
         self.assertFalse(self.report()["inventory"]["colima"]["version_matches"])
+
+    def test_v_prefixed_tool_versions_parse(self):
+        # Real colima prints "colima version v0.10.3"; a bare-\b regex misses the digits.
+        self.probe.results["colima"] = CommandResult("ok", 0, "colima version v0.10.3\ngit commit: 00f6c29")
+        report = self.report()
+        self.assertEqual(report["inventory"]["colima"]["version"], "0.10.3")
+        self.assertTrue(report["inventory"]["colima"]["version_matches"])
 
     def test_missing_image_differs_from_failed_inspect(self):
         self.probe.results["inspect"] = CommandResult("process_failed", 1, stderr="No such image")

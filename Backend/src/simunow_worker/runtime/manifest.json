@@ -46,7 +46,7 @@
       "image": "opencfd/openfoam-dev@sha256:f1a4b6a78ff41bbbedb901078e0abcdee94076933cadace44915ecd0282c89c1",
       "index_digest": "sha256:2e66fd9e77048af7f1c36c739a60a740fbdff4c2f9f4f29429f1a16834f3960f",
       "environment_script": "/usr/lib/openfoam/openfoam2506/etc/bashrc",
-      "version_command": "foamVersion",
+      "version_command": "buoyantSimpleFoam",
       "solver_candidate": "buoyantSimpleFoam",
       "compressed_layer_bytes": 340320682,
       "sources": [

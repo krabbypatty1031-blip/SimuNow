@@ -14,8 +14,8 @@
 | P2-02…05 向导/编辑/保存/模板 | 已完成（代码 + 测试通过；App 手动演示未记录） | Workspace/Home/Wizard/Editing、Core ProjectPackage/Templates；verification.md P2/P3 节 |
 | P3 任务链路（RunInput/事件/结果/取消/哈希/新鲜度） | 已完成（本机 CLI 与进程级验证；App 内运行未验证，sandbox 桥接待 P7） | jobs/、RunProtocols、LocalSimulationClient、RunStore；verification.md P2/P3 节 |
 | L0 稳态代表日能耗 | 已完成（集总平均估算，非 CFD；计算接线验证，非物理标定） | adapters/l0/steady_state.py、test_l0.py、contract_run.py |
-| P1-01 固定运行环境与能力检查 | 部分完成：manifest、doctor、行为测试已实现；本机（tanchai）无容器工具与 EnergyPlus，引擎安装未授权 | runtime/；verification.md |
-| L1/L2/L3 引擎 | 待开发（阻塞：Colima VM + OpenFOAM 镜像 + EnergyPlus 安装授权） | P1/P3 遗留条件 |
+| P1-01 固定运行环境与能力检查 | 已完成（2026-10-03，strict doctor exit 0 / ready） | runtime/、Artifacts/P1-01/；verification.md P1-01 收尾节；ADR-018 |
+| L1/L2/L3 引擎 | L1/L2 引擎已安装并通过最小启动验证（P1-01）；适配器待开发（P1-02…05、P3-03/04） | P1/P3 遗留条件 |
 | P5 方案对比/建议卡/基础 PDF | 已完成（L0 口径；舒适与年度费用不含，见计划） | Comparison/、Reporting/；verification.md P5 节 |
 | 只读 3D 几何预览 | 已完成（macOS 15+ RealityView；更低系统/iOS 回退说明；非编辑器、不含场） | SimuVisualization RoomPreview3D/Layout；ADR-017；verification.md |
 | 场渲染/舒适评价 | 待开发 | P4 |
@@ -38,8 +38,15 @@ GUI 手动演示路径（需用户本机执行）：模板建项目 → inspecto
 
 ## 下一步
 
-P3 与 P5（L0 口径部分）已完成。下一步按依赖顺序：P1-01 收尾需要授权安装 Colima VM、固定 OpenFOAM 镜像与 EnergyPlus 26.1.0，之后 P1-02…05 与 P4 真实 CFD；P6/P7 依赖真实案例与现场数据。报告图表增强、费用数据来源是 P5 遗留。
+P0/P2/P3/P5（L0 口径）与 P1-01 已完成。下一步按依赖顺序：P1-02 公开基准（先浮力后非等温射流，需独立固定来源）→ P1-03 自动 case/网格 → P1-04 EnergyPlus 单区代表日 → P1-05 性能实测 → P3-03 L1 适配器 → P4 CFD。P6/P7 依赖真实案例与现场数据。报告图表增强、费用数据来源是 P5 遗留。
 不要开始用示意场制作定量推荐。任何阶段完成都要添加 run/命令/验证依据。
+
+## P1-01 完成记录（2026-10-03，development 分支）
+
+- 安装（全部在 `Backend/RuntimeLocal/`，可一处清理；ADR-018）：colima v0.10.3、limactl 2.1.4（对上游 SHA256SUMS 校验）、docker CLI 29.6.2；arm64 VM（vz，4 核/6 GiB/20 GiB 稀疏盘，研发初始配置）；OpenCFD openfoam-dev v2506 固定 digest 镜像（压缩层 340 MB）；EnergyPlus 26.1.0-6f2e40d102（SHA-256 `7f2ec425…` 匹配 manifest）。
+- 真实验证（strict doctor exit 0 / ready）：daemon linux/arm64；镜像 RepoDigests 含固定身份；容器内 `uname -m`=aarch64、`buoyantSimpleFoam -help` 与版本横幅执行成功、版本 2506 匹配、探针容器清理确认；EnergyPlus Mach-O arm64 `--version` 精确匹配版本+build。报告 `Artifacts/P1-01/doctor-strict.json`（schema 校验通过）。
+- 执行中修复两个 doctor 真实 bug（v 前缀版本解析、探针递归 source），并修正 manifest `version_command`（镜像不含 foamVersion，改从求解器横幅解析）——详见 ADR-018。
+- 限制：最小启动 ≠ 物理验证；P1-02 基准尚未开始；VM 资源配置未实测（P1-05）。引擎目录与 PATH 不污染系统：`source Backend/RuntimeLocal/env.sh` 使用。
 
 ## P5 决策与基础报告完成记录（2026-10-03，development 分支）
 

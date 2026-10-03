@@ -2,6 +2,7 @@
 from importlib.resources import files
 import json
 import re
+import shlex
 import uuid
 from .probe import CommandResult, Probe, SystemProbe
 
@@ -60,7 +61,7 @@ def load_manifest(path=None) -> dict:
             raise ValueError
         if foam["environment_script"] != f'/usr/lib/openfoam/openfoam{foam["version"]}/etc/bashrc':
             raise ValueError
-        if (foam["version_command"], foam["solver_candidate"]) != ("foamVersion", "buoyantSimpleFoam"):
+        if (foam["version_command"], foam["solver_candidate"]) != ("buoyantSimpleFoam", "buoyantSimpleFoam"):
             raise ValueError
         if (foam["os"], foam["architecture"], ep["os"], ep["architecture"]) != ("linux", "arm64", "Darwin", "arm64"):
             raise ValueError
@@ -185,21 +186,24 @@ def probe_openfoam(probe, manifest, runtime, timeout):
     except (ValueError, TypeError, KeyError):
         return item("probe_failed", "Invalid Docker image metadata; rerun image inspect.", **report)
     name = "simunow-doctor-" + uuid.uuid4().hex
-    # No mount, network or case. Explicit source avoids interactive entrypoint behavior.
-    script = 'source "$1" >/dev/null && uname -m && foamVersion && buoyantSimpleFoam -help'
+    # No mount, network or case. The bashrc path must NOT be a positional parameter:
+    # with $1 set to the bashrc path, the OpenFOAM config chain re-sources it recursively
+    # (measured: ~11 s hang then SIGSEGV in the pinned v2506 image). Embed it literally.
+    script = ('source ' + shlex.quote(target["environment_script"])
+              + ' >/dev/null && uname -m && buoyantSimpleFoam -help >/dev/null && (buoyantSimpleFoam 2>&1 || true)')
     argv = cmd + ["run", "--pull=never", "--rm", "--name", name, "--platform", "linux/arm64",
                   "--network", "none", "--read-only", "--cap-drop", "ALL",
                   "--security-opt", "no-new-privileges", "--entrypoint", "/bin/bash",
-                  target["image"], "-c", script, "simunow-probe", target["environment_script"]]
+                  target["image"], "-c", script]
     result = probe.run(argv, timeout)
-    report["evidence"].append(evidence(result, "docker run --pull=never: uname -m + foamVersion + buoyantSimpleFoam -help"))
+    report["evidence"].append(evidence(result, "docker run --pull=never: uname -m + buoyantSimpleFoam -help + solver banner"))
     # Killing a Docker CLI does not stop a daemon-side container. Always bounded cleanup.
     cleanup = probe.run(cmd + ["rm", "-f", name], min(timeout, 3))
     report["evidence"].append(evidence(cleanup, "docker rm -f (only this probe's container)"))
     absent = cleanup.state == "process_failed" and "no such container" in cleanup.stderr.lower()
     report["cleanup_state"] = "ok" if cleanup.state == "ok" or absent else failure(cleanup)
     if result.state != "ok":
-        return item(failure(result), "Check the pinned image's bashrc, foamVersion and solver; timed-out probes may need container cleanup if the daemon was lost.", **report)
+        return item(failure(result), "Check the pinned image's bashrc, solver -help and version banner; timed-out probes may need container cleanup if the daemon was lost.", **report)
     output = result.stdout + "\n" + result.stderr
     arch = re.search(r"^(aarch64|arm64|x86_64|amd64)$", result.stdout, re.MULTILINE)
     report["execution_architecture"] = architecture(arch[1]) if arch else None
@@ -260,7 +264,8 @@ def inventory(probe, timeout):
     for tool, args in (("colima", ["version"]), ("limactl", ["--version"]), ("podman", ["--version"]), ("multipass", ["version"]),
                        ("foamVersion", []), ("energyplus", ["--version"])):
         result = probe.run([tool, *args], timeout)
-        match = re.search(r"\b(\d+\.\d+\.\d+)\b", result.stdout) if result.state == "ok" else None
+        # Real tools print either "0.10.3" or "v0.10.3"; \b before the digits fails on the v form.
+        match = re.search(r"\bv?(\d+\.\d+\.\d+)\b", result.stdout) if result.state == "ok" else None
         report[tool] = item("not_installed" if result.state == "command_missing" else "discovered" if result.state == "ok" else failure(result),
                             "PATH command inventory only; not a target-runtime or physics validation.",
                             version=match[1] if match else None, evidence=[evidence(result, " ".join([tool, *args]))])

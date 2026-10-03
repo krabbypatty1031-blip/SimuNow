@@ -1,6 +1,6 @@
 # P1-01 固定环境与复现
 
-查询与本机检查日期：2026-10-02。**当前 P1-01 部分完成，等待 VM/引擎安装及真实启动证据**。环境检查成功不等于物理验证成功。
+查询与本机检查日期：2026-10-03。**P1-01 已完成：strict doctor exit 0 / ready，容器与双引擎最小启动全部真实验证**（验证记录见 `Plans/Delivery/verification.md` P1-01 收尾节，ADR-018）。环境检查成功不等于物理验证成功；P1-02 基准尚未开始。
 
 ## 唯一主路线
 
@@ -8,15 +8,27 @@ Mac arm64 上运行 Python worker；现有 Colima + Docker 提供原生 Linux ar
 
 | 项目 | 固定目标 | 选择依据与验证边界 |
 |---|---|---|
-| 宿主 | macOS 14+ / arm64 | 当前实际 macOS 27.0；此 profile 不接受 x86 模拟执行 |
+| 宿主 | macOS 14+ / arm64 | 当前实际 macOS 27.0.1；此 profile 不接受 x86 模拟执行 |
 | Python | 3.13.16 / Backend/.venv | 独立环境与锁定依赖；2026-10-03 由 3.13.7 重钉（ADR-012，补丁级差异） |
-| VM 工具 | Colima 0.10.3、Lima 2.1.4、Docker CLI 29.6.2；context colima | 复用已安装工具，daemon/VM 版本与实际 Linux 架构尚未知；不为未知 server 编造版本 |
-| OpenFOAM | **OpenCFD / openfoam.com v2506**，linux/arm64 | 官方镜像 arm64 manifest digest 固定；不是 Foundation 同名数字版本，也不采用 latest |
-| EnergyPlus | **26.1.0 / build 6f2e40d102**，官方 Darwin macOS13 arm64 tar.gz | 固定官方 macOS 原生包及 SHA-256；实际在 macOS 27 启动仍待验证 |
+| VM 工具 | Colima 0.10.3、Lima 2.1.4、Docker CLI 29.6.2；context colima | 版本实测匹配；daemon linux/arm64，server 29.5.2 为 VM 内置（client 匹配目标即可） |
+| OpenFOAM | **OpenCFD / openfoam.com v2506**，linux/arm64 | 固定 digest 镜像已拉取；`version_command` 为 `buoyantSimpleFoam`（该镜像不含 foamVersion，版本/发行方从求解器横幅解析） |
+| EnergyPlus | **26.1.0 / build 6f2e40d102**，官方 Darwin macOS13 arm64 tar.gz | SHA-256 校验通过；已在 macOS 27 真实执行 `--version` 匹配 |
 
 manifest 唯一文件为 [src/simunow_worker/runtime/manifest.json](../src/simunow_worker/runtime/manifest.json)，随 Python package 分发；结构见 [manifest schema](../../Protocols/Schemas/runtime-manifest.schema.json)。团队目标不随 doctor 发现值变化。本机报告与临时日志放忽略的 `Artifacts/P1-01/`，不得复制机器路径或凭据到 manifest。
 
 已比较：OpenFOAM 原生 Mac 源码编译会增加工具链维护；x86 Linux 引入模拟执行；另建 VM/远程节点没有现存可连接环境。本轮选复用 Colima 的 arm64 镜像。官方 2412、2506 与更新版本存在，本轮冻结可核实 arm64 镜像身份的 2506，不自动跟随新发布。EnergyPlus 26.2.0 已于 2026-09-30 发布；本轮选择 26.1.0 建立首个固定基线。Linux EnergyPlus 需要另管安装/镜像，Mac 原生官方资产足够明确且减少本轮安装环节。任何升级都改 manifest、记录 ADR 并重验执行/后续基准。
+
+## 本地运行时（RuntimeLocal）
+
+所有工具与重数据位于 `Backend/RuntimeLocal/`（gitignore）：CLI 二进制、LIMA_HOME（VM、guest 镜像、容器层）、DOCKER_CONFIG、EnergyPlus 目录。使用：
+
+```bash
+source Backend/RuntimeLocal/env.sh   # 设置 LIMA_HOME/DOCKER_CONFIG/PATH/SIMUNOW_ENERGYPLUS_EXECUTABLE
+colima status                        # VM 应 Running（aarch64, vz, 4 CPU, 6 GiB）
+PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor --strict --timeout 15
+```
+
+VM 为研发初始配置 4 核/6 GiB/20 GiB 稀疏盘（非物理最低要求，P1-05 实测）。colima 的小体量 profile（socket、ssh_config、模板）固定位于 `~/.colima`。**完整清理**：`colima stop` 后删除 `Backend/RuntimeLocal` 与 `~/.colima` 即可。
 
 候选稳态求解器 `buoyantSimpleFoam`：v2506 官方源码索引说明其用于带浮力、湍流和传热的稳态流；具体热物性、辐射、湍流、近壁面策略及适用范围由 P1-02 基准决定。选择候选不代表室内射流精度已证实。自然对流基准之后仍需非等温送风射流基准。
 
@@ -65,23 +77,21 @@ PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor --timeo
 安装后用环境变量指定 EnergyPlus **真实 arm64 binary**，或加入 PATH；设置值属于本地配置，不提交。相对路径按当前 CLI 工作目录解释，建议从项目根运行。doctor 不回显路径。
 
 ```bash
-export SIMUNOW_ENERGYPLUS_EXECUTABLE='./RuntimeLocal/EnergyPlus/energyplus'
-PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor --strict
+source Backend/RuntimeLocal/env.sh   # 或手动 export SIMUNOW_ENERGYPLUS_EXECUTABLE='./Backend/RuntimeLocal/EnergyPlus/energyplus'
+PYTHONPATH=Backend/src Backend/.venv/bin/python -m simunow_worker doctor --strict --timeout 15
 ```
 
-该 RuntimeLocal 是本地示例目录，本轮没有创建或下载引擎；已加入忽略规则。不允许 shell wrapper 冒充 Mach-O 原生 binary。版本命令必须精确匹配版本与 build。OpenFOAM 使用固定 context + digest，不接受动态镜像覆盖；换环境必须显式传 `--manifest <JSON>` 并满足支持的 profile/固定身份验证。
+该 RuntimeLocal 已按 ADR-018 承载全部工具与引擎下载，已加入忽略规则。不允许 shell wrapper 冒充 Mach-O 原生 binary。版本命令必须精确匹配版本与 build。OpenFOAM 使用固定 context + digest，不接受动态镜像覆盖；换环境必须显式传 `--manifest <JSON>` 并满足支持的 profile/固定身份验证。
 
-doctor 只执行有限版本/状态命令；daemon 可用才 inspect 本地 digest，身份/架构吻合才在无 mount、无网络、只读、无额外 capability 的短命容器中执行 `uname -m`、`foamVersion` 和 `buoyantSimpleFoam -help`，分别验证实际执行架构、版本和最小启动。环境脚本目标 `/usr/lib/openfoam/openfoam2506/etc/bashrc` 尚未在本机执行确认，若布局不同会报告失败，不能默默改发行分支。stdout 仅 JSON；默认退出 0 表示报告生成成功，严格模式 blocked 退出 2。详见 [doctor 契约](../../Protocols/doctor-v1.md)。
+doctor 只执行有限版本/状态命令；daemon 可用才 inspect 本地 digest，身份/架构吻合才在无 mount、无网络、只读、无额外 capability 的短命容器中执行 `uname -m`、`buoyantSimpleFoam -help` 与求解器版本横幅（该 v2506 镜像不含 `foamVersion`，版本与发行方从求解器横幅解析），分别验证实际执行架构、版本和最小启动。环境脚本目标 `/usr/lib/openfoam/openfoam2506/etc/bashrc` 已在固定镜像中执行确认。stdout 仅 JSON；默认退出 0 表示报告生成成功，严格模式 blocked 退出 2。详见 [doctor 契约](../../Protocols/doctor-v1.md)。
 
 后续 case/weather/output 以项目根或项目包为基准，manifest 的 `runs/<run-id>/openfoam`、`weather/<weather-file>.epw`、`runs/<run-id>/` 为 P1-03/04 的布局约定，目前没有目录生成、挂载或求解实现。引擎路径仅 Backend adapter 读取，不进入 SimuCore/iOS。真实运行身份/哈希由 P3 建立。
 
-## 待授权安装与完成门槛
+## 完成门槛（已于 2026-10-03 达成）
 
-本轮没有启动或创建 VM，没有安装引擎或下载镜像。要达到 P1-01 完成，需要授权以下具体操作后另行执行：
-
-1. 以现有 Colima 0.10.3 / Lima 2.1.4 配置或启动原生 arm64 Linux VM（初次可能下载 Lima/Colima 的 Linux guest 镜像，大小未核实；先输出计划/下载 URL，再按批准范围运行）。CPU/内存分配是初始研发配置，不能声称物理最低要求。
-2. 拉取上述固定 arm64 OpenFOAM digest（压缩层约 340 MB；registry 元数据已验证），不拉 latest。
-3. 下载官方 EnergyPlus 26.1.0 Darwin arm64 tar.gz（约 210 MB），对照 manifest SHA-256 校验后解压到本地独立目录，配置 binary；不改全局 PATH、系统设置或 App sandbox。
-4. 运行严格 doctor，保存真实 daemon 架构、镜像身份、两个引擎的版本/最小启动和清理证据。成功后更新 status/verification，方可标 P1-01 完成。
+1. ~~以现有 Colima 0.10.3 / Lima 2.1.4 配置或启动原生 arm64 Linux VM~~——已启动（vz，4 核/6 GiB/20 GiB 稀疏盘，研发初始配置；guest 镜像下载到 LIMA_HOME）。
+2. ~~拉取固定 arm64 OpenFOAM digest~~——已拉取，digest 与 manifest 一致。
+3. ~~下载官方 EnergyPlus 26.1.0 Darwin arm64 tar.gz 并校验 SHA-256 解压配置~~——已完成，`energyplus --version` 真实执行匹配。
+4. ~~运行严格 doctor 并保存真实证据~~——`doctor --strict --timeout 15` exit 0 / ready（`Artifacts/P1-01/doctor-strict.json`）。
 
 P1-02 从固定 2506 来源获取候选公开基准及原始对比数据（镜像无 tutorials，需独立固定来源），先浮力基准再非等温室内射流；保留物理适用范围、误差和守恒/收敛证据。最小启动证据不能替代任何基准。P1-03 再接输入→case→网格→求解→采样；P1-04 再固定天气/设备/代表日输入。

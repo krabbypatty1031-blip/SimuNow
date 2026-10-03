@@ -132,6 +132,29 @@ App 内运行 worker 的开发配置（一次性，本机）：`defaults write c
 | `Scripts/check.sh all` | 退出 0 | Python 71 项、Swift 49+2 项、契约运行与交换、macOS/iOS BUILD SUCCEEDED；日志 `Artifacts/P5-check-all.log` |
 | App 内演示（生成候选→运行→对比→导出 PDF） | 未验证 | 需用户本机手动执行；sandbox 下 App 内 worker 执行仍待 P7 桥接 ADR |
 
+## P1-01 收尾验收（2026-10-03，本机 tanchai，用户授权安装）
+
+下载与安装全部位于 `Backend/RuntimeLocal/`（gitignore；清理：停 VM 后删除该目录与 ~/.colima）。VM 为研发初始配置 4 核/6 GiB/20 GiB 稀疏盘（非物理最低要求，P1-05 实测）。
+
+| 步骤 | 结果 | 证据 |
+|---|---|---|
+| colima v0.10.3 / limactl 2.1.4 / docker 29.6.2 | 版本精确匹配 manifest | `colima version`、`limactl --version`、`docker --version`；limactl 对上游 SHA256SUMS 校验匹配（14c5b283…） |
+| arm64 VM 启动 | 通过 | `limactl list`：colima Running，vz，aarch64，4 CPU/6 GiB；guest 镜像下载到 LIMA_HOME（RuntimeLocal/lima） |
+| OpenFOAM 镜像 | 拉取成功 | digest `sha256:f1a4b6a7…` 与 manifest 一致（340 MB 压缩层，52 秒） |
+| EnergyPlus 26.1.0 | 校验+真实启动 | SHA-256 `7f2ec425…` 匹配 manifest；209,850,883 字节；`energyplus --version` → `EnergyPlus, Version 26.1.0-6f2e40d102`，exit 0（macOS 27 原生 arm64） |
+| `doctor --strict --timeout 15` | **exit 0，status=ready** | container verified_available（linux/arm64，server 29.5.2/client 29.6.2）；openfoam verified_available（RepoDigests 含固定身份、容器内 uname=aarch64、版本 2506 匹配、`-help`+横幅执行、清理 ok）；energyplus verified_available；blockers 为空。`Artifacts/P1-01/doctor-strict.json`，过 doctor-report schema |
+| 非 strict doctor | exit 0 | `Artifacts/P1-01/doctor.json`，过 schema |
+| `Scripts/check.sh all` | 退出 0 | Python 72、Swift 52+2、契约与双端构建；`Artifacts/P1-01/check-all-p1.log` |
+
+执行中发现并修复的问题（如实记录）：
+1. doctor inventory 版本正则不匹配 `colima version v0.10.3`（v 前缀处无 `\b` 边界）→ 修正为 `\bv?(\d+\.\d+\.\d+)\b` 并加回归测试。
+2. OpenFOAM 探针以位置参数 `$1` 传 bashrc 路径：OpenFOAM 配置链对指向自身的 `$1` 递归 source（复现：`set -- <bashrc>; source <bashrc>` → ~11 秒挂起后 SIGSEGV）→ 改为脚本内嵌字面路径。
+3. manifest `version_command=foamVersion`：该 v2506 镜像不含 `foamVersion`（`ls bin` 确认）→ 修正为从 `buoyantSimpleFoam` 横幅解析版本/发行方（manifest 与 runtime-manifest schema 同步，banner 实测含 `Version:  2506` 与 `Website:  www.openfoam.com`）。
+4. 探针 5 秒默认超时过短（容器冷启动 ~12 秒）→ 验收用 `--timeout 15`。
+5. colima 小体量 profile 固定位于 ~/.colima（COLIMA_HOME 实测不改变其位置）；重数据均在 RuntimeLocal，清理步骤见 env.sh 注释。
+
+最小启动验证不是物理验证：P1-02 公开基准（浮力→非等温射流）尚未开始，镜像不含 tutorials，需独立固定来源。
+
 ## 应用启动验证（2026-10-03，本机 tanchai）
 
 | 检查 | 结果 | 证据与范围 |

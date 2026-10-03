@@ -1,6 +1,6 @@
 # 实施状态
 
-日期：2026-10-03。当前阶段：**P4 阶段门已关闭（Debug 手测已记录）**。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）。P4-03 座位采样逐座位核算（域外座位 omitted + reason）。P4-04 舒适已通：自实现 ISO 7730 附录 D 程序（ADR-010），舒适输入缺项 → PMV 指标 omitted + `reason`，不填 0。P4-05 已通 a/b/c/d：房间线框 + 质量门控坐姿高度温度切片 + App 内 L2 提交接线（ADR-011）。P4-06 已通 a/b：候选对比（同口径守卫、共用镜头与色标、freshness/quality 独立）。ADR-012 人员显热对齐已实施：每人显热 70→57 W（L1 People 57+13=70 逐位不变，L2 人员源 560→456 W），钉版座位温度 25.08–25.39→**24.43–24.73 °C**、切片 23.938–25.876→23.348–25.207 °C，L1 IDF 与 P3 手测数字逐位有效。2026-10-03 Debug 手测：办公室 L1 3099.335 W / L2 质量 passed 24.43–24.73 °C / 改送风口高度后再 L2 24.21–24.50 °C / 两列共用色标 23.0–25.2 °C。Release 沙盒仍不能 exec 引擎。Mac App 不能当产品 CFD。
+日期：2026-10-03。当前阶段：**P5-01 已通（`p5-decision-and-report`），P5-02…05 未开工**。P4 阶段门已关闭（Debug 手测已记录）。P3 L1 闭环仍在 `dev`。P4-01 已把办公室草稿映射成 L2 房间并写出 OpenFOAM 字典；P4-02 质量门禁已通：钉版 OpenFOAM 求解收敛、五道门禁全过，`energy_rel=0.19%`（含实测进口面导热 −305.9 W）。P4-03 座位采样逐座位核算（域外座位 omitted + reason）。P4-04 舒适已通：自实现 ISO 7730 附录 D 程序（ADR-010），舒适输入缺项 → PMV 指标 omitted + `reason`，不填 0。P4-05 已通 a/b/c/d：房间线框 + 质量门控坐姿高度温度切片 + App 内 L2 提交接线（ADR-011）。P4-06 已通 a/b：候选对比（同口径守卫、共用镜头与色标、freshness/quality 独立）。ADR-012 人员显热对齐已实施：每人显热 70→57 W（L1 People 57+13=70 逐位不变，L2 人员源 560→456 W），钉版座位温度 25.08–25.39→**24.43–24.73 °C**、切片 23.938–25.876→23.348–25.207 °C，L1 IDF 与 P3 手测数字逐位有效。2026-10-03 Debug 手测：办公室 L1 3099.335 W / L2 质量 passed 24.43–24.73 °C / 改送风口高度后再 L2 24.21–24.50 °C / 两列共用色标 23.0–25.2 °C。Release 沙盒仍不能 exec 引擎。Mac App 不能当产品 CFD。
 
 | 项目 | 状态 | 证据 |
 |---|---|---|
@@ -44,12 +44,13 @@
 | P4-06 候选对比 | 同口径守卫；共用镜头与色标；freshness/quality 独立 | 代码与单测见 `CandidateRun` / `WorkspaceComparisonTests` 5 项。**Debug 手测 2026-10-03**：两列并排——降低口 24.21–24.50 °C（新鲜度「输入已改」、质量 passed）与默认口 24.43–24.73 °C（「当前输入」、passed）；共用色标 23.0–25.2 °C（联合范围，单列时降低口曾是 23.0–25.0）；两列 PMV 均不可评价；无口径警示。手测两列，不是三候选 |
 | L0/L3 与场显示接入 | P4 视口/切片/对比已通 | P4-05 a/b/c/d + P4-06 a/b + Debug 手测已记录。L0/L3 引擎仍未配置。Release 沙盒 exec 待 P7 helper |
 | ADR-012 人员显热对齐 | 已实施（P4-06 对比前置） | 模板 `occupantSensibleW` 70→57（每人显热，实测拆分）；`write_idf` `OCCUPANT_LATENT_W=13` 显式单列、People 行 activity 57+13=70 逐位不变 → L1 IDF/P3 手测数字有效；L2 人员源 560→456 W（虚增 104 W 消除）；钉版重跑 `result-l2`（座位 24.43–24.73 °C）/`field-slice-l2`（23.348–25.207 °C）；断言更新 `test_l1_schedule`（activity 跟随显+潜敏感性 + 基线 70）/`test_boundary`/`test_l2_room`（456/57）/`L2BoundaryTests`/`L2RoomMappingTests`/`ContractTests`；`project-v2-office.json` fixture 第 5 处同步 57 并加断言锁值（Python 79 + Swift 125 全绿；mac/ios BUILD SUCCEEDED）；实施补录见 `decisions.md` ADR-012 |
-| 场渲染/成本/报告 | 待开发 | P5（renderer 预算在 P4-05） |
+| 场渲染/成本/报告 | P5-01 已通；费用/PDF 未开工 | ADR-013 默认已写入 office/classroom；`run-l2` 传 `comfortInputs`；`DecisionVariables` 几何轴 vs 口径轴。P5-02…05 未做 |
+| P5-01 舒适默认与可改项 | 已通 a/b/c | `ComfortAssumptionTests` 3 项；`DecisionVariableTests` 3 项；`Backend.tests.test_comfort`（office 四键 → PMV；缺 clo omitted）；`test_project_model` schema 可选 comfort + v2 不编造；`Scripts/check.sh test`：SimuCoreTests 126 + SimuVisualizationTests 10。教室披露「儿童人群未单独评价」。旧 `result-l2.json` 仍 omitted |
 | RoomPlan/实测/代理/批量 | 本期不做（用户决定 2026-10-03） | P6/P7 延后至赛后第 3–8 周路线，阶段计划文档保留不改目标 |
 
 ## 下一步
 
-P4 阶段门已关闭，并已快进合并进 `dev`（未推远程）。下一阶段按计划是 P5（建议/费用/PDF），不要把本阶段 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。已知限制：任务页 `lastResult` 单槽（提交 L2 后 L1 瓦数显示未知）；P1 case 整墙送风带，沿墙平移 s0/s1 不改场。**P6/P7 本期不做（用户决定 2026-10-03）**：RoomPlan 扫描、实测校准、代理/批量/签名部署延后至赛后路线，先集中 P5 交付。
+P5-01 已通。下一步 P5-02（L2 达标比例，文案不得叫实测满意率）。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。P5-03 将修任务页 `lastResult` 单槽（L1/L2 分槽）。P1 case 整墙送风带，沿墙平移 s0/s1 不改场。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
 
 ## P4 阶段结论
 

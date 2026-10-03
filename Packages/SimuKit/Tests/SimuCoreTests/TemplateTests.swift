@@ -113,6 +113,9 @@ private func everyQuantityHasSource(_ draft: ProjectDraft) -> Bool {
         hvac.setpointC, hvac.supplyTemperatureC, hvac.supplySpeedMs, hvac.supplyAirflowM3s,
         hvac.outdoorAirM3s, hvac.cop
     ]
+    if let comfort = occupancy.comfort {
+        quantities.append(contentsOf: [comfort.mrtC, comfort.rhPct, comfort.clo, comfort.met])
+    }
     for opening in geometry.openings {
         quantities.append(contentsOf: [opening.s0, opening.s1, opening.z0, opening.z1])
     }

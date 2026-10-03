@@ -20,6 +20,23 @@ from typing import Any
 
 # Comfort inputs the field model cannot provide itself.
 COMFORT_INPUT_KEYS = ("mrtC", "rhPct", "clo", "met")
+
+
+def comfort_inputs_from_draft(draft: dict) -> dict | None:
+    """Four runner keys from occupancy.comfort. Any missing value stays omitted."""
+    comfort = (draft.get("occupancy") or {}).get("comfort")
+    if not isinstance(comfort, dict):
+        return None
+    values: dict[str, float] = {}
+    for key in COMFORT_INPUT_KEYS:
+        item = comfort.get(key)
+        if not isinstance(item, dict) or item.get("value") is None:
+            return None
+        try:
+            values[key] = float(item["value"])
+        except (TypeError, ValueError):
+            return None
+    return values
 COMFORT_METRIC_NAMES = ("seat_pmv_min", "seat_pmv_max", "seat_ppd_max")
 COMFORT_UNITS = {"seat_pmv_min": "index", "seat_pmv_max": "index", "seat_ppd_max": "%"}
 COMFORT_METHOD = "iso7730_pmv"

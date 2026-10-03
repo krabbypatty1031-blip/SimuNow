@@ -256,6 +256,55 @@ public struct OccupiedHours: Codable, Equatable, Sendable {
     }
 }
 
+/// Adult-office ISO 7730 inputs the L2 field cannot produce. Missing keys
+/// keep PMV omitted; they are never filled with a neutral 0.
+public struct ComfortAssumptions: Codable, Equatable, Sendable {
+    public var mrtC: PhysicalQuantity
+    public var rhPct: PhysicalQuantity
+    public var clo: PhysicalQuantity
+    public var met: PhysicalQuantity
+
+    public init(
+        mrtC: PhysicalQuantity,
+        rhPct: PhysicalQuantity,
+        clo: PhysicalQuantity,
+        met: PhysicalQuantity
+    ) {
+        self.mrtC = mrtC
+        self.rhPct = rhPct
+        self.clo = clo
+        self.met = met
+    }
+
+    /// ADR-013 defaults. MRT is assumed equal to the zone setpoint, not a radiation solve.
+    public static let adultOffice = ComfortAssumptions(
+        mrtC: PhysicalQuantity(
+            value: 26,
+            unit: "C",
+            source: .assumed,
+            reference: "假设等于区设定，不是辐射求解"
+        ),
+        rhPct: PhysicalQuantity(
+            value: 50,
+            unit: "%",
+            source: .assumed,
+            reference: "比赛演示湿度假设，不是房间湿度场"
+        ),
+        clo: PhysicalQuantity(
+            value: 0.5,
+            unit: "clo",
+            source: .assumed,
+            reference: "ISO 7730 夏季轻薄办公着装量级"
+        ),
+        met: PhysicalQuantity(
+            value: 1.2,
+            unit: "met",
+            source: .assumed,
+            reference: "ISO 7730 久坐办公 70 W/m2（1 met = 58.15 W/m2 → 1.2 met）"
+        )
+    )
+}
+
 public struct OccupancyModel: Codable, Equatable, Sendable {
     public var occupantCount: PhysicalQuantity
     public var occupantSensibleW: PhysicalQuantity
@@ -263,6 +312,8 @@ public struct OccupancyModel: Codable, Equatable, Sendable {
     public var equipmentW: PhysicalQuantity
     public var seats: [Seat]
     public var schedule: OccupiedHours?
+    /// Optional. A v2 draft that predates this field still decodes.
+    public var comfort: ComfortAssumptions?
 
     public init(
         occupantCount: PhysicalQuantity,
@@ -270,7 +321,8 @@ public struct OccupancyModel: Codable, Equatable, Sendable {
         lightingW: PhysicalQuantity,
         equipmentW: PhysicalQuantity,
         seats: [Seat],
-        schedule: OccupiedHours? = nil
+        schedule: OccupiedHours? = nil,
+        comfort: ComfortAssumptions? = nil
     ) {
         self.occupantCount = occupantCount
         self.occupantSensibleW = occupantSensibleW
@@ -278,10 +330,11 @@ public struct OccupancyModel: Codable, Equatable, Sendable {
         self.equipmentW = equipmentW
         self.seats = seats
         self.schedule = schedule
+        self.comfort = comfort
     }
 
     enum CodingKeys: String, CodingKey {
-        case occupantCount, occupantSensibleW, lightingW, equipmentW, seats, schedule
+        case occupantCount, occupantSensibleW, lightingW, equipmentW, seats, schedule, comfort
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -292,6 +345,7 @@ public struct OccupancyModel: Codable, Equatable, Sendable {
         try container.encode(equipmentW, forKey: .equipmentW)
         try container.encode(seats, forKey: .seats)
         try container.encodeIfPresent(schedule, forKey: .schedule)
+        try container.encodeIfPresent(comfort, forKey: .comfort)
     }
 }
 

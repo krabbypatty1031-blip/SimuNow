@@ -76,7 +76,13 @@ enum BundledTemplateJSON {
         { "id": "S2", "position": { "x": 1.5, "y": 4.5, "z": 1.1 }, "source": "preset" },
         { "id": "S3", "position": { "x": 4.5, "y": 1.5, "z": 1.1 }, "source": "preset" },
         { "id": "S4", "position": { "x": 4.5, "y": 4.5, "z": 1.1 }, "source": "preset" }
-      ]
+      ],
+      "comfort": {
+        "mrtC": { "value": 26.0, "unit": "C", "source": "assumed", "reference": "假设等于区设定，不是辐射求解" },
+        "rhPct": { "value": 50.0, "unit": "%", "source": "assumed", "reference": "比赛演示湿度假设，不是房间湿度场" },
+        "clo": { "value": 0.5, "unit": "clo", "source": "assumed", "reference": "ISO 7730 夏季轻薄办公着装量级" },
+        "met": { "value": 1.2, "unit": "met", "source": "assumed", "reference": "ISO 7730 久坐办公 70 W/m2（1 met = 58.15 W/m2 → 1.2 met）" }
+      }
     },
     "hvac": {
       "kind": "splitAC",
@@ -125,7 +131,8 @@ enum BundledTemplateJSON {
   "lockedAssumptions": [
     "omitted: envelope_u_value",
     "omitted: weather_file",
-    "omitted: furniture_boxes"
+    "omitted: furniture_boxes",
+    "儿童人群未单独评价"
   ],
   "project": {
     "schemaVersion": 2,
@@ -155,7 +162,8 @@ enum BundledTemplateJSON {
       "assumptions": [
         "omitted: furniture_boxes",
         "omitted: envelope_u_value",
-        "omitted: weather_file"
+        "omitted: weather_file",
+        "儿童人群未单独评价"
       ]
     },
     "occupancy": {
@@ -183,7 +191,13 @@ enum BundledTemplateJSON {
         { "id": "S10", "position": { "x": 6.0, "y": 2.4, "z": 1.1 }, "source": "preset" },
         { "id": "S11", "position": { "x": 6.0, "y": 3.6, "z": 1.1 }, "source": "preset" },
         { "id": "S12", "position": { "x": 6.0, "y": 4.8, "z": 1.1 }, "source": "preset" }
-      ]
+      ],
+      "comfort": {
+        "mrtC": { "value": 26.0, "unit": "C", "source": "assumed", "reference": "假设等于区设定，不是辐射求解" },
+        "rhPct": { "value": 50.0, "unit": "%", "source": "assumed", "reference": "比赛演示湿度假设，不是房间湿度场" },
+        "clo": { "value": 0.5, "unit": "clo", "source": "assumed", "reference": "ISO 7730 夏季轻薄办公着装量级" },
+        "met": { "value": 1.2, "unit": "met", "source": "assumed", "reference": "ISO 7730 久坐办公 70 W/m2（1 met = 58.15 W/m2 → 1.2 met）" }
+      }
     },
     "hvac": {
       "kind": "splitAC",

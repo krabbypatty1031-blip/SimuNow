@@ -91,6 +91,23 @@ class ProjectModelTests(unittest.TestCase):
         self.assertIn(1, versions.get("enum", []) or [versions.get("const")])
         self.assertIn(2, versions.get("enum", []))
 
+    def test_schema_comfort_is_optional_and_names_four_keys(self):
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        occupancy = schema["$defs"]["occupancy"]
+        self.assertNotIn("comfort", occupancy["required"])
+        self.assertIn("comfort", occupancy["properties"])
+        comfort = schema["$defs"]["comfort"]
+        for key in ("mrtC", "rhPct", "clo", "met"):
+            self.assertIn(key, comfort["required"])
+            self.assertIn(key, comfort["properties"])
+
+    def test_v2_fixture_does_not_invent_comfort_zeros(self):
+        from simunow_worker.models.project import parse_project
+
+        payload = json.loads((FIXTURES / "project-v2-office.json").read_text(encoding="utf-8"))
+        draft = parse_project(payload)
+        self.assertNotIn("comfort", draft["occupancy"])
+
 
 if __name__ == "__main__":
     unittest.main()

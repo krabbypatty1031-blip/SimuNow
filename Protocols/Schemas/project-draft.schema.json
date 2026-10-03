@@ -142,7 +142,19 @@
           "minItems": 1,
           "items": { "$ref": "#/$defs/seat" }
         },
-        "schedule": { "$ref": "#/$defs/occupiedHours" }
+        "schedule": { "$ref": "#/$defs/occupiedHours" },
+        "comfort": { "$ref": "#/$defs/comfort" }
+      }
+    },
+    "comfort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mrtC", "rhPct", "clo", "met"],
+      "properties": {
+        "mrtC": { "$ref": "#/$defs/quantity" },
+        "rhPct": { "$ref": "#/$defs/quantity" },
+        "clo": { "$ref": "#/$defs/quantity" },
+        "met": { "$ref": "#/$defs/quantity" }
       }
     },
     "occupiedHours": {

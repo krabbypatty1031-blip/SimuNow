@@ -159,6 +159,12 @@ extension ProjectDraft {
             items.append(contentsOf: Self.records(for: occupancy.occupantSensibleW, path: "occupancy.occupantSensibleW"))
             items.append(contentsOf: Self.records(for: occupancy.lightingW, path: "occupancy.lightingW"))
             items.append(contentsOf: Self.records(for: occupancy.equipmentW, path: "occupancy.equipmentW"))
+            if let comfort = occupancy.comfort {
+                items.append(contentsOf: Self.records(for: comfort.mrtC, path: "occupancy.comfort.mrtC"))
+                items.append(contentsOf: Self.records(for: comfort.rhPct, path: "occupancy.comfort.rhPct"))
+                items.append(contentsOf: Self.records(for: comfort.clo, path: "occupancy.comfort.clo"))
+                items.append(contentsOf: Self.records(for: comfort.met, path: "occupancy.comfort.met"))
+            }
         }
         if let hvac {
             items.append(contentsOf: Self.records(for: hvac.setpointC, path: "hvac.setpointC"))

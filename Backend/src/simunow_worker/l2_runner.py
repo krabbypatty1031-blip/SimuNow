@@ -13,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .models.comfort import comfort_inputs_from_draft
 from .models.l2_accounting import evaluate_l2, quality_detail
 from .models.l2_room import project_to_l2_room
 from .models.task import has_execute_bit, validate_request
@@ -135,7 +136,12 @@ def run_l2_task(argv: list[str] | None = None) -> int:
         result = evaluate_l2(
             identity,
             draft,
-            {"qualityDetail": None, "seatSamples": None, "pipelineCompleted": False},
+            {
+                "qualityDetail": None,
+                "seatSamples": None,
+                "pipelineCompleted": False,
+                "comfortInputs": comfort_inputs_from_draft(draft),
+            },
         )
         _write_result(run_dir, result)
         _emit(_event(request, 2, "failed", "failed", {"message": "OpenFOAM not configured"}))
@@ -150,7 +156,12 @@ def run_l2_task(argv: list[str] | None = None) -> int:
         result = evaluate_l2(
             identity,
             draft,
-            {"qualityDetail": quality_detail(_quality_json(run_dir)), "seatSamples": None, "pipelineCompleted": False},
+            {
+                "qualityDetail": quality_detail(_quality_json(run_dir)),
+                "seatSamples": None,
+                "pipelineCompleted": False,
+                "comfortInputs": comfort_inputs_from_draft(draft),
+            },
         )
         _write_result(run_dir, result)
         _emit(_event(request, 3, "failed", "failed", {"message": f"l2 pipeline failed: {exc}"}))
@@ -165,6 +176,7 @@ def run_l2_task(argv: list[str] | None = None) -> int:
             "qualityDetail": quality_detail(_quality_json(run_dir)),
             "seatSamples": _seat_rows(run_dir),
             "pipelineCompleted": True,
+            "comfortInputs": comfort_inputs_from_draft(draft),
         },
     )
     _write_result(run_dir, result)

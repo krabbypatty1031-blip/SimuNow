@@ -11,9 +11,16 @@ instead of a fabricated value.
 
 from __future__ import annotations
 
+import json
 import unittest
 
-from simunow_worker.models.comfort import NotEvaluable, comfort_metrics, pmv_ppd, ppd_from_pmv
+from simunow_worker.models.comfort import (
+    NotEvaluable,
+    comfort_inputs_from_draft,
+    comfort_metrics,
+    pmv_ppd,
+    ppd_from_pmv,
+)
 from simunow_worker.models.l2_accounting import evaluate_l2
 
 OFFICE = {
@@ -188,6 +195,75 @@ class EvaluateL2ComfortTests(unittest.TestCase):
         self.assertFalse(by_name["seat_pmv_min"]["omitted"])
         self.assertIsNotNone(by_name["seat_pmv_min"]["value"])
         self.assertIn("pmv", result["seatSamples"][0])
+
+
+class ComfortInputsFromDraftTests(unittest.TestCase):
+    """P5-01b: runner extracts occupancy.comfort; a missing key stays omitted."""
+
+    def _identity(self):
+        from uuid import uuid4
+
+        return {"runID": str(uuid4()), "scenarioID": str(uuid4()), "inputHash": "comfort-draft"}
+
+    def _quality(self, **context_extra):
+        quality = {
+            "pipelineCompleted": True,
+            "qualityDetail": {
+                "checkMesh": "ok",
+                "solverEnded": True,
+                "monitorsStable": True,
+                "massRelativeError": 0.001,
+                "massGate": 0.01,
+                "energyRelativeError": 0.004,
+                "energyGate": 0.05,
+            },
+            "seatSamples": [dict(seat) for seat in SEATS],
+        }
+        quality.update(context_extra)
+        return quality
+
+    def test_office_template_supplies_complete_adult_office_inputs(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        office = json.loads((root / "Fixtures" / "templates" / "office.json").read_text(encoding="utf-8"))["project"]
+        inputs = comfort_inputs_from_draft(office)
+        self.assertEqual(inputs["mrtC"], 26.0)
+        self.assertEqual(inputs["rhPct"], 50.0)
+        self.assertEqual(inputs["clo"], 0.5)
+        self.assertEqual(inputs["met"], 1.2)
+        result = evaluate_l2(self._identity(), office, self._quality(comfortInputs=inputs))
+        by_name = {metric["name"]: metric for metric in result["metrics"]}
+        self.assertFalse(by_name["seat_pmv_min"]["omitted"])
+        self.assertIsNotNone(by_name["seat_pmv_min"]["value"])
+        self.assertIn("pmv", result["seatSamples"][0])
+
+    def test_missing_clo_does_not_pass_partial_inputs(self):
+        draft = {
+            "hvac": {"supplyTemperatureC": {"value": 16}, "setpointC": {"value": 26}},
+            "occupancy": {
+                "comfort": {
+                    "mrtC": {"value": 26.0, "unit": "C", "source": "assumed"},
+                    "rhPct": {"value": 50.0, "unit": "%", "source": "assumed"},
+                    "met": {"value": 1.2, "unit": "met", "source": "assumed"},
+                }
+            },
+        }
+        inputs = comfort_inputs_from_draft(draft)
+        self.assertIsNone(inputs)
+        result = evaluate_l2(self._identity(), draft, self._quality(comfortInputs=inputs))
+        by_name = {metric["name"]: metric for metric in result["metrics"]}
+        self.assertTrue(by_name["seat_pmv_min"]["omitted"])
+        self.assertIsNone(by_name["seat_pmv_min"]["value"])
+        self.assertIn("clo", by_name["seat_pmv_min"]["reason"])
+        self.assertNotIn("pmv", result["seatSamples"][0])
+
+    def test_v2_fixture_without_comfort_stays_none(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        draft = json.loads((root / "Fixtures" / "project-v2-office.json").read_text(encoding="utf-8"))
+        self.assertIsNone(comfort_inputs_from_draft(draft))
 
 
 if __name__ == "__main__":

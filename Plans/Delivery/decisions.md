@@ -104,10 +104,53 @@
 
 **实施补录（2026-10-03，对齐已完成）**：模板 `occupantSensibleW` 70→57（office/classroom JSON + `BundledTemplateJSON` 两处 + `project-v2-office.json` fixture 第 5 处（用户报漏后补钉，`test_project_model` 加断言锁值），语义=每人显热，实测拆分）；`write_idf.py` 新增 `OCCUPANT_LATENT_W=13`（显式单列，只进 L1 `q_cool`），People 行 activity=显+潜=70 **逐位不变**（SHF 字面 0.3 保留并加 IDF 注释「引擎自行拆分」），L1 IDF 与 P3 手测数字无需重跑；L2 人员显热源 560→456 W（虚增 104 W 消除），钉版重跑 `Fixtures/task/{result,field-slice}-l2.json`（固定 UUID aaaa…/cccc…，inputHash `aa0e6da1…`）：座位温度 **24.43–24.73 °C**（对齐前 25.08–25.39 为 70 W/人全额显热错位口径）、切片 23.35–25.21 °C（24×24 全有效）；断言更新 `test_l1_schedule`（activity 跟随显+潜的敏感性断言 + office activity 70 逐位基线）、`test_boundary`/`test_l2_room`（456 W / 57 W）、`L2BoundaryTests`/`L2RoomMappingTests`/`ContractTests`（57 口径）。Python 78 + Swift 125 全绿；mac/ios BUILD SUCCEEDED。**第 6 处补钉（2026-10-03 14:08，验收发现后修复）**：`test/p1/fixtures/room_p1.json` 的 `gains.people_w` 70→57（同口径漏改；对齐后该字面按「每人显热」语义使 L1 activity 漂到 83 W、CLI 复现 `q_cool_w=6571.94`，P1-04 历史证据 6334.87 不可复现）。补钉后实测：L1 CLI `q_cool_w=6334.873993885751` 与 2026-10-02 P1-04 记录**小数点后 12 位一致**（run `test/outputs/p1_l1/20261003T060835Z`）；L2 CLI 同夹具重跑质量全过（`quality.pass=true`，座位 16.96–18.68 °C 与 57 W/人口径单变量实验逐位一致，run `test/outputs/p1_room/20261003T060935Z`）；Python 79 项全绿。
 
+## ADR-013：成人办公舒适默认写入草稿，缺项仍不编造 PMV（已接受）
+
+日期：2026-10-03。
+背景：P4 舒适算法已通，但草稿无 `mrtC/rhPct/clo/met`，App 内 PMV 恒为 omitted。P5 建议卡若继续「舒适不可评价」，比赛故事讲不完。产品范围写明儿童人群需独立评价，不能把成人办公模型偷偷套到教室当实测。
+备选：(a) 继续缺输入 omitted——建议卡无舒适；(b) 用座位气温冒充完整舒适且不披露——违反 ADR-010；(c) 模板写入成人办公假设，source=`assumed`，reference 写来源，教室额外披露「儿童未单独评价」。
+选择：(c)。默认值锁定：
+
+| 量 | 值 | 单位 | 依据 |
+|---|---|---|---|
+| clo | 0.5 | clo | ISO 7730 夏季轻薄办公着装量级 |
+| met | 1.2 | met | ISO 7730 久坐办公 70 W/m²（1 met = 58.15 W/m² → 1.2 met） |
+| rhPct | 50 | % | 比赛演示湿度假设，不是房间湿度场 |
+| mrtC | 26 | °C | 假设等于区设定，**不是辐射求解**；不取 L2 气温反填 |
+
+`l2_runner` 从草稿 `occupancy.comfort` 组装 `comfortInputs`。用户可改；清空任一项 → 指标 omitted + reason，不填 0。教室模板用同一组成人默认，并在假设列表写「儿童人群未单独评价」。
+影响：schema / Swift / Python / 办公室与教室模板同步可选 `occupancy.comfort`。钉版 L2 fixture 在传入舒适假设后 PMV 将有值，须重钉或加独立夹具，不得把旧 omitted fixture 说成有 PMV。
+验证：`ComfortAssumptionTests`（office 四键 source=assumed；教室「儿童人群未单独评价」；v2 无 comfort 仍解码）；`Backend.tests.test_comfort.ComfortInputsFromDraftTests`（完整四键评 PMV；缺 clo omitted + reason）；`DecisionVariableTests`（改设定保留候选并警示「不是有效比较」）。`Fixtures/task/result-l2.json` 仍 omitted，未改钉版数字。
+
+## ADR-014：代表日电费用演示电价，改造费待报价（已接受）
+
+日期：2026-10-03。
+背景：P5 要比较运行成本。没有真实电价来源，不能编造港币或回收期。全年情景不存在（`annual_kwh` 已永 omitted）。
+备选：(a) 无电价就不算费——对比页缺运行费；(b) 编一个「市场电价」不写来源——违反费用红线；(c) 明确的演示假设，可编辑，必须带 source/reference。
+选择：(c)。默认：`1.2 HKD/kWh`，source=`assumed`，reference=`比赛演示假设，非真实电价`。代表日电量 = `p_elec_w / 1000 × 占用小时`（办公室模板 08:00–18:00 → 10 h）；代表日电费 = 电量 × 单价。缺 `p_elec_w`、缺占用时段或电价 → 费用 omitted，不填 0。改造/设备报价无来源 → 「待报价」，不出回收期、不出全年费。改设定后的节电必须来自新的 L1 run，不得乘系数。
+影响：`CostAssumptions` 进草稿或工作区状态，不写死 Desktop 路径；`CandidateRun` 冻结 pin 当时的 L1 电功率与代表日费用。
+验证：待 P5-03 测试（有电价算出日费；缺电价 omitted；不出现年费/回收期字段有值）。
+
+## ADR-015：PDF 由证据包出数字，模型 API 只写叙述（已接受）
+
+日期：2026-10-03。
+背景：用户要求加模型 API，让模型整合生成 PDF。计划要求报告引用冻结 run、不从 View 重算、每条结论有 run ID/方法/假设。LLM 直接出带数字的 PDF 会编造瓦数、达标率和费用。
+备选：(a) 纯 Swift PDFKit 表格，无模型——叙述弱；(b) 模型直接生成整份 PDF/HTML，数字也由模型写——不可复核；(c) 先由代码生成不可变 `ReportEvidence`，模型只填指定叙述槽，排版器只把证据包里的数字画进 PDF。
+选择：(c)。
+
+- **证据包**（Swift + Python + schema）：候选 run ID / inputHash / quality / 座位指标 / 达标比例 / 代表日电费 / 假设 / 建议卡结构化字段。数字只来自已有 L1/L2 结果，不经模型。
+- **叙述器协议** `ReportNarrator`：输入整份证据 JSON，输出 `headline` / 各卡 `prose` / `caveats`。实现一：OpenAI 兼容 `POST {baseURL}/v1/chat/completions`。密钥只来自环境变量 `SIMUNOW_REPORT_API_KEY` 或钥匙串，不进仓库、不在启动时下载模型。
+- **排版器**：Mac `PDFKit` 画证据表 + 叙述段落。叙述里出现的数字若不在证据包数值集合中，该段降级为「叙述未采用（含证据外数字）」，表格仍在。
+- **API 未配置或失败**：仍导出证据-only PDF（表 + run ID + 假设）。演示不依赖外网。
+- **拒绝**：模型重算指标；模型声称合规/全局最优/实测满意率；把 View 状态当报告源。
+
+影响：P5-04 先做证据包与无模型 PDF，再接可选叙述器。P5-05 离线演示验收的是证据 PDF，不是 API 连通。具体供应商/baseURL 实现时写入本地配置，不写死公钥。
+验证：待 P5-04 测试（证据包数字 = 候选指标；无密钥仍能导出 PDF；注入证据外数字的叙述被拒）。
+
 ## 待决定
 
-- P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型。
-- P4：renderer 及各平台预算、舒适档案与边界；L1 事件流式刷新。
-- P5：PDF 实现与成本数据；P7：代理/远程/发布渠道。
+- P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。
+- 叙述器供应商与 `baseURL` / 模型名：实现 P5-04 时用 OpenAI 兼容接口本地配置，不进仓库。
+- P7：代理/远程/发布渠道。
 
 每条新增决策记录触发原因、备选、选择、影响、验证证据与日期。

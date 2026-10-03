@@ -17,7 +17,7 @@
 
 | 检查 | 结果 | 说明 |
 |---|---|---|
-| Python `unittest discover -s Backend/tests` | 通过，78 项（约 40s） | 新增/更新断言：`test_l1_schedule`（occupantSensibleW=30 → People activity=43 敏感性、office activity 70 逐位基线）；`test_boundary`/`test_l2_room`（人员显热源 8×57=456 W、`people_w==57`）；钉版 `test_l2_runner`/`test_field_slice` 为独立复算型断言，随新钉版自动自洽 |
+| Python `unittest discover -s Backend/tests` | 通过，79 项（约 40s） | 新增/更新断言：`test_l1_schedule`（occupantSensibleW=30 → People activity=43 敏感性、office activity 70 逐位基线）；`test_boundary`/`test_l2_room`（人员显热源 8×57=456 W、`people_w==57`）；`test_project_model`（`project-v2-office.json` fixture 钉 57——ADR-012 漏改第 5 处补钉，防再漂移）；钉版 `test_l2_runner`/`test_field_slice` 为独立复算型断言，随新钉版自动自洽 |
 | `Scripts/check.sh test` | 通过，125 项（SimuCoreTests 115 + SimuVisualizationTests 10） | 更新断言：`L2BoundaryTests`（8×57、occupantTotal 456）、`L2RoomMappingTests`（3×57）、`ContractTests`（模板 occupantSensibleW 57）；`BundledTemplateJSON` office/classroom 两处 57.0 |
 | 钉版重跑 | 真实收敛场 | `run-l2` 固定 UUID 重跑（对齐后口径）：`Fixtures/task/result-l2.json` 座位 tC 24.42899–24.72772 °C（对齐前 25.08–25.39，下移 ~0.65 K，虚增 104 W 消除）；`field-slice-l2.json` 23.34831–25.20712 °C、576 全有效；result.identity.inputHash `aa0e6da1…`（草稿快照哈希），切片 inputHash `c922cf7a…`（P1 房间哈希），两层语义，钉版 match: False 为预期 |
 | L1 逐位不变 | 逐行 diff 证据 | People 行 activity = 57+13=70 与对齐前逐位一致（SHF 字面 0.3 保留，引擎自行拆分）→ L1 IDF 与 P3 手测数字（`q_cool` 6334.87）无需重钉 |

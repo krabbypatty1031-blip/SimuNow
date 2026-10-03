@@ -59,6 +59,18 @@ class ProjectModelTests(unittest.TestCase):
         self.assertEqual(draft["geometry"]["northYawDegrees"]["value"], 0)
         self.assertEqual(draft["geometry"]["northYawDegrees"]["unit"], "deg")
 
+    def test_v2_fixture_pins_adr012_per_person_sensible_watts(self):
+        # ADR-012: office/classroom templates carry 57 W per-person SENSIBLE
+        # heat (measured EnergyPlus split 57 sensible + 13 latent). P2-05 keeps
+        # the fixture on the template basis; a stale 70 W full-sensible figure
+        # here would re-inflate L2 occupant heat to 8x70=560 W when the fixture
+        # feeds boundary mapping, silently undoing the alignment.
+        from simunow_worker.models.project import parse_project
+
+        payload = json.loads((FIXTURES / "project-v2-office.json").read_text(encoding="utf-8"))
+        draft = parse_project(payload)
+        self.assertEqual(draft["occupancy"]["occupantSensibleW"]["value"], 57.0)
+
     def test_schema_requires_wall_span_and_optional_quantity_provenance(self):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         opening_required = schema["$defs"]["opening"]["required"]

@@ -47,7 +47,7 @@ enum ProjectLocationPicker {
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "对比说明.pdf"
         panel.prompt = "导出"
-        panel.message = "导出对比说明。表内数字来自已加入对比的方案，不会按当前房间重算。"
+        panel.message = "由 DeepSeek 根据已加入对比的方案写说明。数字来自计算结果，不会按当前房间重算。"
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         if url.pathExtension.lowercased() == "pdf" {
             return url

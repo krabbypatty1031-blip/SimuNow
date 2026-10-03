@@ -147,6 +147,8 @@
 影响：P5-04 先做证据包与无模型 PDF，再接可选叙述器。P5-05 离线演示验收的是证据 PDF，不是 API 连通。具体供应商/baseURL 实现时写入本地配置，不写死公钥。
 验证：P5-04 已测。`ReportEvidence` 数字等于候选 `seat_pass_ratio` 与代表日费用；无 `SIMUNOW_REPORT_API_KEY` 时 `narrate` 返回 nil 且 PDF 仍写出；夹具「节电 37%」整段被拒为「叙述未采用（含证据外数字）」。假密钥不出现在 PDF、project JSON 或叙述日志。见 `RecommendationTests`、`ReportEvidenceTests`、`NarratorGuardTests`、`Backend.tests.test_recommend`。
 
+**实施补录（2026-10-03，ADR-019）**：导出路径改为 DeepSeek 生成可读正文；无密钥不再写证据-only PDF。证据包出数字与数字守卫仍有效，见 ADR-019。
+
 ## ADR-016：3D 视口选 RealityKit 方案 A（只读查看，已接受并落地）
 
 日期：2026-10-03。
@@ -203,7 +205,6 @@
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。
-- 叙述器供应商与 `baseURL` / 模型名：实现 P5-04 时用 OpenAI 兼容接口本地配置，不进仓库。
 - P7：代理/远程/发布渠道。
 - 方案 B/C（点选座位、三维拖柄）是否做：方案 A 已通后另议。
 

@@ -31,70 +31,56 @@ public enum EvidencePDFAssembler {
     /// Plain-text body. Every figure is formatted from an evidence field.
     static func render(evidence: ReportEvidence, narration: ReportNarration?) -> String {
         var lines: [String] = []
-        lines.append("证据报告")
+        lines.append("对比说明")
         lines.append("电价说明：\(evidence.tariffReference)")
-        lines.append("座位带是模型门 \(format(evidence.candidates.first?.seatBandLowC ?? SeatFeasibility.airLowC))–\(format(evidence.candidates.first?.seatBandHighC ?? SeatFeasibility.airHighC)) °C。")
-        lines.append("证据表")
-        lines.append("名称")
-        lines.append("run ID")
-        lines.append("inputHash")
-        lines.append("quality")
-        lines.append("座位带 °C")
-        lines.append("达标比例（模型）")
-        lines.append("代表日 kWh")
-        lines.append("代表日费用")
+        let bandLow = evidence.candidates.first?.seatBandLowC ?? SeatFeasibility.airLowC
+        let bandHigh = evidence.candidates.first?.seatBandHighC ?? SeatFeasibility.airHighC
+        lines.append("座位合适范围：\(format(bandLow))–\(format(bandHigh)) °C（计算用的温度带，不是问卷）")
+        lines.append("方案")
         for run in evidence.candidates {
             lines.append(run.name)
-            lines.append(run.runID.uuidString)
-            lines.append(run.inputHash)
-            lines.append(run.quality.rawValue)
-            lines.append("\(format(run.seatBandLowC))–\(format(run.seatBandHighC))")
             if run.seatPassRatioOmitted || run.seatPassRatio == nil {
-                lines.append("达标比例（模型） 不可评价")
+                lines.append("合适的座位 不可评价")
             } else if let ratio = run.seatPassRatio {
-                lines.append(format(ratio))
+                lines.append("合适的座位 \(format(ratio))")
             }
             if let energy = run.dayEnergyKWh {
-                lines.append("\(format(energy)) kWh")
+                lines.append("这一天用电 \(format(energy)) kWh")
             } else {
-                lines.append("代表日电量 省略")
+                lines.append("这一天用电 还没有")
             }
             if let cost = run.dayCost, let currency = run.currency {
-                lines.append("\(format(cost)) \(currency)")
+                lines.append("这一天费用 \(format(cost)) \(currency)")
             } else {
-                lines.append("代表日费用 省略")
+                lines.append("这一天费用 还没有")
             }
             if let z0 = run.supplyZ0M, let z1 = run.supplyZ1M {
-                lines.append("送风口高度 \(format(z0))–\(format(z1)) m")
+                lines.append("出风口离地 \(format(z0))–\(format(z1)) m")
             }
         }
-        lines.append("舒适假设")
+        lines.append("查看依据与限制")
         if evidence.comfortAssumptions.isEmpty {
-            lines.append("无舒适假设")
+            lines.append("还没有舒适假设")
         } else {
             for item in evidence.comfortAssumptions {
-                let value = item.value.map(format) ?? "省略"
+                let value = item.value.map(format) ?? "还没有"
                 let reference = item.reference ?? ""
-                lines.append("\(item.name) \(value) \(item.unit) \(reference)")
+                lines.append("\(UserFacingCopy.comfortKeyTitle(item.name)) \(value) \(item.unit) \(reference)")
             }
         }
-        lines.append("建议")
         for card in evidence.cards {
-            lines.append(card.kind.rawValue)
+            lines.append(card.kind.label)
             lines.append(card.title)
             lines.append(card.detail)
             if let quote = card.quoteStatus {
                 lines.append(quote)
-            }
-            for id in card.citedRunIDs {
-                lines.append(id.uuidString)
             }
             for assumption in card.assumptions {
                 lines.append(assumption)
             }
         }
         if let narration {
-            lines.append("叙述")
+            lines.append("说明文字")
             lines.append(narration.headline)
             for (key, prose) in narration.cardProse.sorted(by: { $0.key < $1.key }) {
                 lines.append(key)
@@ -104,12 +90,19 @@ public enum EvidencePDFAssembler {
                 lines.append(caveat)
             }
         }
+        lines.append("详细编号")
+        for run in evidence.candidates {
+            lines.append(run.name)
+            lines.append(run.runID.uuidString)
+            lines.append(run.inputHash)
+            lines.append(UserFacingCopy.qualityTitle(run.quality))
+        }
         return lines.joined(separator: "\n")
     }
 
-    /// `%g` matches the guard and the PDF test for values such as 0.75 and 23.
+    /// Same two-decimal display as the rest of the UI. Stored run values stay full precision.
     private static func format(_ value: Double) -> String {
-        String(format: "%g", value)
+        UserFacingCopy.displayNumber(value)
     }
 
     #if os(macOS)

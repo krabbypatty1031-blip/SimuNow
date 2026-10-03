@@ -137,7 +137,7 @@ import SimuCore
     let operation = try #require(cards.first { $0.kind == .operation })
     #expect(operation.citedRunIDs.contains(cheaper.l1Identity!.runID))
     #expect(operation.citedRunIDs.contains(costlier.l1Identity!.runID))
-    #expect(operation.detail.contains(String(format: "%.3f", saved)))
+    #expect(operation.detail.contains(UserFacingCopy.displayNumber(saved)))
     #expect(!operation.detail.contains("无电费差"))
 }
 
@@ -160,8 +160,9 @@ import SimuCore
     let cards = RecommendationClassifier.cards(from: [low, crowded])
     #expect(cards.count == 1)
     #expect(cards[0].kind == .explanation)
-    #expect(cards[0].detail.contains("口径不同"))
-    #expect(cards[0].detail.contains("不能作为有效推荐"))
+    #expect(cards[0].title == "使用条件不同")
+    #expect(cards[0].detail.contains("不能直接比"))
+    #expect(cards[0].detail.contains("不能作为有效结论"))
     #expect(!RecommendationClassifier.canExportRecommendation(from: [low, crowded]))
 }
 
@@ -187,7 +188,7 @@ import SimuCore
         watts: 1033.112
     )
     let operation = try #require(RecommendationClassifier.cards(from: [left, right]).first { $0.kind == .operation })
-    #expect(operation.detail.contains("无电费差"))
+    #expect(operation.detail.contains("费用相同"))
     #expect(operation.citedRunIDs.contains(left.l1Identity!.runID))
     #expect(operation.citedRunIDs.contains(right.l1Identity!.runID))
 }

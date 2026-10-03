@@ -29,10 +29,13 @@ public struct WallPatchScene: Equatable, Sendable {
 public struct SeatScene: Equatable, Identifiable, Sendable {
     public var id: String
     public var position: Position3D
+    /// Room-language name. The stored id stays on the model.
+    public var displayName: String
 
-    public init(id: String, position: Position3D) {
+    public init(id: String, position: Position3D, displayName: String? = nil) {
         self.id = id
         self.position = position
+        self.displayName = displayName ?? id
     }
 }
 
@@ -49,6 +52,8 @@ public struct RoomScene: Equatable, Sendable {
     public var supply: WallPatchScene?
     public var returnAir: WallPatchScene?
     public var seats: [SeatScene]
+    /// Same order as `seats`. Used by VoiceOver and on-canvas labels.
+    public var seatDisplayNames: [String] { seats.map(\.displayName) }
 
     public init?(
         draft: ProjectDraft,
@@ -63,7 +68,14 @@ public struct RoomScene: Equatable, Sendable {
         doors = geometry.openings.filter { $0.kind == .door }.map(Self.patch)
         supply = draft.hvac.map { Self.patch($0.supply) }
         returnAir = draft.hvac.map { Self.patch($0.returnTerminal) }
-        seats = (draft.occupancy?.seats ?? []).map { SeatScene(id: $0.id, position: $0.position) }
+        let draftSeats = draft.occupancy?.seats ?? []
+        seats = draftSeats.map { seat in
+            SeatScene(
+                id: seat.id,
+                position: seat.position,
+                displayName: UserFacingCopy.seatTitle(seat: seat, seats: draftSeats, geometry: geometry)
+            )
+        }
     }
 
     /// Draft opening/terminal spans map one-to-one; no invented geometry.
@@ -135,18 +147,20 @@ public struct RoomScene: Equatable, Sendable {
             parts.append("\(doors.count) 扇门")
         }
         if supply != nil {
-            parts.append("送风口 1")
+            parts.append(UserFacingCopy.terminalTitle(isSupply: true))
         }
         if returnAir != nil {
-            parts.append("回风口 1")
+            parts.append(UserFacingCopy.terminalTitle(isSupply: false))
         }
-        parts.append("\(seats.count) 个座位")
+        if seats.isEmpty {
+            parts.append("还没有座位")
+        } else {
+            parts.append(seats.map(\.displayName).joined(separator: "、"))
+        }
         return parts.joined(separator: "，")
     }
 
     private func formatMetres(_ value: Double) -> String {
-        value.truncatingRemainder(dividingBy: 1) == 0
-            ? String(Int(value))
-            : String(format: "%.1f", value)
+        UserFacingCopy.displayNumber(value)
     }
 }

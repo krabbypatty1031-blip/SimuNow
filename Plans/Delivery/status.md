@@ -51,10 +51,12 @@
 | P5-04 建议与证据 PDF | 已通 a/b/c | 实现提交 `4c73e03`。本会话 inline 自检：规格三条均有单测；无阻塞项。导出按钮在仅有质量失败候选时仍显示，属 P5-05a 修复。Python `comfortAssumptions` 仍空（PDF 走 Swift）。未改 Release sandbox |
 | P5-05 离线演示与失败路径 | a/b 已通（含 App Debug 点击） | 自动化见上。**Debug 手测 2026-10-03**：办公室 L1 `B0932281` 3099.335 / 1033.112 W；默认口 L2 `057D25D4` 24.43–24.73 °C、PMV 0.16；降低口 L2 `373BC329` 24.21–24.50 °C、PMV 0.12；对比两列同口径、色标 23.0–25.2 °C；证据 PDF 两 run ID、比例 1、10.3311 kWh / 12.397 HKD、电价声明、舒适四假设、三卡，无叙述器。z0=2.2 的失败场 `A63B00F4` 未固定。未改 Release sandbox |
 | RoomPlan/实测/代理/批量 | 本期不做（用户决定 2026-10-03） | P6/P7 延后至赛后第 3–8 周路线，阶段计划文档保留不改目标 |
+| UX 用户向界面第一轮 | 已通（呈现层，非 3D） | `UserFacingCopy` + 四页/检查器/PDF/视口人话。`Scripts/check.sh test`：SimuCoreTests 170 + SimuVisualizationTests 11。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。提交按钮在「用电与舒适」。哈希/UUID 只进 PDF「详细编号」。3D 未做（ADR-016）。手测八条清单待 Debug 点一遍 |
+| UX 展示两位小数 | 已通 | 用户看见的数字走 `UserFacingCopy.displayNumber`（两位）。存值与会计半入（10.33112 kWh / 12.397 HKD）未改。检查器输入最多两位。`Scripts/check.sh test`：SimuCoreTests 171 + SimuVisualizationTests 11；`mac` / `ios` BUILD SUCCEEDED |
 
 ## 下一步
 
-P5 阶段门已关闭。证据 PDF 的数字来自固定 run，叙述器可选；无密钥仍可导出。质量失败或口径不同不能当有效建议导出。代表日电费不是全年电费，改造费仍是「待报价」，没有回收期。达标比例不是实测满意率，无场不写 0%。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
+用户向界面第一轮已落地（[UX-user-facing-ui](../Phases/UX-user-facing-ui/UX-user-facing-ui.md)）。**下一工作包是 ADR-016 的 RealityKit 3D**，必须复用同一套 `UserFacingCopy`，不能把 `z0` / `L1` 画回界面。证据 PDF 的数字来自固定 run，叙述器可选；无密钥仍可导出。质量失败或使用条件不同不能当有效建议导出。这一天电费不是全年电费，改造费仍是「待报价」，没有回收期。合适的座位不是实测满意率，无场不写 0%。不要把 Debug 关 sandbox 带进 Release。生产 exec 路径仍是签名 helper（ADR-011）。**P6/P7 本期不做**：RoomPlan、实测校准、代理/批量/签名部署延后。
 
 ## P5 阶段结论
 

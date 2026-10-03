@@ -112,11 +112,11 @@ public struct WorkspaceView: View {
                 } else {
                     SimulationViewport(draft: store.project, field: store.lastFieldSlice)
                 }
-                NavigationLink("编辑房间参数") {
+                NavigationLink("编辑房间") {
                     RoomEditorForm(store: store)
                 }
                 .padding()
-                .accessibilityLabel("编辑房间参数")
+                .accessibilityLabel("编辑房间")
             }
         }
         #endif
@@ -125,107 +125,81 @@ public struct WorkspaceView: View {
     @ViewBuilder
     private var runsDetail: some View {
         if store.activeRun == nil && store.lastL1Result == nil && store.lastL2Result == nil {
-            EmptyStateView(
-                "暂无计算任务",
-                symbol: "waveform.path",
-                message: "配置引擎并提交代表日 L1 或代表工况 L2 后，这里显示进度、指标与质量状态。L2 是稳态气流场，不是全年 8760 小时。"
-            )
+            VStack(spacing: 16) {
+                EmptyStateView(
+                    "用电与舒适",
+                    symbol: "waveform.path",
+                    message: "布置好房间后，在这里估算这一天用电，并查看座位冷热。"
+                )
+                VStack(spacing: 8) {
+                    runActionButtons
+                }
+                .buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Form {
-                Section("任务") {
-                    LabeledContent("状态", value: store.activeRun?.state.rawValue ?? "无")
-                    LabeledContent("质量", value: (store.lastL2Result ?? store.lastL1Result)?.quality.rawValue ?? "未评价")
-                    LabeledContent("新鲜度", value: freshnessText)
+                Section {
+                    LabeledContent("进度", value: store.activeRun.map { UserFacingCopy.runStateTitle($0.state) } ?? "已完成")
+                    LabeledContent("检查", value: UserFacingCopy.qualityTitle((store.lastL2Result ?? store.lastL1Result)?.quality ?? .notEvaluated))
+                    LabeledContent("是否按当前房间", value: UserFacingCopy.freshnessTitle(store.resultFreshness))
                     if store.isSubmitting {
-                        Text("正在求解…")
+                        Text("正在估算…")
                             .font(.footnote)
                     }
                     if let message = store.runMessage {
                         Text(message)
                             .font(.footnote)
                     }
-                    Button("固定为对比候选") {
-                        store.pinCurrentAsCandidate()
-                    }
-                    .disabled(!store.canPinCandidate)
-                    .accessibilityLabel("把当前结果固定为对比候选，冻结几何与口径快照")
+                    runActionButtons
                     if store.candidateRuns.isEmpty {
-                        Text("固定后可在方案对比页并排查看。stale 结果不能固定。")
+                        Text("房间改过之后需要重新估算，才能加入对比。")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("已固定 \(store.candidateRuns.count) 个候选，见方案对比页。")
+                        Text("已有 \(store.candidateRuns.count) 个方案在对比页。")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Section("代表日指标") {
-                    LabeledContent("L1 新鲜度", value: l1FreshnessText)
-                    if store.l1Freshness == .stale {
-                        Text("下列瓦数属于上次 L1，不是当前草稿。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                Section {
+                    LabeledContent("这一天预计用电", value: store.dayEnergyText())
+                    LabeledContent("这一天预计费用", value: store.dayCostText())
+                    LabeledContent(UserFacingCopy.metricTitle("seat_t_c_min"), value: store.metricText(named: "seat_t_c_min"))
+                    LabeledContent(UserFacingCopy.metricTitle("seat_t_c_max"), value: store.metricText(named: "seat_t_c_max"))
+                    ForEach(SeatFeasibility.comparisonRows(metrics: store.lastL2Result?.metrics ?? []), id: \.label) { row in
+                        LabeledContent(row.label, value: row.value)
                     }
-                    LabeledContent("制冷量", value: store.metricText(named: "q_cool_w"))
-                    LabeledContent("电功率", value: store.metricText(named: "p_elec_w"))
-                    LabeledContent("代表日电量", value: store.dayEnergyText())
-                    LabeledContent("代表日电费", value: store.dayCostText())
-                    LabeledContent("全年电量", value: store.metricText(named: "annual_kwh"))
+                }
+                DisclosureGroup("查看依据与限制") {
+                    LabeledContent(UserFacingCopy.metricTitle("q_cool_w"), value: store.metricText(named: "q_cool_w"))
+                    LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.metricText(named: "p_elec_w"))
                     LabeledContent("改造报价", value: "待报价")
-                    Text("制冷量不是电功率。代表日电费 = 电功率 ÷ 1000 × 占用小时 × 电价，不是全年电费。改造费待报价，不出回收期。")
+                    Text("制冷需求不是用电功率。这一天费用 = 用电功率 ÷ 1000 × 占用小时 × 电价，不是全年电费。改造待报价，不出回收期。座位是检查点不是发热源。这是稳态，不是开机降温时间。合适的座位不是问卷满意率。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Section("L2 座位指标（稳态气流场）") {
-                    LabeledContent("座位最低温", value: store.metricText(named: "seat_t_c_min"))
-                    LabeledContent("座位最高温", value: store.metricText(named: "seat_t_c_max"))
-                    LabeledContent("座位最大风速", value: store.metricText(named: "seat_u_mag_max"))
-                    LabeledContent("座位 PMV 最低", value: store.metricText(named: "seat_pmv_min"))
-                    LabeledContent("座位 PPD 最高", value: store.metricText(named: "seat_ppd_max"))
-                    if let reason = store.lastL2Result?.metric(named: "seat_pmv_min")?.reason {
-                        Text(reason)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("座位 PMV 不可评价原因")
-                    }
-                    Text("座位是采样点不是热源；PMV 是模型判据不是实测满意率；稳态场不表示降温时间。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                if let slice = store.lastFieldSlice {
-                    Section("温度切片") {
-                        LabeledContent("高度", value: String(format: "%.2f m", slice.zM))
-                        LabeledContent("范围", value: sliceRangeText(slice))
-                        LabeledContent("有效格点", value: "\(slice.stats.validCount)")
-                        Text("切片只随质量通过的场出现；格值取最近求解单元，显示密度不进座位数字。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Section("温度切片") {
-                        Text("无质量通过的场，暂无切片。未通过的数据不当有效结果。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Section("L2 边界（未跑 OpenFOAM）") {
-                    LabeledContent("送风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
+                DisclosureGroup("计算过程") {
+                    LabeledContent("出风温度", value: temperatureText(store.lastBoundary?.supplyTemperatureC, unit: "°C"))
                     LabeledContent("设定温度", value: temperatureText(store.lastBoundary?.setpointC, unit: "°C"))
-                    LabeledContent("回风口", value: store.lastBoundary?.returnTerminal.id ?? "无")
-                    LabeledContent("新风", value: flowText(store.lastBoundary?.outdoorAirM3s))
+                    LabeledContent("室外新风", value: flowText(store.lastBoundary?.outdoorAirM3s))
                     LabeledContent("循环风", value: flowText(store.lastBoundary?.recirculatedAirM3s))
-                    Text("送风温度不是设定温度。回风与新风分开。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Section("进度事件") {
+                    if let slice = store.lastFieldSlice {
+                        LabeledContent("坐姿高度", value: UserFacingCopy.displayQuantity(slice.zM, unit: "m"))
+                        LabeledContent("温度范围", value: sliceRangeText(slice))
+                    } else {
+                        Text("还没有通过检查的温度图。未通过的数据不当有效结果。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     if store.runEvents.isEmpty {
-                        Text("尚无 JSONL 事件。")
+                        Text("还没有进度。")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(Array(store.runEvents.enumerated()), id: \.offset) { _, event in
-                            Text("\(event.sequence) \(event.eventType.rawValue) \(event.payload?.message ?? event.payload?.monitor ?? "")")
-                                .accessibilityLabel("事件 \(event.sequence) \(event.eventType.rawValue)")
+                            let monitor = UserFacingCopy.monitorTitle(event.payload?.monitor)
+                            Text("\(UserFacingCopy.eventTitle(event.eventType.rawValue)) \(monitor)")
+                                .accessibilityLabel("进度 \(UserFacingCopy.eventTitle(event.eventType.rawValue))")
                         }
                     }
                 }
@@ -234,20 +208,30 @@ public struct WorkspaceView: View {
         }
     }
 
-    private var freshnessText: String {
-        switch store.resultFreshness {
-        case .current: "当前输入"
-        case .stale: "输入已改，待重算"
-        case nil: "无结果"
+    @ViewBuilder
+    private var runActionButtons: some View {
+        Button("估算这一天用电") {
+            Task { await store.submitL1() }
         }
-    }
-
-    private var l1FreshnessText: String {
-        switch store.l1Freshness {
-        case .current: "当前输入"
-        case .stale: "输入已改，非当前草稿"
-        case nil: "无结果"
+        .disabled(!store.canSubmitL1)
+        .accessibilityLabel("估算这一天用电")
+        #if os(macOS)
+        Button("查看座位冷热分布") {
+            Task { await store.submitL2() }
         }
+        .disabled(!store.canSubmitL2)
+        .accessibilityLabel("查看座位冷热分布")
+        #endif
+        Button("加入对比") {
+            store.pinCurrentAsCandidate()
+        }
+        .disabled(!store.canPinCandidate)
+        .accessibilityLabel("把当前结果加入对比")
+        Button("取消") {
+            Task { await store.cancelActiveRun() }
+        }
+        .disabled(store.activeRun == nil || !store.isSubmitting)
+        .accessibilityLabel("取消当前估算")
     }
 
     /// P4-06 comparison page: pinned candidates share one camera (yaw), one
@@ -257,10 +241,11 @@ public struct WorkspaceView: View {
     private var scenariosDetail: some View {
         if store.candidateRuns.isEmpty {
             EmptyStateView(
-                "暂无对比候选",
+                "方案对比",
                 symbol: "square.stack.3d.up",
-                message: "提交代表工况 L2 后，在任务页把结果固定为候选；基准加两个候选同口径并排。"
+                message: "先完成估算，再把结果加入对比。"
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -270,7 +255,7 @@ public struct WorkspaceView: View {
                             .foregroundStyle(.orange)
                             .accessibilityLabel(mismatch)
                     } else {
-                        Label("口径一致：人数、占用时段、设定与送风温度相同，只有几何不同。", systemImage: "checkmark.circle")
+                        Label("人数、使用时间和设定温度相同，可以并排比较。", systemImage: "checkmark.circle")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         if let savings = store.comparisonSavingsText {
@@ -280,11 +265,11 @@ public struct WorkspaceView: View {
                         }
                     }
                     if let range = store.comparisonPaletteRange {
-                        Text(String(format: "共用色标 %.1f – %.1f °C（跨候选联合范围，不各自归一化）", range.minC, range.maxC))
+                        Text("共用色标 \(UserFacingCopy.displayRange(range.minC, range.maxC, unit: "°C"))（同一把尺，不各自拉伸）")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("无质量通过的切片，暂无共用色标。")
+                        Text("还没有通过检查的温度图，暂无共用色标。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -307,7 +292,7 @@ public struct WorkspaceView: View {
                 Spacer()
                 if store.highlightedRunID == record.identity.runID
                     || store.highlightedRunID == record.l1Identity?.runID {
-                    Text("报告引用此 run")
+                    Text("结论引用此方案")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -316,62 +301,29 @@ public struct WorkspaceView: View {
                 } label: {
                     Image(systemName: "trash")
                 }
-                .accessibilityLabel("移除候选 \(record.name)")
+                .accessibilityLabel("移除方案 \(record.name)")
             }
-            Text("run \(record.identity.runID.uuidString.prefix(8)) · 输入哈希 \(record.identity.inputHash.prefix(8))")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            // Freshness and quality are independent states, shown side by side.
             HStack(spacing: 12) {
-                LabeledContent("状态", value: record.state.rawValue)
-                LabeledContent("质量", value: record.quality.rawValue)
-                LabeledContent("新鲜度", value: store.candidateFreshness(record) == .current ? "当前输入" : "输入已改")
+                LabeledContent("检查", value: UserFacingCopy.qualityTitle(record.quality))
+                LabeledContent("是否按当前房间", value: UserFacingCopy.freshnessTitle(store.candidateFreshness(record)))
             }
             .font(.footnote)
             HStack(spacing: 12) {
-                LabeledContent("L1 电功率", value: store.candidateL1PowerText(record))
-                LabeledContent("代表日电量", value: store.candidateL1EnergyText(record))
-                LabeledContent("代表日电费", value: store.candidateL1CostText(record))
+                LabeledContent("这一天预计用电", value: store.candidateL1EnergyText(record))
+                LabeledContent("这一天预计费用", value: store.candidateL1CostText(record))
             }
             .font(.footnote)
-            if store.candidateL1Freshness(record) == .stale {
-                Text("L1 电功率与代表日电费属于固定时的 L1，输入已改，非当前草稿。")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
             HStack(spacing: 12) {
-                LabeledContent("座位最低温", value: candidateMetric(record, "seat_t_c_min"))
-                LabeledContent("座位最高温", value: candidateMetric(record, "seat_t_c_max"))
-                LabeledContent("最大风速", value: candidateMetric(record, "seat_u_mag_max"))
-                LabeledContent("PPD 最高", value: candidateMetric(record, "seat_ppd_max"))
+                LabeledContent(UserFacingCopy.metricTitle("seat_t_c_min"), value: candidateMetric(record, "seat_t_c_min"))
+                LabeledContent(UserFacingCopy.metricTitle("seat_t_c_max"), value: candidateMetric(record, "seat_t_c_max"))
             }
             .font(.footnote)
-            // Model-gate coverage. Omitted fields read 不可评价, never 0%.
             HStack(spacing: 12) {
                 ForEach(SeatFeasibility.comparisonRows(metrics: record.metrics), id: \.label) { row in
                     LabeledContent(row.label, value: row.value)
                 }
             }
             .font(.footnote)
-            if let coverageNote = record.metrics.first(where: { $0.name == "seat_pass_ratio" })?.reason {
-                Text(coverageNote)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            if let infeasible = record.metrics.first(where: { $0.name == "infeasibleReason" }),
-               !infeasible.omitted,
-               let text = infeasible.reason {
-                Text(text)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            if let reason = record.metrics.first(where: { $0.name == "seat_pmv_min" })?.reason {
-                Text(reason)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            // Frozen geometry snapshot, not the live draft. One shared camera
-            // (yaw) and one shared physical palette across all candidates.
             SimulationViewport(
                 draft: record.draft,
                 field: record.slice,
@@ -379,11 +331,34 @@ public struct WorkspaceView: View {
                 yaw: sharedYaw
             )
             .frame(height: 220)
+            DisclosureGroup("查看依据与限制") {
+                LabeledContent(UserFacingCopy.metricTitle("p_elec_w"), value: store.candidateL1PowerText(record))
+                LabeledContent(UserFacingCopy.metricTitle("seat_u_mag_max"), value: candidateMetric(record, "seat_u_mag_max"))
+                LabeledContent(UserFacingCopy.metricTitle("seat_ppd_max"), value: candidateMetric(record, "seat_ppd_max"))
+                if store.candidateL1Freshness(record) == .stale {
+                    Text(UserFacingCopy.freshnessTitle(.stale))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if let coverageNote = record.metrics.first(where: { $0.name == "seat_pass_ratio" })?.reason {
+                    Text(coverageNote)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if let infeasible = record.metrics.first(where: { $0.name == "infeasibleReason" }),
+                   !infeasible.omitted,
+                   let text = infeasible.reason {
+                    Text(UserFacingCopy.gateTitle(text))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("计算编号", value: String(record.identity.runID.uuidString.prefix(8)))
+            }
         }
         .padding(12)
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("对比候选 \(record.name)")
+        .accessibilityLabel("对比方案 \(record.name)")
     }
 
     private func candidateMetric(_ record: CandidateRun, _ name: String) -> String {
@@ -393,7 +368,7 @@ public struct WorkspaceView: View {
         if metric.omitted || metric.value == nil {
             return "未知"
         }
-        return "\(metric.value!) \(metric.unit)"
+        return UserFacingCopy.displayQuantity(metric.value!, unit: metric.unit)
     }
 
     /// One physical colour range shared by every candidate viewport.
@@ -407,17 +382,17 @@ public struct WorkspaceView: View {
         guard let minC = slice.stats.minC, let maxC = slice.stats.maxC else {
             return "未知"
         }
-        return String(format: "%.1f – %.1f °C", minC, maxC)
+        return UserFacingCopy.displayRange(minC, maxC, unit: "°C")
     }
 
     private func temperatureText(_ value: Double?, unit: String) -> String {
         guard let value else { return "无" }
-        return "\(value) \(unit)"
+        return UserFacingCopy.displayQuantity(value, unit: unit)
     }
 
     private func flowText(_ value: Double?) -> String {
         guard let value else { return "无" }
-        return "\(value) m³/s"
+        return UserFacingCopy.displayQuantity(value, unit: "m³/s")
     }
 
     /// Pinned evidence only. No candidates keeps the empty state, and the export
@@ -449,7 +424,7 @@ public struct WorkspaceView: View {
                     }
                     #else
                     if store.canExportEvidencePDF {
-                        Text("证据 PDF 在 Mac 上导出。")
+                        Text("对比说明在 Mac 上导出。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -458,7 +433,8 @@ public struct WorkspaceView: View {
                 .padding()
             }
         } else {
-            EmptyStateView("暂无报告", symbol: "doc.text", message: "固定通过质量检查的候选后，这里显示建议。没有候选时不能导出。")
+            EmptyStateView("带走结论", symbol: "doc.text", message: "加入通过检查的方案后，这里给出结论。没有方案时不能导出。")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -469,23 +445,26 @@ public struct WorkspaceView: View {
                 .foregroundStyle(.secondary)
             Text(card.title)
                 .font(.headline)
-            Text(card.detail)
+            Text(card.summary)
                 .font(.body)
             if let quote = card.quoteStatus {
                 Text(quote)
                     .font(.subheadline)
             }
             ForEach(card.citedRunIDs, id: \.self) { runID in
-                Button(runID.uuidString) {
+                Button(citedSchemeName(runID)) {
                     store.focusCitedRun(runID)
                 }
-                .font(.caption.monospaced())
-                .accessibilityLabel("打开 run \(runID.uuidString)")
+                .accessibilityLabel("打开方案 \(citedSchemeName(runID))")
             }
-            if !card.assumptions.isEmpty {
-                Text(card.assumptions.joined(separator: "\n"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            DisclosureGroup("查看依据与限制") {
+                Text(card.detail)
+                    .font(.footnote)
+                if !card.assumptions.isEmpty {
+                    Text(card.assumptions.joined(separator: "\n"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -495,6 +474,16 @@ public struct WorkspaceView: View {
         .accessibilityLabel("\(card.kind.label) \(card.title)")
     }
 
+    /// Cite a pinned scheme by its name. The UUID stays on the evidence object.
+    private func citedSchemeName(_ runID: UUID) -> String {
+        if let match = store.candidateRuns.first(where: {
+            $0.identity.runID == runID || $0.l1Identity?.runID == runID
+        }) {
+            return match.name
+        }
+        return "方案"
+    }
+
     private func exportEvidencePDF() async {
         guard let url = ProjectLocationPicker.requestEvidencePDFURL() else { return }
         do {
@@ -502,9 +491,9 @@ public struct WorkspaceView: View {
         } catch EvidencePDFError.notExportable {
             store.reportMessage = WorkspaceStore.blockedExportStatus
         } catch EvidencePDFError.unsupportedPlatform {
-            store.packageError = "证据 PDF 仅在 Mac 上导出"
+            store.packageError = "对比说明仅在 Mac 上导出"
         } catch {
-            store.packageError = "证据 PDF 导出失败"
+            store.packageError = "对比说明导出失败"
         }
     }
 
@@ -512,9 +501,9 @@ public struct WorkspaceView: View {
     private var emptyProjectPane: some View {
         VStack(spacing: 16) {
             EmptyStateView(
-                "房间工作区",
+                "布置房间",
                 symbol: "cube.transparent",
-                message: "还没有项目。从办公室或教室模板开始，或打开已有的 .simunow 包。未配置引擎时不能提交代表日 L1。"
+                message: "从一个办公室或教室模板开始，或打开已有房间。"
             )
             HStack(spacing: 12) {
                 Button("办公室模板") {

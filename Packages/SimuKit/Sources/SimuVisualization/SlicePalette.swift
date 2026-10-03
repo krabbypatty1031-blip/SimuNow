@@ -43,6 +43,6 @@ public struct SlicePalette: Sendable {
     /// Legend text states the physical range with the unit; the range is
     /// evidence, not decoration.
     public var legendText: String {
-        String(format: "%.1f – %.1f °C", minC, maxC)
+        "坐姿高度 \(UserFacingCopy.displayRange(minC, maxC, unit: "°C")) · 蓝凉红热"
     }
 }

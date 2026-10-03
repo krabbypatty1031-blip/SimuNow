@@ -16,8 +16,8 @@ public enum RecommendationKind: String, Codable, Sendable, Equatable {
     public var label: String {
         switch self {
         case .explanation: "说明"
-        case .operation: "运行"
-        case .comfort: "舒适"
+        case .operation: "用电"
+        case .comfort: "座位舒适"
         case .retrofit: "改造"
         }
     }
@@ -59,6 +59,14 @@ public struct RecommendationCard: Codable, Equatable, Sendable, Identifiable {
         self.quoteStatus = quoteStatus
         self.payback = payback
     }
+
+    /// First sentence for the unfolded report card. The rest stays behind disclosure.
+    public var summary: String {
+        if let end = detail.firstIndex(of: "。") {
+            return String(detail[...end])
+        }
+        return detail
+    }
 }
 
 /// Classifies pinned candidates into cards. Does not resimulate and does not
@@ -69,16 +77,16 @@ public enum RecommendationClassifier: Sendable {
         if !candidates.contains(where: isQualityPassedField) {
             return [explanation(
                 id: "no-quality-passed-field",
-                title: "无质量通过场",
-                detail: "这些 run 没有质量通过的气流场，不能比较座位舒适或代表日费用。",
+                title: "还不能比较",
+                detail: "这些方案还没有通过检查的气流结果，不能比较座位冷热或这一天的费用。",
                 candidates: candidates
             )]
         }
         if allEvaluatedSeatsFail(candidates) {
             return [explanation(
                 id: "no-feasible-seats",
-                title: "已评座位均未通过模型门",
-                detail: "已评座位全部未通过温度、风速或 PMV 门。这里只说明触犯的约束。",
+                title: "这些座位目前都不合适",
+                detail: "先看温度和吹风，再谈哪个方案更好。",
                 candidates: candidates.filter(isQualityPassedField)
             )]
         }
@@ -88,8 +96,8 @@ public enum RecommendationClassifier: Sendable {
         if let reason = mixedBasisReason(fields) {
             return [explanation(
                 id: "basis-mismatch",
-                title: "口径不同",
-                detail: reason + "。不能作为有效推荐。",
+                title: "使用条件不同",
+                detail: reason + "。不能作为有效结论。",
                 candidates: fields
             )]
         }
@@ -172,8 +180,8 @@ public enum RecommendationClassifier: Sendable {
         return RecommendationCard(
             id: "constraint",
             kind: .explanation,
-            title: "约束：部分座位未过模型门",
-            detail: "部分已评座位未通过模型门。先看约束，再比较舒适与代表日费用。",
+            title: "有的座位还不合适",
+            detail: "先看不合适的座位，再比较舒适和电费。",
             citedRunIDs: partial.map(\.identity.runID),
             qualityPassed: true,
             assumptions: assumptionLines(partial)
@@ -194,8 +202,8 @@ public enum RecommendationClassifier: Sendable {
         return RecommendationCard(
             id: "comfort",
             kind: .comfort,
-            title: "舒适：送风高度",
-            detail: "同口径下送风口高度不同，座位温度或达标比例（模型）发生变化。质量 passed。舒适与费用分列，不合成单一分数。",
+            title: "出风口高度不同",
+            detail: "同样使用条件下，出风口高低改变了座位冷热。舒适和费用分开看，不合成一个分数。",
             citedRunIDs: changed.map(\.identity.runID),
             qualityPassed: true,
             assumptions: assumptionLines(changed)
@@ -215,21 +223,17 @@ public enum RecommendationClassifier: Sendable {
             return nil
         }
         let l1IDs = priced.compactMap(\.l1Identity?.runID)
-        let lever = "同口径下设定温度、风量与占用仍可调整。"
+        let lever = "同样使用条件下，设定温度、风量和人数仍可调整。"
         let detail: String
         if saved == 0 {
-            detail = lever + "无电费差。"
+            detail = lever + "费用相同。"
         } else {
-            detail = lever + String(
-                format: "代表日电费相差 %.3f %@（两次 L1 电功率之差，不是系数估算）。",
-                saved,
-                currency
-            )
+            detail = lever + "这一天预计费用相差 \(UserFacingCopy.displayNumber(saved)) \(currency)（按两次估算的用电功率相减，不是系数）。"
         }
         return RecommendationCard(
             id: "operation",
             kind: .operation,
-            title: "运行：代表日电费",
+            title: "哪天更省电",
             detail: detail,
             citedRunIDs: l1IDs,
             qualityPassed: true,
@@ -244,8 +248,8 @@ public enum RecommendationClassifier: Sendable {
         return RecommendationCard(
             id: "retrofit",
             kind: .retrofit,
-            title: "改造：设备与安装",
-            detail: "更换设备或改安装需要报价。当前结论为待报价。",
+            title: "若要换设备",
+            detail: "更换设备需要报价，现在是待报价。",
             citedRunIDs: candidates.map(\.identity.runID),
             qualityPassed: candidates.allSatisfy { $0.quality == .passed },
             assumptions: assumptions,
@@ -301,9 +305,15 @@ public enum RecommendationClassifier: Sendable {
         var lines: [String] = []
         for candidate in candidates {
             if let comfort = candidate.draft.occupancy?.comfort {
-                for quantity in [comfort.mrtC, comfort.rhPct, comfort.clo, comfort.met] {
+                let quantities: [(String, PhysicalQuantity)] = [
+                    ("mrtC", comfort.mrtC),
+                    ("rhPct", comfort.rhPct),
+                    ("clo", comfort.clo),
+                    ("met", comfort.met),
+                ]
+                for (key, quantity) in quantities {
                     guard let reference = quantity.reference else { continue }
-                    let line = "\(quantity.value) \(quantity.unit)：\(reference)"
+                    let line = "\(UserFacingCopy.comfortKeyTitle(key)) \(UserFacingCopy.displayQuantity(quantity.value, unit: quantity.unit))：\(reference)"
                     if !lines.contains(line) {
                         lines.append(line)
                     }

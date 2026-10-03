@@ -89,19 +89,21 @@ private func metric(_ metrics: [ResultMetric], _ name: String) -> ResultMetric? 
     let blob = metrics.map { ($0.reason ?? "") + $0.name }.joined(separator: " ")
     #expect(!blob.contains("推荐方案"))
     #expect(!blob.contains("满意率"))
-    #expect(SeatFeasibility.coverageText(metrics: metrics) == "0%（0/3）")
+    #expect(SeatFeasibility.coverageText(metrics: metrics) == "3 个中 0 个合适")
 }
 
 @Test func comparisonLabelsAreModelCoverageNotSatisfactionRate() {
     let rows = SeatFeasibility.comparisonRows(metrics: SeatFeasibility.metrics(seats: inBand, qualityPassed: true))
-    #expect(rows.contains { $0.label == "达标座位比例（模型）" || $0.label == "模型判据座位覆盖" })
+    #expect(rows.contains { $0.label == SeatFeasibility.coverageLabel })
     for row in rows {
         #expect(!row.label.contains("满意率"))
         #expect(!row.value.contains("满意率"))
+        #expect(!UserFacingCopy.containsForbiddenDefaultToken(row.label))
     }
-    #expect(rows[0].value == "100%（4/4）")
+    #expect(rows[0].value == "4 个中 4 个合适")
     let worst = rows.first { $0.label == SeatFeasibility.worstSeatLabel }
-    #expect(worst?.value.contains("S4") == true)
+    #expect(worst?.value.contains("座位 4") == true)
+    #expect(worst?.value.contains("S4") != true)
 }
 
 @Test func bandEdgesPassAndSpeedBreaksATemperatureTie() {

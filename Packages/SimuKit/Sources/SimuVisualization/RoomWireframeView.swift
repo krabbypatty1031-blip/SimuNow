@@ -75,11 +75,7 @@ public struct RoomWireframeView: View {
     private var accessibilityText: String {
         var text = scene.accessibilitySummary
         if let field, let minC = field.stats.minC, let maxC = field.stats.maxC {
-            text += String(
-                format: "，坐姿高度温度切片 %.1f 到 %.1f 摄氏度（质量通过）",
-                minC,
-                maxC
-            )
+            text += "，坐姿高度温度切片 \(UserFacingCopy.displayNumber(minC)) 到 \(UserFacingCopy.displayNumber(maxC)) 摄氏度（质量通过）"
         }
         return text
     }
@@ -172,6 +168,10 @@ public struct RoomWireframeView: View {
             let center = Self.apply(projection.screenPoint(seat.position), transform: fit)
             let rect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
             context.fill(Path(ellipseIn: rect), with: .color(.primary))
+            context.draw(
+                Text(seat.displayName).font(.caption2),
+                at: CGPoint(x: center.x + 10, y: center.y)
+            )
         }
     }
 

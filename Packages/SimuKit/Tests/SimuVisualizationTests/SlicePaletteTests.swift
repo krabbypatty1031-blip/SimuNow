@@ -28,6 +28,14 @@ import SimuVisualization
     #expect(legend.contains("°C"))
 }
 
+@Test func slicePaletteLegendStatesSeatHeightAndColdWarm() {
+    let palette = SlicePalette(minC: 23.9, maxC: 25.9)
+    #expect(palette.legendText.contains("23.9"))
+    #expect(palette.legendText.contains("坐姿高度"))
+    #expect(palette.legendText.contains("蓝凉红热"))
+    #expect(!palette.legendText.contains("L2"))
+}
+
 @Test func slicePaletteWithDegenerateRangeIsSingleHue() {
     // A flat field is one colour, not a division by zero.
     let palette = SlicePalette(minC: 25.0, maxC: 25.0)

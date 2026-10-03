@@ -93,17 +93,17 @@ public struct RepresentativeDayCost: Codable, Equatable, Sendable {
 
     public var energyText: String {
         guard let energyKWh, !energyOmitted else { return "未知" }
-        return String(format: "%.5f kWh", energyKWh)
+        return UserFacingCopy.displayQuantity(energyKWh, unit: "kWh")
     }
 
     public var costText: String {
         guard let cost, let currency, !costOmitted else { return "未知" }
-        return String(format: "%.3f %@", cost, currency)
+        return UserFacingCopy.displayQuantity(cost, unit: currency)
     }
 
     public var powerText: String {
         guard let electricPowerW else { return "未知" }
-        return String(format: "%.3f W", electricPowerW)
+        return UserFacingCopy.displayQuantity(electricPowerW, unit: "W")
     }
 }
 

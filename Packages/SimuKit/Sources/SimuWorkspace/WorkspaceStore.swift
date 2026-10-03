@@ -38,7 +38,7 @@ public final class WorkspaceStore {
     public var runEvents: [SimulationEvent] = []
     public var runMessage: String?
     public var isSubmitting = false
-    public var engineStatus = "未配置本地 EnergyPlus"
+    public var engineStatus = "还不能估算。请在「计算准备」里选择计算文件夹。"
     public var pendingRepositoryRoot: URL?
     public var pendingEnginesRoot: URL?
 
@@ -51,7 +51,7 @@ public final class WorkspaceStore {
         self.l1Client = l1Client ?? UnconfiguredL1TaskClient()
         self.l2Client = l2Client ?? UnconfiguredL2TaskClient()
         if l1Client != nil {
-            engineStatus = self.l1Client.isConfigured ? "已配置代表日 L1" : "未配置本地 EnergyPlus"
+            engineStatus = self.l1Client.isConfigured ? "可以估算这一天用电。" : "还不能估算。请在「计算准备」里选择计算文件夹。"
         }
     }
 
@@ -312,11 +312,11 @@ public final class WorkspaceStore {
     /// Submit an immutable representative-day L1. Does not invent watts if the client fails.
     public func submitL1() async {
         guard let project else {
-            runMessage = "没有可提交的项目。"
+            runMessage = "还没有房间。"
             return
         }
         guard canSubmitL1 else {
-            runMessage = l1Client.isConfigured ? "模型不完整或已有任务在运行。" : "计算引擎尚未配置。请选择工作副本与引擎目录。"
+            runMessage = l1Client.isConfigured ? "房间还不完整，或正在估算。" : "还不能估算。请在「计算准备」里选择计算文件夹。"
             return
         }
         isSubmitting = true
@@ -341,7 +341,7 @@ public final class WorkspaceStore {
                 lastBoundary = try? L2BoundaryMapping.map(draft: project, l1: lastL1Result)
             }
             if receipt.state == .failed {
-                runMessage = "代表日 L1 失败。冷量未写成 0。"
+                runMessage = "这一天的用电还算不出来，不会用 0 代替。"
             }
         } catch {
             runMessage = error.localizedDescription
@@ -353,11 +353,11 @@ public final class WorkspaceStore {
     /// seat metrics omitted and load no slice; nothing is invented.
     public func submitL2() async {
         guard let project else {
-            runMessage = "没有可提交的项目。"
+            runMessage = "还没有房间。"
             return
         }
         guard canSubmitL2 else {
-            runMessage = l2Client.isConfigured ? "模型不完整或已有任务在运行。" : "计算引擎尚未配置。请选择工作副本与含 openfoam.sh 的引擎目录。"
+            runMessage = l2Client.isConfigured ? "房间还不完整，或正在估算。" : "还不能查看座位冷热。请在「计算准备」里选择计算文件夹。"
             return
         }
         isSubmitting = true
@@ -380,7 +380,7 @@ public final class WorkspaceStore {
             // The slice only exists for a quality-passed field; nil is honest.
             lastFieldSlice = try await l2Client.loadFieldSlice(runID: receipt.identity.runID)
             if receipt.state == .failed {
-                runMessage = "代表工况 L2 失败。座位温度未写成 0。"
+                runMessage = "座位冷热还看不出来，不会写成 0 度。"
             }
         } catch {
             runMessage = error.localizedDescription
@@ -412,9 +412,9 @@ public final class WorkspaceStore {
     public var reportMessage: String?
 
     /// Button copy stays this phrase. A missing API key must not rename it to 「生成报告」.
-    public static let evidenceExportLabel = "导出证据 PDF"
-    public static let evidenceOnlyNarratorStatus = "未配置叙述器，仅证据表"
-    public static let blockedExportStatus = "质量未通过、座位不可行或口径不同，不能导出有效建议 PDF。"
+    public static let evidenceExportLabel = "导出对比说明"
+    public static let evidenceOnlyNarratorStatus = "未配置说明文字，仅导出对照表"
+    public static let blockedExportStatus = "有方案未通过检查、座位都不可评价，或使用条件不同，不能导出有效结论。"
 
     /// Narrate when a narrator is injected or (in production) configured from the environment.
     /// Missing key or a failed request still writes the evidence tables.
@@ -427,7 +427,7 @@ public final class WorkspaceStore {
         let narration = await narrator?.narrate(evidence)
         try EvidencePDFAssembler.write(evidence: evidence, narration: narration, to: url)
         // Narration is optional. A nil result is still a successful evidence PDF.
-        reportMessage = narration == nil ? Self.evidenceOnlyNarratorStatus : "已导出证据 PDF"
+        reportMessage = narration == nil ? Self.evidenceOnlyNarratorStatus : "已导出对比说明"
     }
 
     public var reportEvidence: ReportEvidence? {
@@ -538,7 +538,7 @@ public final class WorkspaceStore {
               saved != 0 else {
             return nil
         }
-        return String(format: "代表日电费相差 %.3f %@（两次 L1 电功率之差，不是系数估算）", saved, currency)
+        return "这一天预计费用相差 \(UserFacingCopy.displayNumber(saved)) \(currency)（按两次估算的用电功率相减，不是系数）"
     }
 
     /// Day cost of the stored L1 watts. Hours come from that run's schedule
@@ -640,7 +640,7 @@ public final class WorkspaceStore {
     private func annotatedL1(_ record: CandidateRun, text: String, hasValue: Bool) -> String {
         guard hasValue, text != "未知" else { return text }
         if candidateL1Freshness(record) == .stale {
-            return "\(text)（输入已改，非当前草稿）"
+            return "\(text)（\(UserFacingCopy.freshnessTitle(.stale))）"
         }
         return text
     }
@@ -658,21 +658,21 @@ public final class WorkspaceStore {
 
     public func chooseRepositoryRoot() {
         guard let url = ProjectLocationPicker.requestDirectoryURL(
-            message: "选择含 Backend/src 的工作副本。App 包内已有 worker 时不必选。",
-            prompt: "选择工作副本"
+            message: "选择含计算程序的文件夹。App 已自带时不必选。",
+            prompt: "选择程序副本"
         ) else { return }
         pendingRepositoryRoot = url
         if let engines = pendingEnginesRoot {
             applyEnginesOnly(engines)
         } else {
-            engineStatus = "已选工作副本，还需要引擎目录"
+            engineStatus = "已选程序副本，还需要计算文件夹。"
         }
     }
 
     public func chooseEnginesRoot() {
         guard let url = ProjectLocationPicker.requestDirectoryURL(
-            message: "选择含 EnergyPlus/energyplus 的引擎目录。只需选一次。",
-            prompt: "选择引擎目录"
+            message: "选择计算文件夹，只需选一次。",
+            prompt: "选择计算文件夹"
         ) else { return }
         applyEnginesOnly(url)
     }
@@ -681,7 +681,7 @@ public final class WorkspaceStore {
     public func applyEnginesOnly(_ enginesRoot: URL, runtimeRoot: URL? = nil) {
         pendingEnginesRoot = enginesRoot
         guard let source = workerSourceRoot() else {
-            engineStatus = "已选引擎目录。还需要 App 内 worker 或工作副本。"
+            engineStatus = "已选计算文件夹，还缺程序副本。"
             return
         }
         do {
@@ -724,14 +724,14 @@ public final class WorkspaceStore {
         )
         l2Client = l2
         if client.isConfigured && l2.isConfigured {
-            engineStatus = "已配置代表日 L1 与代表工况 L2（不是全年 8760h）"
+            engineStatus = "可以估算用电，也可以查看座位冷热。"
         } else if client.isConfigured {
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = "已配置 EnergyPlus 代表日 L1，不是 CFD；L2 还需要含 openfoam.sh 的引擎目录"
+            engineStatus = "可以估算这一天用电。座位冷热还需要气流计算文件夹。"
         } else {
             l1Client = UnconfiguredL1TaskClient()
             l2Client = UnconfiguredL2TaskClient()
-            engineStatus = "未配置：运行时须含 worker，引擎目录须含 EnergyPlus/energyplus，且需可用的 python3"
+            engineStatus = "还不能估算。请选择计算文件夹。"
         }
     }
 
@@ -775,7 +775,7 @@ public final class WorkspaceStore {
         if !hasResult { return "无结果" }
         if !hasValue || text == "未知" { return "未知" }
         if l1Freshness == .stale {
-            return "\(text)（输入已改，非当前草稿）"
+            return "\(text)（\(UserFacingCopy.freshnessTitle(.stale))）"
         }
         return text
     }
@@ -784,9 +784,9 @@ public final class WorkspaceStore {
         guard let metric = result?.metric(named: name), let value = metric.value, !metric.omitted else {
             return result == nil ? "无结果" : "未知"
         }
-        let text = "\(value) \(metric.unit)"
+        let text = UserFacingCopy.displayQuantity(value, unit: metric.unit)
         if markStale {
-            return "\(text)（输入已改，非当前草稿）"
+            return "\(text)（\(UserFacingCopy.freshnessTitle(.stale))）"
         }
         return text
     }
@@ -820,10 +820,10 @@ public enum WorkspaceDestination: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .workspace: "房间工作区"
+        case .workspace: "布置房间"
         case .scenarios: "方案对比"
-        case .runs: "计算任务"
-        case .reports: "分析报告"
+        case .runs: "用电与舒适"
+        case .reports: "带走结论"
         }
     }
 

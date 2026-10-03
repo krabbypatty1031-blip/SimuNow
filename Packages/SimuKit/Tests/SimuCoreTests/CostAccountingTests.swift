@@ -166,7 +166,7 @@ import SimuWorkspace
     store.applyOccupantCount(10)
     #expect(store.l1Freshness == .stale)
     #expect(store.metricText(named: "p_elec_w").contains("2000"))
-    #expect(store.metricText(named: "p_elec_w").contains("非当前草稿"))
+    #expect(store.metricText(named: "p_elec_w").contains(UserFacingCopy.freshnessTitle(.stale)))
 }
 
 @MainActor
@@ -294,7 +294,7 @@ import SimuWorkspace
     ))
     #expect(store.l1Freshness == .current)
     #expect(!store.metricText(named: "p_elec_w").contains("非当前"))
-    #expect(store.dayCostText() == "30.000 HKD")
+    #expect(store.dayCostText() == "30.00 HKD")
 }
 
 /// Lowering the supply and re-running only L2 leaves L1 watts behind.
@@ -351,9 +351,9 @@ import SimuWorkspace
     #expect(store.candidateL1Freshness(record) == .stale)
     let power = store.candidateL1PowerText(record)
     let cost = store.candidateL1CostText(record)
-    #expect(power.contains("非当前草稿"))
+    #expect(power.contains(UserFacingCopy.freshnessTitle(.stale)))
     #expect(!power.contains("当前输入"))
-    #expect(cost.contains("非当前草稿"))
+    #expect(cost.contains(UserFacingCopy.freshnessTitle(.stale)))
     #expect(!cost.contains("当前输入"))
 }
 

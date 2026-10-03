@@ -28,7 +28,7 @@ public struct ListedAssumption: Equatable, Identifiable, Sendable {
     public var provenanceText: String {
         var text = note ?? reference ?? "未知 / 无出处"
         if let uncertainty, let unit {
-            text += " · 不确定度 \(uncertainty) \(unit)"
+            text += " · 不确定度 \(UserFacingCopy.displayQuantity(uncertainty, unit: unit))"
         }
         return text
     }

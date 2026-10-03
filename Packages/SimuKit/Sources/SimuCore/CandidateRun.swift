@@ -94,6 +94,6 @@ public struct CandidateRun: Codable, Equatable, Sendable, Identifiable {
             mismatches.append("送风温度")
         }
         guard !mismatches.isEmpty else { return nil }
-        return "口径不同（\(mismatches.joined(separator: "、"))），并排数值不是有效比较"
+        return "\(mismatches.joined(separator: "、"))不同，不能直接比"
     }
 }

@@ -18,8 +18,9 @@ import PDFKit
     #expect(store.reportStatusLine == nil)
     #expect(!store.canSubmitL1)
     #expect(!store.canSubmitL2)
-    #expect(WorkspaceStore.evidenceExportLabel == "导出证据 PDF")
+    #expect(WorkspaceStore.evidenceExportLabel == "导出对比说明")
     #expect(WorkspaceStore.evidenceExportLabel != "生成报告")
+    #expect(WorkspaceStore.evidenceExportLabel != "导出证据 PDF")
 }
 
 /// A quality-failed pin can be explained. It must not become a recommendation PDF.
@@ -90,10 +91,10 @@ import PDFKit
     #expect(text.contains(pair.high.identity.runID.uuidString))
     #expect(text.contains("比赛演示假设，非真实电价"))
     let ratio = try #require(evidence.candidates.first { $0.runID == pair.high.identity.runID }?.seatPassRatio)
-    #expect(text.contains(String(format: "%g", ratio)))
+    #expect(text.contains(UserFacingCopy.displayNumber(ratio)))
     let cost = try #require(pair.high.dayCost.cost)
     let currency = try #require(pair.high.dayCost.currency)
-    #expect(text.contains(String(format: "%g", cost)))
+    #expect(text.contains(UserFacingCopy.displayNumber(cost)))
     #expect(text.contains(currency))
     #expect(store.reportMessage == WorkspaceStore.evidenceOnlyNarratorStatus)
     #expect(store.reportStatusLine == WorkspaceStore.evidenceOnlyNarratorStatus)

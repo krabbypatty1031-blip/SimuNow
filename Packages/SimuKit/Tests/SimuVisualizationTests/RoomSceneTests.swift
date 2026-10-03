@@ -100,6 +100,12 @@ import SimuVisualization
     #expect(summary.contains("6"))
     #expect(summary.contains("窗"))
     #expect(summary.contains("座位"))
-    #expect(summary.contains("送风"))
+    #expect(summary.contains("出风"))
     #expect(summary.contains("回风"))
+    #expect(!summary.contains("S1"))
+    #expect(scene.seatDisplayNames.contains(where: { $0.contains("靠窗") }))
+    for name in scene.seatDisplayNames {
+        #expect(name != "S1")
+        #expect(!name.hasPrefix("S"))
+    }
 }

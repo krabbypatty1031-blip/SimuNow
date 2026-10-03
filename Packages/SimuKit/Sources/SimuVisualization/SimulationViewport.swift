@@ -25,9 +25,9 @@ public struct SimulationViewport: View {
             RoomWireframeView(scene: scene, field: field, sharedPalette: sharedPalette, yaw: yaw)
         } else {
             EmptyStateView(
-                "房间工作区",
+                "布置房间",
                 symbol: "cube.transparent",
-                message: "模型不完整。先在属性面板填写房间尺寸与设备，计算引擎尚未接入。"
+                message: "先填写房间的长宽高。没有完整房间时不会画示意图。"
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityIdentifier("simulationViewport")

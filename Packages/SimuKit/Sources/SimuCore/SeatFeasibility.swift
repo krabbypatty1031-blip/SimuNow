@@ -68,8 +68,8 @@ public enum SeatFeasibility: Sendable {
     public static let isoAirHighC = 30.0
     public static let isoSpeedHighMps = 1.0
 
-    public static let coverageLabel = "达标座位比例（模型）"
-    public static let worstSeatLabel = "最差座位"
+    public static let coverageLabel = "合适的座位"
+    public static let worstSeatLabel = "最不合适的座位"
 
     private static let omitReason = "not evaluable: no quality-passed seat samples"
     private static let method = "l2_seat_gate"
@@ -141,14 +141,13 @@ public enum SeatFeasibility: Sendable {
     public static func coverageText(metrics: [ResultMetric]) -> String {
         guard let ratio = metrics.first(where: { $0.name == "seat_pass_ratio" }),
               !ratio.omitted,
-              let value = ratio.value,
+              ratio.value != nil,
               let pass = metrics.first(where: { $0.name == "seat_pass_count" })?.value,
               let evalCount = metrics.first(where: { $0.name == "seat_eval_count" })?.value
         else {
             return "不可评价"
         }
-        let percent = (value * 100).rounded()
-        return String(format: "%.0f%%（%.0f/%.0f）", percent, pass, evalCount)
+        return String(format: "%.0f 个中 %.0f 个合适", evalCount, pass)
     }
 
     public static func worstSeatText(metrics: [ResultMetric]) -> String {
@@ -160,9 +159,17 @@ public enum SeatFeasibility: Sendable {
             return "不可评价"
         }
         if let why = metrics.first(where: { $0.name == "worst_seat_reason" })?.reason, !why.isEmpty {
-            return "\(id)：\(why)"
+            return "\(displaySeatID(id))：\(UserFacingCopy.gateTitle(why))"
         }
-        return id
+        return displaySeatID(id)
+    }
+
+    /// S4 → 座位 4. Unknown prefixes stay as a generic 座位.
+    private static func displaySeatID(_ id: String) -> String {
+        if id.count >= 2, id.first?.isLetter == true, let number = Int(id.dropFirst()) {
+            return "座位 \(number)"
+        }
+        return "座位"
     }
 
     public static func comparisonRows(metrics: [ResultMetric]) -> [FeasibilityDisplay] {

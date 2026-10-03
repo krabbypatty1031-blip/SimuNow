@@ -156,11 +156,19 @@
 影响：spike 需验证三项——(1) 切片上色路径（UV + `TextureResource` 纹理 vs per-vertex color buffer，后者本次查证未确认可用性）；(2) `RealityView` 非 visionOS 场景的相机交互成熟度；(3) Swift 6 严格并发下 Entity 非 Sendable 的边界（实体操作全部收在 `@MainActor` make/update 闭包内，与仓库「UI 状态 MainActor」一致）。沙盒无涉：系统框架、无 Process/exec，与 ADR-011 的引擎 exec 例外无关。
 验证：待 spike——`SimuVisualization` 内最小 `RealityView`（6×6×2.8 盒线框细 Box × 12 + 一张切片纹理平面 + 4 座位球），`Scripts/check.sh mac` / `ios` 双端 BUILD SUCCEEDED + 视觉手测；spike 结论回填本条（通过→排期正式视口升级与 `field_slice.py` 纵向剖面提取；不通过→回 Canvas 增强路线，仅记差距）。
 
+## ADR-017：用户向界面第一轮只做呈现，3D 后置（已接受）
+
+日期：2026-10-03。
+背景：P5 链路已通，但四页与检查器直接展示 `L1`/`z0`/`inputHash`/`PMV`。需要先让非技术人员能对比方案。
+选择：检查器保持总表、加折叠（房间 / 使用 / 空调）；视口只改图例、空状态、座位人话名；提交计算放到「用电与舒适」。点选、拖拽、补画门家具、RealityKit 3D 不进本轮。呈现集中在 `UserFacingCopy`，不改 schema、哈希、质量门。
+影响：第一轮可按 [UX-user-facing-ui](../Phases/UX-user-facing-ui/UX-user-facing-ui.md) 实施。ADR-016 的 RealityKit spike 明确排在本轮完成之后，且必须复用同一套用户文案，不能把求解变量画回界面。
+验证：2026-10-03 落地。`Scripts/check.sh test`：SimuCoreTests 170 + SimuVisualizationTests 11 全绿。`Scripts/check.sh mac` / `ios` BUILD SUCCEEDED。钉版 1033.112 W / 10.33112 kWh / 12.397 HKD 与座位温度未改。呈现层 `UserFacingCopy`；检查器默认房间/使用/空调；提交在「用电与舒适」；PDF 正文「对比说明」，哈希在「详细编号」。App Debug 手测仍待用户点一遍八条清单。3D 仍按 ADR-016 后置。
+
 ## 待决定
 
 - P1：OpenFOAM 分支/版本/求解器/网格与湍流，EnergyPlus 版本与设备模型（运行时已钉，文档待收口）。
 - 叙述器供应商与 `baseURL` / 模型名：实现 P5-04 时用 OpenAI 兼容接口本地配置，不进仓库。
 - P7：代理/远程/发布渠道。
-- ADR-016 spike 三项验证结果（切片上色路径、相机交互、Swift 6 并发边界）。
+- ADR-016 spike 三项验证结果（切片上色路径、相机交互、Swift 6 并发边界）。排期：UX 第一轮完成之后。
 
 每条新增决策记录触发原因、备选、选择、影响、验证证据与日期。

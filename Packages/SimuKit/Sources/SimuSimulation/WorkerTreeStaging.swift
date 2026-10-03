@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(Darwin)
-import Darwin
-#endif
 
 /// Copy worker scripts into a container-owned tree. Never writes Desktop paths into project.json.
 public enum WorkerTreeStaging {
@@ -44,11 +41,17 @@ public enum WorkerTreeStaging {
         "field_slice.py"
     ]
 
-    /// Copy only the Python worker and P1 helpers (L1 IDF writer + L2 CFD
-    /// pipeline). Does not copy EnergyPlus or OpenFOAM.
+    /// Copy only the Python worker and P1 helpers. Engines are never staged:
+    /// macOS quarantines executables an app writes into its own container and
+    /// the sandboxed app can neither exec nor remove the mark (2026-10-03 hand
+    /// test), so EnergyPlus, the EPW and the OpenFOAM wrapper run in place
+    /// from the user-selected engines directory via SIMUNOW_ENGINES_ROOT.
+    /// Staged Python files are data, not executables - the mark is harmless.
     public static func stageWorker(from sourceRoot: URL, into runtimeRoot: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: runtimeRoot, withIntermediateDirectories: true)
+        // Drop any engine tree an older build staged into the container.
+        try? fm.removeItem(at: runtimeRoot.appendingPathComponent("test/engines"))
         try replaceDirectory(
             from: sourceRoot.appendingPathComponent("Backend/src/simunow_worker"),
             to: runtimeRoot.appendingPathComponent("Backend/src/simunow_worker")
@@ -68,90 +71,6 @@ public enum WorkerTreeStaging {
         }
     }
 
-    /// Copy weather always; copy EnergyPlus when the destination binary is
-    /// missing; copy the OpenFOAM wrapper when the source has one, so an L2
-    /// user who installed OpenFOAM can run from the staged tree. Sources
-    /// without openfoam.sh still stage for L1.
-    public static func stageEngines(from enginesRoot: URL, into runtimeRoot: URL) throws {
-        // run_room.py resolves the wrapper as <repo>/test/engines/openfoam.sh,
-        // so the staged copy must sit beside the staged test/p1 helpers.
-        let dest = runtimeRoot.appendingPathComponent("test/engines", isDirectory: true)
-        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-        try replaceDirectory(
-            from: enginesRoot.appendingPathComponent("weather"),
-            to: dest.appendingPathComponent("weather")
-        )
-        let destBinary = LocalEngineProbe.energyPlusURL(in: dest)
-        // Execute bits via stat: access(X_OK) is denied in-app for staged paths.
-        if !LocalEngineProbe.hasExecuteBit(at: destBinary.path) {
-            try replaceDirectory(
-                from: enginesRoot.appendingPathComponent("EnergyPlus").resolvingSymlinksInPath(),
-                to: dest.appendingPathComponent("EnergyPlus")
-            )
-        }
-        let wrapper = enginesRoot.appendingPathComponent("openfoam.sh")
-        let stagedWrapper = dest.appendingPathComponent("openfoam.sh")
-        // Execute bits via stat: the X_OK probe silently skipped this copy in-app.
-        if LocalEngineProbe.hasExecuteBit(at: wrapper.path) {
-            try? FileManager.default.removeItem(at: stagedWrapper)
-            try FileManager.default.copyItem(at: wrapper, to: stagedWrapper)
-        }
-        // Copying engine files into the app container makes macOS quarantine
-        // them (agent = this app, "created without user consent"), and the
-        // sandbox then denies exec and dylib loads of the quarantined
-        // unnotarized engine (2026-10-03 hand test: kernel Quarantine deny +
-        // process-exec* deny -> EPERM). Clear the mark staging caused, so the
-        // run - not the probe - stays the evidence. Walk runs whether or not
-        // the EnergyPlus copy was skipped, because the wrapper is always
-        // re-copied and re-quarantined here.
-        try stripQuarantineRecursively(at: dest)
-    }
-
-    public static func enginesURL(in runtimeRoot: URL) -> URL {
-        runtimeRoot.appendingPathComponent("test/engines", isDirectory: true)
-    }
-
-    #if canImport(Darwin)
-    /// Quarantine attribute macOS (Tahoe) puts on executables an app writes
-    /// into its own container. Apple-only, so the strip is Apple-only too.
-    private static let quarantineAttributeName = "com.apple.quarantine"
-
-    /// Strip quarantine from one regular file. Read-only engine files (444
-    /// dylibs) need the owner-write bit to remove an attribute; the original
-    /// mode is restored afterwards. Missing files and symlinks are skipped:
-    /// exec and dyld evaluate the resolved target, which the walk covers.
-    private static func stripQuarantine(fromRegularFileAt path: String) throws {
-        var st = stat()
-        // S_ISREG spelled with S_IFMT bits: the C macro is not visible in Swift.
-        guard lstat(path, &st) == 0, st.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { return }
-        // Probe first: most staged files never carry the attribute, and one
-        // getxattr per file keeps the walk cheap for the 7000+ file engine tree.
-        guard getxattr(path, quarantineAttributeName, nil, 0, 0, 0) >= 0 else { return }
-        let originalMode = st.st_mode
-        let addedWriteBit = originalMode & mode_t(S_IWUSR) == 0
-        if addedWriteBit, chmod(path, originalMode | mode_t(S_IWUSR)) != 0 {
-            throw StagingError.quarantineNotStripped((path as NSString).lastPathComponent)
-        }
-        defer { if addedWriteBit { _ = chmod(path, originalMode) } }
-        if removexattr(path, quarantineAttributeName, 0) != 0 {
-            throw StagingError.quarantineNotStripped((path as NSString).lastPathComponent)
-        }
-    }
-
-    /// Walk the staged engines tree and strip quarantine from regular files.
-    private static func stripQuarantineRecursively(at root: URL) throws {
-        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
-            throw StagingError.missingWorkerFile(root.lastPathComponent)
-        }
-        while let url = walker.nextObject() as? URL {
-            try stripQuarantine(fromRegularFileAt: url.path)
-        }
-    }
-    #else
-    /// Non-Apple platforms never quarantine an app's own staged files.
-    private static func stripQuarantineRecursively(at root: URL) throws {}
-    #endif
-
     private static func replaceDirectory(from source: URL, to dest: URL) throws {
         let fm = FileManager.default
         guard fm.fileExists(atPath: source.path) else {
@@ -166,14 +85,11 @@ public enum WorkerTreeStaging {
 
     public enum StagingError: Error, Equatable, LocalizedError {
         case missingWorkerFile(String)
-        case quarantineNotStripped(String)
 
         public var errorDescription: String? {
             switch self {
             case .missingWorkerFile(let name):
                 "运行时缺少 \(name)，无法提交代表日 L1。"
-            case .quarantineNotStripped(let name):
-                "引擎文件 \(name) 的隔离标记无法清除，App 内无法启动引擎。"
             }
         }
     }

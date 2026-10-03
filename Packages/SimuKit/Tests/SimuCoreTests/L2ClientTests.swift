@@ -46,7 +46,7 @@ private func repoRoot() -> URL {
     try Data("# stub worker\n".utf8).write(
         to: runtime.appendingPathComponent("Backend/src/simunow_worker/__main__.py")
     )
-    let engines = WorkerTreeStaging.enginesURL(in: runtime)
+    let engines = runtime.appendingPathComponent("test/engines")
     try fm.createDirectory(at: engines, withIntermediateDirectories: true)
     let wrapper = engines.appendingPathComponent("openfoam.sh")
     try Data("#!/bin/sh\nexit 0\n".utf8).write(to: wrapper)
@@ -72,7 +72,7 @@ private func repoRoot() -> URL {
     try Data("# stub worker\n".utf8).write(
         to: runtime.appendingPathComponent("Backend/src/simunow_worker/__main__.py")
     )
-    let engines = WorkerTreeStaging.enginesURL(in: runtime)
+    let engines = runtime.appendingPathComponent("test/engines")
     try fm.createDirectory(at: engines, withIntermediateDirectories: true)
 
     let client = LocalProcessL2Client(
@@ -104,7 +104,7 @@ private func repoRoot() -> URL {
     try Data("# stub worker\n".utf8).write(
         to: runtime.appendingPathComponent("Backend/src/simunow_worker/__main__.py")
     )
-    let engines = WorkerTreeStaging.enginesURL(in: runtime)
+    let engines = runtime.appendingPathComponent("test/engines")
     try fm.createDirectory(at: engines, withIntermediateDirectories: true)
 
     let client = LocalProcessL2Client(repositoryRoot: runtime, enginesRoot: engines, runRoot: runRoot)

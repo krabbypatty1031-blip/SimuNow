@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -32,7 +33,25 @@ from write_openfoam_room import write_openfoam_room
 
 P1 = Path(__file__).resolve().parent
 TEST_ROOT = P1.parent
-OPENFOAM_SH = TEST_ROOT / "engines" / "openfoam.sh"
+
+
+def _openfoam_sh() -> Path:
+    """Resolve the OpenFOAM wrapper.
+
+    SIMUNOW_ENGINES_ROOT (the App passes the user-selected engines directory)
+    overrides the repo path: engine files an app copies into its own
+    container get quarantined by macOS and the sandboxed app can neither exec
+    nor remove the mark (2026-10-03 hand test), so the wrapper must run in
+    place from the user's tree. Without the variable the repo path keeps the
+    CLI behavior unchanged.
+    """
+    root = os.environ.get("SIMUNOW_ENGINES_ROOT", "").strip()
+    if root:
+        return Path(root) / "openfoam.sh"
+    return TEST_ROOT / "engines" / "openfoam.sh"
+
+
+OPENFOAM_SH = _openfoam_sh()
 REPORT_LATEST = TEST_ROOT / "outputs" / "p1_room" / "latest.json"
 
 LOGGER = logging.getLogger("simunow.p1.run_room")
@@ -55,7 +74,8 @@ def setup_logging(log_path: Path) -> None:
 
 def _of(case: Path, args: list[str], log_path: Path, timeout: int) -> subprocess.CompletedProcess[str]:
     if not OPENFOAM_SH.is_file():
-        raise RoomError("test/engines/openfoam.sh is missing")
+        # Name the resolved wrapper path: env-override and repo modes differ.
+        raise RoomError(f"openfoam.sh is missing at {OPENFOAM_SH}")
     command = [str(OPENFOAM_SH), str(case), *args]
     LOGGER.info("OpenFOAM %s", " ".join(args[:4]))
     proc = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)

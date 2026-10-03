@@ -501,11 +501,11 @@ public final class WorkspaceStore {
             let runtime = try runtimeRoot ?? WorkerTreeStaging.applicationSupportRuntime()
             try WorkerTreeStaging.stageWorker(from: source, into: runtime)
             _ = enginesRoot.startAccessingSecurityScopedResource()
-            try WorkerTreeStaging.stageEngines(from: enginesRoot, into: runtime)
-            applyLocalEngine(
-                repositoryRoot: runtime,
-                enginesRoot: WorkerTreeStaging.enginesURL(in: runtime)
-            )
+            // Engines run in place from the user-selected directory via
+            // SIMUNOW_ENGINES_ROOT. Copies into the app container get
+            // quarantined by macOS and the sandbox cannot exec or remove the
+            // mark, so the staged tree carries only Python files.
+            applyLocalEngine(repositoryRoot: runtime, enginesRoot: enginesRoot)
             if l1Client.isConfigured {
                 EngineBookmarkStore.saveEngines(enginesRoot)
             }

@@ -79,7 +79,8 @@ public enum WorkerTreeStaging {
             to: dest.appendingPathComponent("weather")
         )
         let destBinary = LocalEngineProbe.energyPlusURL(in: dest)
-        if !FileManager.default.isExecutableFile(atPath: destBinary.path) {
+        // Execute bits via stat: access(X_OK) is denied in-app for staged paths.
+        if !LocalEngineProbe.hasExecuteBit(at: destBinary.path) {
             try replaceDirectory(
                 from: enginesRoot.appendingPathComponent("EnergyPlus").resolvingSymlinksInPath(),
                 to: dest.appendingPathComponent("EnergyPlus")
@@ -87,7 +88,8 @@ public enum WorkerTreeStaging {
         }
         let wrapper = enginesRoot.appendingPathComponent("openfoam.sh")
         let stagedWrapper = dest.appendingPathComponent("openfoam.sh")
-        if FileManager.default.isExecutableFile(atPath: wrapper.path) {
+        // Execute bits via stat: the X_OK probe silently skipped this copy in-app.
+        if LocalEngineProbe.hasExecuteBit(at: wrapper.path) {
             try? FileManager.default.removeItem(at: stagedWrapper)
             try FileManager.default.copyItem(at: wrapper, to: stagedWrapper)
         }

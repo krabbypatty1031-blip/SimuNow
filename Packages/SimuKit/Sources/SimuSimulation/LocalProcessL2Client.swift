@@ -28,12 +28,14 @@ public actor LocalProcessL2Client: L2TaskClient {
     }
 
     /// L2 needs the staged worker plus an executable OpenFOAM wrapper. File
-    /// presence only - actually launching OpenFOAM is the run's own evidence.
+    /// presence and POSIX execute bits only - actually launching OpenFOAM is
+    /// the run's own evidence. X_OK probes are denied in the sandbox, so the
+    /// bits come from stat.
     static func probeIsConfigured(repositoryRoot: URL, enginesRoot: URL) -> Bool {
         let worker = repositoryRoot.appendingPathComponent("Backend/src/simunow_worker/__main__.py")
         let wrapper = enginesRoot.appendingPathComponent("openfoam.sh")
         return FileManager.default.fileExists(atPath: worker.path)
-            && FileManager.default.isExecutableFile(atPath: wrapper.path)
+            && LocalEngineProbe.hasExecuteBit(at: wrapper.path)
     }
 
     public func submitL2(_ request: SimulationRequest, snapshot: Data) async throws -> RunReceipt {

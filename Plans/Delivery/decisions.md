@@ -77,6 +77,8 @@
 影响：`enginesURL(in:)` 语义从 `runtime/engines` 改为 `runtime/test/engines`（L1 probe 仍按 enginesRoot 下 `EnergyPlus/energyplus` 相对解析，行为不变）；`Scripts/generate_project.py` Stage WorkerTree 同步九脚本；App 内首跑 L2 的沙盒 docker 可达性待手测记录，未验证前不宣称 App 内闭环。
 验证：`WorkerStagingTests`（六 L2 脚本 staged、engines 落位 test/engines）；`L2ClientTests`（未配置拒绝、wrapper 探测、field-slice 读取/缺文件 nil）；`Backend/tests/test_l2_staged.py` 以 subprocess 重建 staged 树全链路跑 `run-l2`（succeeded + quality passed + field-slice.json 落位，17.7 s）；Python 76 + Swift 113 全绿。
 
+**实施补录（2026-10-03 14:35，P4 手测发现后修复）**：手测选择 `test/engines` 后 App 仍报「未配置：运行时须含 worker，引擎目录须含 EnergyPlus/energyplus」，且 staged 树缺 `openfoam.sh`。根因：`6a2c301` 起的 presence probe 用 `isExecutableFile`（底层 `access(X_OK)`），而 App Sandbox 对 staged 容器路径与用户选定引擎目录一律拒绝 X_OK（终端 `test -x` 同路径为真；sandbox-exec 复现：read 全放行下 X_OK 仍拒）——昨日 P3 手测成功是旧 build 无此 probe，非沙盒语义变化。修复：`LocalEngineProbe.hasExecuteBit`（stat 读 POSIX x 位；stat 只需读权限，且跟随 symlink——staged `energyplus → energyplus-25.2.0` 布局适用），`isConfigured`、`stageEngines` 的 destBinary 跳过与 wrapper 拷贝条件、`LocalProcessL2Client.probeIsConfigured` 四处统一改用；`LocalProcessClient` 的 python3 候选初筛保留 X_OK（系统路径在沙盒白名单内，`canStartInterpreter` 实测兜底，昨日 L1 成功已验证该路径）。引擎能否真跑仍是 run 的证据，probe 不代言。验证：`LocalEngineTests` 新增 stat 语义回归锚点（x 位/无 x 位/symlink 解析/缺失路径、0o644 拒绝）两项；Swift 117 全绿；mac/ios BUILD SUCCEEDED；App 内重选 `test/engines` 的手测复验进行中。
+
 ## ADR-012：人员热源以「每人显热」为 L1/L2 对账基准，先披露后对齐（已接受）
 
 日期：2026-10-03（当日以 EnergyPlus 分项输出修正根因）。

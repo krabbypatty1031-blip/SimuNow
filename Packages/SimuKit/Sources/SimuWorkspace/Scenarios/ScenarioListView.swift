@@ -9,6 +9,7 @@ public struct ScenarioListView: View {
     private let onSelect: @MainActor (UUID) -> Void
     private let onCommit: @MainActor (ProjectDocument, String) throws -> Void
     private let onSetBaseline: @MainActor (UUID) throws -> Void
+    private let onCopy: (@MainActor (ProjectDocument, UUID) throws -> Void)?
     @State private var editName: ScenarioNameRequest?
     @State private var confirmDelete = false
     @State private var errorMessage: String?
@@ -16,13 +17,15 @@ public struct ScenarioListView: View {
     public init(project: ProjectDocument, selectedScenarioID: UUID?, baselineScenarioID: UUID?,
                 onSelect: @escaping @MainActor (UUID) -> Void,
                 onCommit: @escaping @MainActor (ProjectDocument, String) throws -> Void,
-                onSetBaseline: @escaping @MainActor (UUID) throws -> Void) {
+                onSetBaseline: @escaping @MainActor (UUID) throws -> Void,
+                onCopy: (@MainActor (ProjectDocument, UUID) throws -> Void)? = nil) {
         self.project = project
         self.selectedScenarioID = selectedScenarioID
         self.baselineScenarioID = baselineScenarioID
         self.onSelect = onSelect
         self.onCommit = onCommit
         self.onSetBaseline = onSetBaseline
+        self.onCopy = onCopy
     }
 
     public var body: some View {
@@ -91,7 +94,8 @@ public struct ScenarioListView: View {
                 switch request.mode {
                 case .copy:
                     let edited = try ScenarioEditing.copy(project, scenarioID: request.scenarioID, name: name)
-                    try onCommit(edited, "复制方案")
+                    if let onCopy { try onCopy(edited, request.scenarioID) }
+                    else { try onCommit(edited, "复制方案") }
                     if let id = edited.scenarios.last?.id { onSelect(id) }
                 case .rename:
                     try onCommit(ScenarioEditing.rename(project, scenarioID: request.scenarioID, name: name), "重命名方案")

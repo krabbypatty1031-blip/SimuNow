@@ -11,8 +11,12 @@ if version('jsonschema') != '4.26.0': raise SystemExit('Use locked jsonschema 4.
 PY
 export PYTHONDONTWRITEBYTECODE=1
 "$contract_python" "$project_root/Scripts/generate_native_analysis_schemas.py" --check
+"$contract_python" "$project_root/Scripts/generate_consumer_schemas.py" --check
 export SIMUNOW_NATIVE_CONTRACT_DIR
 SIMUNOW_NATIVE_CONTRACT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/SimuNow-native-contracts.XXXXXX")"
 trap 'rm -rf "$SIMUNOW_NATIVE_CONTRACT_DIR"' EXIT
+export SIMUNOW_CONSUMER_OUTPUT_DIR="$SIMUNOW_NATIVE_CONTRACT_DIR/consumer"
 "$project_root/Scripts/check.sh" test
 "$contract_python" "$project_root/Scripts/validate_native_analysis_contracts.py" "$SIMUNOW_NATIVE_CONTRACT_DIR"
+
+"$contract_python" "$project_root/Scripts/check_consumer_contracts.py" "$SIMUNOW_CONSUMER_OUTPUT_DIR"

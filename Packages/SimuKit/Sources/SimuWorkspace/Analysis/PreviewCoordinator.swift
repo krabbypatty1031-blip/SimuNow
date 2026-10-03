@@ -53,6 +53,9 @@ public final class PreviewCoordinator {
         }
         return analysis.result(scenarioID: scenario, inputHash: hash)
     }
+    public var currentRequest: LocalAnalysisRequest? {
+        guard let request, currentResult?.identity == request.identity else { return nil }; return request
+    }
     /// Task status belongs to the same frozen request as the displayed input.
     /// Old terminal state remains history while configuration/debounce changes.
     public var currentStage: LocalAnalysisStage? {

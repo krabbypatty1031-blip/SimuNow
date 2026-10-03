@@ -36,3 +36,9 @@ Mac sandbox 和用户选择文件读写继续启用。本地 CPU 分析无需 Pr
 交付顺序：双端构建→实际查看与文档操作→无网络/无 worker 试用→可访问性→图标/本地化/许可证/隐私→签名安装候选→新机器试装→用户授权后正式分发。N5 产生候选，不自动上传或公证发布。
 
 已验证平台事实见 [verification](verification.md)，不能把本页的新路线当运行证据。
+
+## N5/N6 当前开发候选边界（2026-10-03）
+
+0.2.0(2) 资源与 unsigned Release archive 脚本已准备，见 [资源/隐私清单](consumer-resources-and-privacy.md)。保留原 deployment targets、sandbox、bundle IDs 和共享 schemes；摄像用途只在 iOS 主动 RoomPlan 流程声明。无 Xcode 的本轮 Linux 环境不能产出安装候选；签名、公证/商店、真机安装与旧包升级仍未验。
+
+正式部署门槛还包括 [N5/N6交接](N5-N6-implementation.md) 中的完整 Swift 包、双端 Debug/Release、长中文 PDF 页图、系统分享/取消、浏览器导出再开、最低系统/VoiceOver/动态字号、两端试用及许可证确认。可选专业复核没有默认节点或启动调用，也没有新增 Mac 网络 entitlement；实际节点需求与隐私/权限审查后再启用。

@@ -8,29 +8,65 @@ public enum NativeAnalysisRecord: String, Sendable {
     case configuration = "analysis-configuration"
     case costEvaluation = "cost-evaluation"
     case comparisonSnapshot = "comparison-snapshot"
+    case comparisonRecord = "comparison-record"
+    case measurementDataset = "measurement-dataset"
+    case professionalReviewConfiguration = "professional-review-configuration"
+    case professionalReviewReceipt = "professional-review-receipt"
+    case roomCapture = "room-capture"
+    case redactedReport = "redacted-report"
+    case redactedMeasurements = "redacted-measurements"
+    case jetCalibration = "jet-calibration"
 }
 /// A separate strict wire boundary; it never changes project v2 or P0 quality semantics.
 public struct NativeAnalysisCodec: Sendable {
     public let registry: ModelRegistry
     public init(registry: ModelRegistry = .builtIn) { self.registry = registry }
-    private static let schemas: [String: Result<JSONValue, ProjectDataError>] = {
-        var values: [String: Result<JSONValue, ProjectDataError>] = [:]
-        for record in [NativeAnalysisRecord.request, .event, .result, .manifest, .configuration, .costEvaluation, .comparisonSnapshot] {
+    // Per-record immutable lazy resources: opening a configuration does not parse
+    // all unrelated report, measurement and research schemas on the UI thread.
+    private enum SchemaResources {
+        private static func load(_ record: NativeAnalysisRecord) -> Result<JSONValue, ProjectDataError> {
             do {
-                guard
-                    let url = Bundle.module.url(
-                        forResource: record.rawValue + ".schema", withExtension: "json")
+                guard let url = Bundle.module.url(forResource: record.rawValue + ".schema", withExtension: "json")
                 else { throw ProjectDataError.contract("Missing native schema resource") }
-                values[record.rawValue] = .success(try JSONValue(data: Data(contentsOf: url)))
-            } catch { values[record.rawValue] = .failure(.contract("Native schema load: \(error)")) }
+                return .success(try JSONValue(data: Data(contentsOf: url)))
+            } catch { return .failure(.contract("Native schema load: \(error)")) }
         }
-        return values
-    }()
+        static let request = load(.request)
+        static let event = load(.event)
+        static let result = load(.result)
+        static let manifest = load(.manifest)
+        static let configuration = load(.configuration)
+        static let costEvaluation = load(.costEvaluation)
+        static let comparisonSnapshot = load(.comparisonSnapshot)
+        static let comparisonRecord = load(.comparisonRecord)
+        static let measurementDataset = load(.measurementDataset)
+        static let jetCalibration = load(.jetCalibration)
+        static let professionalReviewConfiguration = load(.professionalReviewConfiguration)
+        static let professionalReviewReceipt = load(.professionalReviewReceipt)
+        static let redactedReport = load(.redactedReport)
+        static let redactedMeasurements = load(.redactedMeasurements)
+        static let roomCapture = load(.roomCapture)
+    }
     public static func schema(_ record: NativeAnalysisRecord) throws -> JSONValue {
-        guard let schema = schemas[record.rawValue] else {
-            throw ProjectDataError.contract("Missing native schema resource")
+        let value: Result<JSONValue, ProjectDataError>
+        switch record {
+        case .request: value = SchemaResources.request
+        case .event: value = SchemaResources.event
+        case .result: value = SchemaResources.result
+        case .manifest: value = SchemaResources.manifest
+        case .configuration: value = SchemaResources.configuration
+        case .costEvaluation: value = SchemaResources.costEvaluation
+        case .comparisonSnapshot: value = SchemaResources.comparisonSnapshot
+        case .comparisonRecord: value = SchemaResources.comparisonRecord
+        case .measurementDataset: value = SchemaResources.measurementDataset
+        case .jetCalibration: value = SchemaResources.jetCalibration
+        case .professionalReviewConfiguration: value = SchemaResources.professionalReviewConfiguration
+        case .professionalReviewReceipt: value = SchemaResources.professionalReviewReceipt
+        case .redactedReport: value = SchemaResources.redactedReport
+        case .redactedMeasurements: value = SchemaResources.redactedMeasurements
+        case .roomCapture: value = SchemaResources.roomCapture
         }
-        return try schema.get()
+        return try value.get()
     }
     public func encodeRequest(_ value: LocalAnalysisRequest) throws -> Data {
         try encode(value, record: .request, validate: validateRequest)
@@ -73,6 +109,20 @@ public struct NativeAnalysisCodec: Sendable {
     }
     public func decodeComparisonSnapshot(_ data: Data) throws -> ComparisonSnapshot {
         try decode(data, record: .comparisonSnapshot, validate: validateComparisonSnapshot)
+    }
+    public func encodeComparisonRecord(_ value: ComparisonRecord) throws -> Data {
+        try encode(value, record: .comparisonRecord, validate: validateComparisonRecord)
+    }
+    public func decodeComparisonRecord(_ data: Data) throws -> ComparisonRecord {
+        try decode(data, record: .comparisonRecord, validate: validateComparisonRecord)
+    }
+    public func validateComparisonRecord(_ value: ComparisonRecord) throws {
+        try validateComparisonSnapshot(value.snapshot)
+        guard value.references.map(\.run) == value.snapshot.runs,
+              Set(value.snapshot.runs.map(\.runID)).count == value.snapshot.runs.count,
+              Set(value.snapshot.runs.map(\.scenarioID)).count == value.snapshot.runs.count else {
+            throw ProjectDataError.contract("固定比较的引用重复或不一致。")
+        }
     }
     public func validateCostEvaluation(_ value: CostEvaluationRecord) throws {
         try ThermalEstimateValidation.validateWindows(value.configuration.requestedWindows)

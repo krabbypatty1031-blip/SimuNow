@@ -161,6 +161,10 @@ public extension SimuNowDocument {
         metadata.baselineScenarioID = state.baselineScenarioID
         metadata.templateID = state.templateID; metadata.templateVersion = state.templateVersion
         var entries = preservedEntries
+        if let capture = state.importedCapture {
+            guard capture.project == state.project else { throw NativeArtifactError.identityMismatch }
+            try entries.appendRoomCapture(capture)
+        }
         if state.project.id != project.id, let bytes = analysisConfigurationData,
            let owned = try? NativeAnalysisCodec().decodeConfiguration(bytes), owned.projectID == project.id,
            case .directory(var analysis) = entries["analysis"] {
@@ -179,8 +183,34 @@ public extension SimuNowDocument {
         }
         return next
     }
-    private static func validateOwnedNativeBudget(_ entries: [String:ProjectPackageEntry]) throws {
+    static func validateOwnedNativeBudget(_ entries: [String:ProjectPackageEntry]) throws {
         var total = 0
+        if case .directory(let calibrations) = ProjectPackageEntry.directory(entries).entry(at: "analysis/calibrations") {
+            for entry in calibrations.values {
+                guard case .file(let bytes) = entry, let node = try? JSONValue(data: bytes),
+                      node["method"]?.string == FiniteJetCalibration.method, node["calibrationVersion"]?.double == 1 else { continue }
+                guard bytes.count <= 256*1024 else { throw NativeArtifactError.resourceLimit("calibration") }; total += bytes.count
+            }
+        }
+        if case .directory(let measurements) = entries["measurements"] {
+            for entry in measurements.values {
+                guard case .directory(let files) = entry, case .file(let manifest) = files["manifest.json"], manifest.count <= 4096,
+                      let node = try? JSONValue(data: manifest), node["owner"]?.string == "com.simunow.measurements", node["artifactVersion"]?.double == 1 else { continue }
+                if case .file(let bytes) = files["data.json"] {
+                    guard bytes.count <= 8*1024*1024 else { throw NativeArtifactError.resourceLimit("measurement") }; total += bytes.count
+                }
+                total += manifest.count
+            }
+        }
+        if case .directory(let comparisons) = ProjectPackageEntry.directory(entries).entry(at: "analysis/comparisons") {
+            for entry in comparisons.values {
+                guard case .file(let bytes) = entry,
+                      let node = try? JSONValue(data: bytes), node["owner"]?.string == "com.simunow.comparison",
+                      node["recordVersion"]?.double == 1 else { continue }
+                guard bytes.count <= ComparisonRecordCodec.maximumBytes else { throw NativeArtifactError.resourceLimit("comparison") }
+                total += bytes.count
+            }
+        }
         if case .file(let config) = ProjectPackageEntry.directory(entries).entry(at: "analysis/configuration.json"),
            let node = try? JSONValue(data: config), node["storeVersion"]?.double == 1 { total += config.count }
         if case .directory(let runs) = entries["runs"] {
@@ -198,7 +228,7 @@ public extension SimuNowDocument {
         guard total <= NativeArtifactCodec.maximumOwnedBytes else { throw NativeArtifactError.resourceLimit("Recognized native analysis budget exceeded") }
     }
 }
-private extension Dictionary where Key == String, Value == ProjectPackageEntry {
+extension Dictionary where Key == String, Value == ProjectPackageEntry {
     mutating func setNativeEntry(_ value: ProjectPackageEntry, at components: [String], allowReplace: Bool) throws {
         guard let key = components.first else { throw NativeArtifactError.invalidManifest }
         if components.count == 1 {

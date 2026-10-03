@@ -1,13 +1,23 @@
 import Foundation
 import SimuCore
 
-/// Transient display state, intentionally not Codable and never part of a project or analysis input.
-public struct RoomCameraState: Equatable, Sendable {
+/// Serializable display value for comparison cameras; never part of physical input or input hashes.
+public struct RoomCameraState: Codable, Equatable, Sendable {
     public private(set) var target: Position3D
     public private(set) var distance: Double
     public private(set) var yawDegrees: Double
     public private(set) var pitchDegrees: Double
     public let fieldOfViewDegrees: Double
+    private enum CodingKeys: String, CodingKey { case target, distance, yawDegrees, pitchDegrees, fieldOfViewDegrees }
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let target = try c.decode(Position3D.self, forKey: .target), distance = try c.decode(Double.self, forKey: .distance)
+        let yaw = try c.decode(Double.self, forKey: .yawDegrees), pitch = try c.decode(Double.self, forKey: .pitchDegrees)
+        let fov = try c.decode(Double.self, forKey: .fieldOfViewDegrees)
+        guard [target.x,target.y,target.z,distance,yaw,pitch,fov].allSatisfy(\.isFinite), distance > 0,
+              (-85...89).contains(pitch), (10...120).contains(fov) else { throw ProjectDataError.contract("比较相机参数无效。") }
+        self.init(target: target, distance: distance, yawDegrees: yaw, pitchDegrees: pitch, fieldOfViewDegrees: fov)
+    }
     public init(target: Position3D, distance: Double, yawDegrees: Double = 45, pitchDegrees: Double = 35, fieldOfViewDegrees: Double = 45) {
         self.target = target
         self.distance = distance.isFinite && distance > 0 ? distance : 1

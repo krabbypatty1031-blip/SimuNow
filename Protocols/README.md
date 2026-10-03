@@ -5,11 +5,16 @@ P2-04 新增 [本地项目包 v1](project-package-v1.md)，包元数据属于 Ap
 
 N1 新增 [Swift 本地分析 v1](native-analysis-v1.md)：独立 request/event/result/configuration/manifest，不改变 P0 或项目 v2。开发检查使用 `Scripts/check_native_analysis_contracts.sh`；App 运行不调用 Python 验证器。
 
+N5/N6 新增 [固定证据/测量/匿名导出 v1](consumer-evidence-v1.md)，原项目和 native 方法版本不变。严格 schema 由独立消费者生成器维护；Python 解析只用于开发验证。
+
 ## 文件
 
 - Schemas/local-analysis-request.schema.json、local-analysis-event.schema.json、local-analysis-result.schema.json：本地方法与 typed payload。
 - Schemas/analysis-configuration.schema.json、analysis-artifact-manifest.schema.json：独立本地配置与不可变 run 文件索引。
 - Schemas/cost-evaluation.schema.json、comparison-snapshot.schema.json：N4固定父run的独立费用评价与纯值比较，精确货币数值使用Decimal字符串。
+- Schemas/comparison-record.schema.json、measurement-dataset.schema.json、jet-calibration.schema.json、room-capture.schema.json：固定比较、本地测量/独立留出研究与扫描几何。
+- Schemas/redacted-report.schema.json、redacted-measurements.schema.json：独立匿名派生摘要。
+- Schemas/professional-review-configuration.schema.json、professional-review-receipt.schema.json：未启用的可选节点边界。
 - Schemas/project-document.schema.json：ProjectDocument v2。
 - Schemas/scenario-input-snapshot.schema.json：ScenarioInputSnapshot v2，尚非运行请求。
 - Schemas/project-package-metadata.schema.json：App 项目包 v1 的基准/模板信息。

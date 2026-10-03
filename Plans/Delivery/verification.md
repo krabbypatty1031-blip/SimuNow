@@ -1,5 +1,14 @@
 # 工程验证记录
 
+## N5/N6 提交前复核（2026-10-03）
+
+用户追加授权提交、推送本工作区 N5/N6 实现，并通过 PR 合并 UI 修复。提交基点为 `eda5d5c`；保留既有演示稿、共享 scheme 和未知项目附件。
+
+- 重新执行 Linux Foundation harness：17 项真实 Swift 核心/值层测试通过；8 份真实 Swift wire 及 17 个拒绝反例通过独立 Python 契约校验。
+- 重新执行 Backend 测试：44 项通过；项目模型、本地分析、消费者证据及 Python schema 生成检查无漂移；`git diff --check` 通过。
+- 当前环境没有 Xcode；这次复核不提供 Apple SDK 编译、PDF 页面、RoomPlan 真机或 UI 操作验收证据。
+- UI 分支须在可读取的远端取得后再做差异审查、冲突处理和 PR 合并；本次 N5/N6 提交不代表 UI 修复已整合。
+
 路线说明（2026-10-03）：下文已有构建/运行/环境记录为对应日期事实。旧P1安装“下一步”属于当时引擎路线；当前开工按Plans/README的N1–N6，未产生本地分析/RealityKit运行证据。
 
 日期：2026-10-02；环境：Apple Silicon Mac、Xcode 27.0 (27A266a)、Xcode Swift 6.4、macOS/iOS SDK27。
@@ -241,3 +250,22 @@ N4代理提交713e06e精确整合为c502e81，随后根代理修复已实现功�
 现有锁定`Backend/.venv`，没有安装依赖。初次沙盒因嵌套SwiftPM sandbox/Xcode服务权限失败，获得自动批准的必要开发工具权限后重跑；没有关闭App sandbox。首轮201项回归有缓存fixture及构建中新旧object混用失败；修正fixture为真实v1积分载荷，源码冻结后专项与全测通过，没有放宽生产数学/缓存门槛。失败日志保留，不用代理191项代替最终201项证据。
 
 电脑操作服务getState在约10.972秒后超时并重置；此前getApp亦未恢复。N4移动端截图只证明房间及入口显示，估算卡片、文件操作、深浅色/大字号/VoiceOver和GPU/App峰值没有新增验收证据。最低macOS14/iOS17运行时不可用。完整清单及继续验收步骤见[最终审查](N1-N4-final-review.md)、[逐项台账](native-acceptance-status.md)。未push或正式发布。
+
+## N5/N6 本轮代码与 Linux 检查（2026-10-03）
+
+用户新增授权 N5/N6，分支 `paco-development`、基线 `eda5d5c`。完整任务状态与 Apple 待验脚本见 [本轮交接](N5-N6-implementation.md)，新增协议见 [固定证据 v1](../../Protocols/consumer-evidence-v1.md)。旧 N1～N4 验证段落为历史证据，不代表本轮新增 SwiftUI/PDF/RoomPlan 分支已通过构建。
+
+| 检查 | 结果 | 证据/边界 |
+|---|---|---|
+| `Scripts/check_portable_native.sh` | pass | Swift 6.0.3；17 项真实 Core/Simulation/Reporting 与纯 Workspace 值层测试；临时 Apple swift-crypto SHA-256 shim，无生产依赖改动 |
+| Python 完整 unittest | pass | 锁定 pydantic/jsonschema；44 项，其中 5 项新解析/坏输入/预算测试 |
+| 消费者真实 wire/schema | pass | 8 份真实 Swift 输出，17 个未来版本/额外字段/坏引用/时区/单位反例；匿名 exportHash 和校准原父数据复核 |
+| 领域/native/消费者/worker schema 漂移 | pass | 旧 native 生成器排除独立 ConsumerEvidence DTO，保持既有 v1 schema 完全不变 |
+| Swift 6 全源语法解析 | pass | 不解析 Apple SDK 类型、不能替代编译 |
+| Xcode 工程生成/资源检查 | pass（静态） | 幂等，schemes 与基线字节一致；原创 PNG/JSON/隐私 plist 结构检查；Apple asset/string 编译未验 |
+| `Scripts/check.sh test` | notAvailable | Linux 缺 SwiftUI；4 项新增文档/相机/事务平台回归未运行，旧整包回归未重跑 |
+| `Scripts/check.sh mac` / `ios` | notAvailable | xcodebuild 不存在；没有本轮双端构建成功 |
+| unsigned archive | notAvailable | 脚本主动拒绝无 Xcode；未产出可安装/签名包 |
+| PDF页面/系统分享/RoomPlan/VoiceOver/试用 | notAvailable | Linux 无 Apple UI/扫描/读屏，须执行交接脚本后逐项保存真实证据 |
+
+日志与真实合成 wire、CPU 8/16/32 方格 benchmark 在忽略的 `Artifacts/N5-N6/`。网格只记录合成守恒/散度/数组估算与单次 Debug CPU 时间，不作为真机预算、内存峰值或真实空间场验证。Swift/Python 全部通过后仍不将 N5 标发布就绪，不升级 N6 为通用物理模型。

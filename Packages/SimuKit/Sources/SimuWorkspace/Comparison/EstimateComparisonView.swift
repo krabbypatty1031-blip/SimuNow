@@ -49,6 +49,7 @@ public enum EstimateComparisonBuilder {
     @State private var kind:AnalysisKind = .powerEstimate
     @State private var decisions:Set<String>=["powerIntervals"]
     @State private var snapshot:ComparisonSnapshot?
+    @State private var saved = false
     @State private var error:String?
     @State private var busy=false
     @State private var buildTask:Task<Void,Never>?
@@ -62,7 +63,7 @@ public enum EstimateComparisonBuilder {
             Picker("方法",selection:$kind){Text("电量 / 已保存费用").tag(AnalysisKind.powerEstimate);Text("显热").tag(AnalysisKind.steadyHeatBalance)}
             DisclosureGroup("明确比较决策变量：\(decisions.sorted().joined(separator:"、"))") {
                 ForEach(kind == .powerEstimate ? ["powerIntervals"] : ["conductance","indoorTemperature","outdoorTemperature","outdoorAir","infiltration","internalSensibleHeat","solarSensibleHeat"],id:\.self){field in
-                    Toggle("明确改变\(field)",isOn:Binding(get:{decisions.contains(field)},set:{if $0{decisions.insert(field)}else{decisions.remove(field)}}))
+                    Toggle("明确改变\(field == "powerIntervals" ? "电功率与时段" : heatFieldTitle(field))",isOn:Binding(get:{decisions.contains(field)},set:{if $0{decisions.insert(field)}else{decisions.remove(field)}}))
                 }
                 Text("未选字段作为背景，差异会阻断改善比较；这里是情景声明，不保证实际收益。").font(.caption)
             }
@@ -70,33 +71,41 @@ public enum EstimateComparisonBuilder {
                 Picker("基准",selection:Binding(get:{baselineID ?? store.baselineScenarioID},set:{baselineID=$0})){ForEach(project.scenarios,id:\.id){Text($0.name).tag(Optional($0.id))}}
                 Picker("候选",selection:Binding(get:{candidateID ?? store.selectedScenarioID},set:{candidateID=$0})){ForEach(project.scenarios,id:\.id){Text($0.name).tag(Optional($0.id))}}
             }
-            Button("冻结当前两份证据并比较"){build()}.disabled(busy || input.baselineID==input.candidateID)
+            Button("冻结、比较并保存到项目"){build()}.disabled(busy || input.baselineID==input.candidateID)
             if busy {ProgressView("后台核对固定run…")}
             if let error {Text(error).font(.caption).foregroundStyle(.orange)}
             if let snapshot {
                 ForEach(snapshot.metrics ?? [],id:\.metric){m in VStack(alignment:.leading){
-                    Text("\(m.metric)：基准 \(m.baseline?.formatted() ?? "missing") / 候选 \(m.candidate?.formatted() ?? "missing") \(m.unit)").font(.caption)
+                    Text("\(metricTitle(m.metric))：基准 \(m.baseline?.formatted() ?? "未知") / 候选 \(m.candidate?.formatted() ?? "未知") \(m.unit)").font(.caption)
                     if let delta=m.absoluteDifference {Text("名义绝对差（候选−基准）：\(delta.formatted()) \(m.unit)").font(.caption)}
                     if let percent=m.percentDifference {Text("同口径名义差：\(percent.formatted()) %；不是保证收益。").font(.caption)}
-                    Text("排序依据："+m.ranking).font(.caption)
+                    Text("排序依据："+comparisonRankingTitle(m.ranking)).font(.caption)
                     ForEach(m.reasons,id:\.self){Text($0).font(.caption).foregroundStyle(.secondary)}
                 }}
                 ForEach(Array(snapshot.incomparableReasons.enumerated()),id:\.offset){_,reason in Text(reason.reason).font(.caption).foregroundStyle(.secondary)}
-                Text("Comparison \(snapshot.comparisonID.uuidString) · 固定比较只保留在本次会话；关闭后可从已保存run重新生成。").font(.caption2)
+                Text("Comparison \(snapshot.comparisonID.uuidString) · \(saved ? "固定比较已保存到项目" : "当前仅在会话中，尚未保存")").font(.caption2)
             }
         }.onChange(of:kind){_,value in decisions = value == .powerEstimate ? ["powerIntervals"]:[] }
         .onDisappear {buildTask?.cancel();buildID=UUID();busy=false}
-        .onChange(of:input){_,_ in buildTask?.cancel();buildID=UUID();busy=false;if snapshot != nil {error="输入或侧文件已更新；下方为原固定比较，需重新冻结后评价当前方案。"}}
+        .onChange(of:input){_,_ in buildTask?.cancel();buildID=UUID();busy=false;if snapshot != nil {error="项目已更新；下方仍为原固定比较。重新冻结可比较当前输入。"}}
     }
     private func build() {
-        let frozen=input,registry=store.modelRegistry,instance=store.documentInstanceID;busy=true;error=nil
+        let frozen=input,registry=store.modelRegistry,instance=store.documentInstanceID;busy=true;error=nil;saved=false
         buildTask?.cancel();buildID=UUID();let token=buildID
         buildTask=Task { defer{if buildID==token{busy=false}};do {
-            let worker=Task.detached{try EstimateComparisonBuilder.build(frozen,registry:registry)}
+            let worker=Task.detached{
+                let snapshot = try EstimateComparisonBuilder.build(frozen,registry:registry)
+                return try FixedComparisonArtifacts.make(snapshot, entries: frozen.entries)
+            }
             let value=try await withTaskCancellationHandler(operation:{try await worker.value},onCancel:{worker.cancel()})
             guard !Task.isCancelled,buildID==token,input==frozen else{return}
             try store.validateNativeDocumentContext(instanceID:instance,sidefileRevision:frozen.revision)
-            snapshot=value
+            snapshot=value.record.snapshot
+            guard let persist = store.persistComparison else { throw NativeArtifactError.unsupportedRecord }
+            try persist(value); saved=true
         }catch{if !Task.isCancelled,buildID==token{self.error=error.localizedDescription}} }
+    }
+    private func metricTitle(_ key: String) -> String {
+        switch key { case "energy": "声明时段电量"; case "referenceCost": "声明时段费用"; case "coolingSensible": "工况显热需求"; default: key }
     }
 }

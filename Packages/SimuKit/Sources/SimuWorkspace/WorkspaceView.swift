@@ -85,31 +85,49 @@ public struct WorkspaceView: View {
         case .workspace:
             if let project = store.project, let id = store.selectedScenarioID, !project.geometry.rooms.isEmpty {
                 VStack(spacing:0) {
-                ScrollView { VStack(alignment:.leading) { AirflowPreviewPanelView(store:store,input:previewInput);DisclosureGroup("电量、电费与显热情景") { ThermalEstimatePanelView(store:store,entries:nativeEntries,input:estimateInput) } }.padding() }.frame(maxHeight:300)
+                ScrollView { VStack(alignment:.leading, spacing:16) {
+                    DailySettingsView(store: store, onRoom: { sheet = .room($0) }, onAdvanced: { sheet = .conditions(id) }, onObject: { focusEntityID = $0 })
+                    AirflowPreviewPanelView(store:store,input:previewInput)
+                    DisclosureGroup("条件建议与依据") { SuggestionCardsView(store: store, onDirection: { sheet = .direction }, onObject: { focusEntityID = $0 }) }
+                    DisclosureGroup("电量、电费与显热情景") { ThermalEstimatePanelView(store:store,entries:nativeEntries,input:estimateInput) }
+                }.padding() }.frame(maxHeight:360)
                 RoomObjectsView(project: project, scenarioID: id, registry: store.modelRegistry,
                                 focusEntityID: focusEntityID, overlay: store.preview.overlay, rendererCapability: rendererCapability, onCommit: commit)
                 }
             } else {
-                EmptyStateView("建立房间模型", symbol: "square.dashed", message: "通过矩形房间向导或办公室、教室模板开始；未知输入可保留为草稿。")
+                VStack(spacing:16) {
+                    EmptyStateView("建立房间模型", symbol: "square.dashed", message: "从家庭、办公室、教室模板或矩形向导开始；热工输入可以保持未知。")
+                    Button("选择房间模板") { requestCreation(.templates) }
+                    Button("手动输入房间尺寸") { requestCreation(.wizard) }
+                }
             }
         case .scenarios:
             if let project = store.project {
                 ScenarioListView(project: project, selectedScenarioID: store.selectedScenarioID,
                     baselineScenarioID: store.baselineScenarioID, onSelect: { store.selectedScenarioID = $0 },
-                    onCommit: commit, onSetBaseline: { try store.setBaseline($0) })
-                ScrollView { VStack(alignment:.leading) { PreviewComparisonView(store: store, additionalIssues: packageIssues);EstimateComparisonView(store:store,entries:nativeEntries,revision:nativeSidefileRevision,additionalIssues:packageIssues) }.padding() }.frame(maxHeight:400)
+                    onCommit: commit, onSetBaseline: { try store.setBaseline($0) },
+                    onCopy: { edited, sourceID in
+                        guard store.project == project else { throw PreviewConfigurationEditingError.staleDraft }
+                        try store.replaceProject(edited, actionName: "复制方案", copiedFromScenarioID: sourceID)
+                    })
+                ScrollView { VStack(alignment:.leading) { PreviewComparisonView(store: store, additionalIssues: packageIssues);FixedPreviewComparisonView(store:store,entries:nativeEntries,revision:nativeSidefileRevision);EstimateComparisonView(store:store,entries:nativeEntries,revision:nativeSidefileRevision,additionalIssues:packageIssues) }.padding() }.frame(maxHeight:500)
             }
         case .runs:
             NativeAnalysisHistoryView(store:store,entries:nativeEntries,revision:nativeSidefileRevision)
         case .reports:
-            EmptyStateView("报告功能尚未接入", symbol: "doc.text", message: "已保存的气流规则与电量、费用、显热情景可在工作区和运行历史查看。完整舒适、年度节能与报告导出仍待开发。")
+            LocalReportView(store: store, entries: nativeEntries, revision: nativeSidefileRevision)
+        case .measurements:
+            MeasurementWorkspaceView(store: store, entries: nativeEntries, revision: nativeSidefileRevision)
         }
     }
     @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {
         ToolbarItemGroup {
             Menu {
                 Button("矩形房间向导") { requestCreation(.wizard) }
-                Button("办公室 / 教室模板") { requestCreation(.templates) }
+                Button("家庭 / 办公室 / 教室模板") { requestCreation(.templates) }
+                #if os(iOS)
+                Button("RoomPlan 扫描 / 手动回退") { requestCreation(.capture) }
+                #endif
                 if let onImportJSON { Button("导入 JSON 为新项目", action: onImportJSON) }
             } label: { Label("创建与导入", systemImage: "plus") }
             Menu {
@@ -151,6 +169,23 @@ public struct WorkspaceView: View {
     }
     @ViewBuilder private func sheetContent(_ destination: WorkspaceSheet) -> some View {
         switch destination {
+        case .capture:
+            let instance = store.documentInstanceID, inputRevision = store.revision
+            RoomCaptureWorkflowView(onManual: { sheet = .wizard }) { snapshot, original in
+                let worker = Task.detached { try RoomCaptureArtifact.make(snapshot, original: original) }
+                let artifact = try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+                try Task.checkCancellation()
+                try store.validateNativeDocumentContext(instanceID: instance)
+                guard store.revision == inputRevision else { throw PreviewConfigurationEditingError.staleDraft }
+                try store.applyRoomCapture(artifact)
+            }
+        case .direction:
+            if let project = store.project, let scenario = store.currentScenario {
+                DailyDirectionEditor(project: project, scenario: scenario) { candidate in
+                    guard store.project == project, store.selectedScenarioID == scenario.id else { throw PreviewConfigurationEditingError.staleDraft }
+                    try store.replaceProject(candidate, actionName: "调整送风方向")
+                }
+            }
         case .wizard:
             NavigationStack { RoomWizardView(registry: store.modelRegistry) { try store.createRoomProject($0) } }.modifier(EditorSheetSize())
         case .templates:
@@ -255,7 +290,7 @@ public struct WorkspaceView: View {
     }
 }
 private enum WorkspaceSheet: Hashable, Identifiable {
-    case wizard, templates, room(UUID), opening(UUID, UUID), conditions(UUID), assumptions, issues, snapshot, identity
+    case wizard, templates, room(UUID), opening(UUID, UUID), conditions(UUID), assumptions, issues, snapshot, identity, direction, capture
     var id: Self { self }
 }
 private struct EditorSheetSize: ViewModifier {

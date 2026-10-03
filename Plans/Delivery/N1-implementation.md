@@ -84,3 +84,28 @@ V-N5-01…05的基础artifact/附件/完整值失败行为已覆盖：FileWrappe
 - 身份防重表有65,536会话上限，达到明确sessionRunLimit；从不偷偷忘记旧ID。包budget32MiB/8MiB/2MiB/64KiB仍由持久化门槛执行。
 - CostEvaluationRecord/ComparisonRecord专用codec/schema与append事务在N4/N5实施；现有manifest允许受控evaluation路径，未知内容不当有效费用。
 - 默认方法配置的profile/source是内部显示假设；N3需验证profile/version支持并持续标注几何规则，不按m/s/T/舒适解释。
+
+## 非 AR probe 受限补审：实体命中与系统相机
+
+范围只包括 `RealityKitCapabilityProbeView.swift` 和本记录；不修改 App 路由、生产 renderer、Core 或共享验收状态。根代理报告原 probe 在现代 Mac 上自管相机旋转/放大/重置和独立选择按钮有效，但盒体点击和系统 orbit 拖动没有可观察变化。按钮响应不能证明实体命中；这一问题不能按构建结果判定解决，也不能直接归因为系统缺陷。
+
+公开接口核对：本机 Xcode27 SDK 的 `RealityViewCameraContent: RealityCoordinateSpaceProjecting` 包含 `entity(at:in:)`、`hitTest` 和 `ray`，availability 为 macOS15/iOS18，与 probe 原有门槛一致。Apple 的 [entity(at:in:) 文档](https://developer.apple.com/documentation/realitykit/realitycoordinatespaceprojecting/entity(at:in:)) 说明二维坐标射线以碰撞形状为命中依据；[相机 controls 文档](https://developer.apple.com/documentation/swiftui/view/realityviewcameracontrols(_:)) 允许鼠标、触控板和屏幕拖动；[cameraTarget](https://developer.apple.com/documentation/realitykit/realityviewcameracontent/cameratarget) 是系统 orbit 的目标实体。这里没有使用私有 API 或增加摄像权限。
+
+修复策略：
+
+1. 在画布命名二维坐标空间接收真实 `SpatialTapGesture`，将同一坐标传入公开 `content.entity(at:in:)`。仅射线实际返回 `probe-box` 时切换选中。保留盒体碰撞组件；不以屏幕矩形、外部按钮或代理调用冒充实体命中。
+2. 使用 `simultaneousGesture`，避免以普通独占 gesture 与系统拖动争用。最新 projection content 存在仅 MainActor 的画布私有 context；update 不发布 SwiftUI 状态、不订阅逐帧事件，disappear 清除引用。每个相机模式的画布有独立生命周期。
+3. 模式切换用 `.id(controlMode)` 重建场景。自管模式创建唯一 PerspectiveCameraComponent，controls 为 none；系统模式完全不创建自管相机，实体添加完后设置 cameraTarget=root，仅配置 orbit 或 dolly。原来仅禁用自管相机不能证明默认相机已恢复，这是输入失败的一项实现风险，当前仍不宣称已证实其为唯一原因。
+4. 增加画布真实点击数、盒体射线命中数和最后来源文字。选择按钮只修改选择和来源文字，不增加点击或命中计数。红/黄静态非对称标记帮助观察相机拖动，标记不具碰撞组件、不参与选择。
+
+构建与自审：两端独立 Debug probe 构建均通过，证据为 `Artifacts/N1/probe-mac-hit-review-build.log`、`probe-ios-hit-review-build.log`。使用原 macOS14/iOS17 deployment target，类型及其调用仍完整受 macOS15/iOS18 分支保护。精确 diff 自审确认没有修改业务接口、没有假算法/假点击计数、没有新增 unchecked Sendable、没有摄像/逐帧订阅；`git diff --check` 通过。实际 UI 回验由根代理执行，本 agent 没有操作桌面或模拟器，最低系统运行仍未验证。
+
+根代理回验步骤及通过标准：
+
+- 启动 `/private/tmp/SimuNow-N1-Probe/macOS/Build/Products/Debug/SimuNow.app`，独立 ID `com.simunow.nativevalidation.mac`。iOS 对应 `/private/tmp/SimuNow-N1-Probe/iOS/Build/Products/Debug-iphonesimulator/SimuNow.app`，ID `com.simunow.nativevalidation.ios`。已有编译旗标入口保持；不退出用户原 App。
+- 点重置后直接点盒体可见面的中心：应出现“画布点击1次·盒体命中1次·射线命中probe-box”且变绿；再点盒体应命中2次并变蓝。直接点灰地板/空白只增加画布点击，命中数及选中状态不变。
+- 点“选择盒体”按钮：选择变更，来源为“通过按钮更改选择”，命中数不变。这个结果只验按钮，不算命中测试。
+- 切系统 orbit 并在画布拖动：红/黄标记与盒体的视角必须出现实际变化。切 dolly 拖动：实际投影尺度必须变化。切回自管模式验证旋转/放大/重置按钮仍有效。失败时记录模式、点击计数、命中计数和前后截图，不能仅凭手势 handler 存在标完成。
+- 在 iOS 执行同样的实际触摸命中与拖动检查；只启动和截图仍不足以证明交互。
+
+N2 交接边界：生产方案继续遵循 N2 的单一自管相机，并可采用这里的公开二维到碰撞射线命中方法，将 Entity 转换为稳定业务 selectionKey。probe 的 Entity 名称判断仅服务固定测试盒体；不作为生产选择模型。N2 还需完成真实房间和开口、遮挡、对象删除、场景 diff、focus/手势/生命周期与二维回退验收。若本次修复后某平台仍不响应，生产实现需继续排查实际输入路径；本记录不会据此宣称所有系统手势已通过。

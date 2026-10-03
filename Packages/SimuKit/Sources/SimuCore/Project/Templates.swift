@@ -183,12 +183,12 @@ private struct Builder {
         let surfaces = faces.map { Surface(id: surfaceID(for: $0), face: $0) }
         let shape = RectangularRoom(dimensions: Dimensions3D(width: m(width), depth: m(depth), height: m(height)))
         let room = Room(id: roomID, name: name, shape: try! ExtensionRecord(shape),
-                        northAngle: .unknown(reason: "Confirm orientation on site"),
+                        northAngle: HongKongOctoberClimate.northAngle(),
                         surfaces: surfaces, openings: openings)
         let envelope = Envelope(surfaces: surfaces.map { surface in
             if surface.face == exteriorWall {
                 return SurfaceCondition(surfaceID: surface.id, exposure: .outdoors, uValue: uv(1.8),
-                                        boundary: ThermalBoundary(mode: .temperature, temperature: .unknown(reason: "Boundary condition pending L1 or weather adapter")))
+                                        boundary: ThermalBoundary(mode: .temperature, temperature: HongKongOctoberClimate.exteriorAirTemperature()))
             }
             return SurfaceCondition(surfaceID: surface.id, exposure: .adiabatic, uValue: uv(1.5),
                                     boundary: ThermalBoundary(mode: .heatFlux, heatFlux: .known(value: 0, source: .init(kind: .assumed, note: "Adiabatic interior partition (template assumption)"))))
@@ -199,9 +199,7 @@ private struct Builder {
                                           exfiltration: assumedFlow(0, "No exfiltration in template"),
                                           density: density(),
                                           openings: openings.map { OpeningState(openingID: $0.id, openFraction: assumedRatio(0, "Openings closed in template")) })
-        let environment = Environment(outdoorTemperature: .unknown(reason: "Weather adapter not connected"),
-                                      outdoorHumidity: .unknown(reason: "Weather adapter not connected"),
-                                      indoorHumidity: .unknown(reason: "No measurement or model source yet"))
+        let environment = HongKongOctoberClimate.environment()
         let inputs = ScenarioInputs(usage: Usage(seats: seats, occupants: occupants, equipment: equipment),
                                     hvac: devices, controls: controls, envelope: envelope,
                                     ventilation: [ventilation], environment: environment)

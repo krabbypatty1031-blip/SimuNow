@@ -19,7 +19,7 @@
 | P1-01 固定运行环境与能力检查 | 已完成（2026-10-03，strict doctor exit 0 / ready） | runtime/、Artifacts/P1-01/；verification.md P1-01 收尾节；ADR-018 |
 | L1/L2/L3 引擎 | L1/L2 引擎已安装并通过最小启动验证（P1-01）；适配器待开发（P1-02…05、P3-03/04） | P1/P3 遗留条件 |
 | P5 方案对比/建议卡/基础 PDF | 已完成（L0 口径；舒适与年度费用不含，见计划） | Comparison/、Reporting/；verification.md P5 节 |
-| 只读 3D 几何预览 | 已完成（macOS 15+ RealityView；更低系统/iOS 回退说明；非编辑器、不含场） | SimuVisualization RoomPreview3D/Layout；ADR-017；verification.md |
+| 只读 3D 几何预览 | 已完成（macOS 15+ RealityView；示意桌椅、人体、显示器、门窗和壁挂空调；更低系统/iOS 回退说明；非编辑器、不含场） | SimuVisualization RoomPreview3D/Layout/Meshes；ADR-017、ADR-020 |
 | 场渲染/舒适评价 | 待开发 | P4 |
 | RoomPlan/实测/代理/批量 | 待开发 | P6/P7 |
 | iOS 模拟器启动 | 已验证（iPhone 17，install+launch+存活） | verification.md「应用启动验证」 |
@@ -36,7 +36,7 @@
 | P6 iOS 采集与校准 | 扫描建模 | 稳定结果管线（已具备）+ LiDAR 设备实机 + 现场测量数据 |
 | P7 优化/批量/发布 | 产品化 | 真实案例与误差数据（P6）+ 签名/公证账号 |
 
-GUI 手动演示路径（需用户本机执行）：模板建项目 → inspector 补全未知（室外温度等）→ 计算任务页运行 L0 → 改设定温度看旧结果「待重算」→ 方案对比页生成 ±1 °C 候选并各跑一次 → 查看建议卡 → 报告页导出 PDF。
+GUI 手动演示路径（需用户本机执行）：模板建项目（已含香港大学 10 月气候默认值，朝向默认远侧为正北）→ 计算任务页运行 L0 → 改设定温度看旧结果「待重算」→ 方案对比页生成 ±1 °C 候选并各跑一次 → 查看建议卡 → 报告页导出 PDF。按向导新建的房间仍需填写空调和通风。气候来源见 ADR-019。
 
 ## 下一步
 

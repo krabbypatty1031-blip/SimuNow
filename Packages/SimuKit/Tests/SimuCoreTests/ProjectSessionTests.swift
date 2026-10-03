@@ -6,7 +6,7 @@ import Testing
 @Test @MainActor func sessionEditsMarkDirtyAndRevalidate() throws {
     let session = ProjectSession(project: ProjectTemplates.office())
     #expect(!session.isDirty)
-    #expect(!session.validation.passes(.inputPreparation)) // template honestly lacks weather
+    #expect(session.validation.passes(.inputPreparation))
     session.mutate { $0.name = "改名" }
     #expect(session.isDirty)
     #expect(session.validation.passes(.projectIntegrity))
@@ -24,6 +24,8 @@ import Testing
     #expect(loaded.project == session.project)
     #expect(loaded.packageURL == url)
     #expect(ProjectSession.recents.first?.path == url.path)
+    let citation = url.appendingPathComponent(HongKongOctoberClimate.weatherRelativePath)
+    #expect(try Data(contentsOf: citation) == HongKongOctoberClimate.citationData())
 }
 
 @Test @MainActor func duplicateScenarioKeepsEntityIdentityWithNewScenarioID() throws {
@@ -61,4 +63,26 @@ import Testing
     #expect(session.selection == nil)
     // Snapshots stay capturable after edits.
     #expect(try session.snapshot(for: session.project.scenarios[0].id).scenarioID == session.project.scenarios[0].id)
+}
+
+@Test @MainActor func everyBlockingInputOpensAnEditor() {
+    var project = ProjectTemplates.office()
+    project.scenarios[0].inputs.environment.outdoorTemperature = .unknown(reason: "test")
+    if let index = project.scenarios[0].inputs.envelope.surfaces.firstIndex(where: { $0.boundary.mode == .temperature }) {
+        project.scenarios[0].inputs.envelope.surfaces[index].boundary.temperature = .unknown(reason: "test")
+    }
+    let session = ProjectSession(project: project)
+    let blocking = session.validation.issues.filter { $0.blocks.contains(.inputPreparation) }
+    #expect(!blocking.isEmpty)
+    for issue in blocking {
+        let target = session.settingTarget(for: issue)
+        #expect(target != nil, "\(issue.path)")
+        guard let target else { continue }
+        if let scenarioID = target.scenarioID { session.currentScenarioID = scenarioID }
+        #expect(session.exists(target.selection), "\(issue.path)")
+    }
+    let outdoor = blocking.first { $0.path.hasSuffix("/outdoorTemperature") }
+    #expect(session.settingTarget(for: outdoor!)?.selection == .environment)
+    let wall = blocking.first { $0.path.contains("/boundary/temperature") }
+    #expect(session.settingTarget(for: wall!)?.selection == .room(session.project.geometry.rooms[0].id))
 }

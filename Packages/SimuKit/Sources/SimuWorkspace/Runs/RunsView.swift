@@ -8,11 +8,13 @@ import SimuDesignSystem
 public struct RunsView: View {
     let session: ProjectSession
     let runStore: RunStore
+    var onOpenSetting: (SettingTarget) -> Void
     @State private var showValidation = false
 
-    public init(session: ProjectSession, runStore: RunStore) {
+    public init(session: ProjectSession, runStore: RunStore, onOpenSetting: @escaping (SettingTarget) -> Void = { _ in }) {
         self.session = session
         self.runStore = runStore
+        self.onOpenSetting = onOpenSetting
     }
 
     private var inputReady: Bool { session.validation.passes(.inputPreparation) }
@@ -45,7 +47,10 @@ public struct RunsView: View {
         .onAppear { runStore.syncHashes(project: session.project) }
         .sheet(isPresented: $showValidation) {
             NavigationStack {
-                ValidationIssueListView(session: session)
+                ValidationIssueListView(session: session) { target in
+                    showValidation = false
+                    onOpenSetting(target)
+                }
                     .navigationTitle("待填信息")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showValidation = false } } }
             }

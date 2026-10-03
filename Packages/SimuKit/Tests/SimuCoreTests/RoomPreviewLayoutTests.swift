@@ -78,4 +78,36 @@ struct RoomPreviewLayoutTests {
                                               seats: args.seats, devices: args.devices, registry: .builtIn)
         #expect(changed?.fingerprint != first?.fingerprint)
     }
+
+    @Test func officePreviewAddsSchematicPeopleMonitorsAndSupplyFacing() throws {
+        let project = template()
+        let scenario = project.scenarios[0]
+        let layout = try #require(RoomPreviewLayout.build(
+            room: project.geometry.rooms[0],
+            obstacles: project.geometry.obstacles,
+            seats: scenario.inputs.usage.seats,
+            devices: scenario.inputs.hvac,
+            registry: .builtIn,
+            occupants: scenario.inputs.usage.occupants,
+            equipment: scenario.inputs.usage.equipment))
+        #expect(layout.figures.filter { $0.kind == .person }.count == 4)
+        #expect(layout.figures.filter { $0.kind == .monitor }.count == 4)
+        let person = try #require(layout.figures.first { $0.kind == .person })
+        #expect(person.position == Position3D(x: 1.4, y: 0, z: -1.2))
+        let monitor = try #require(layout.figures.first { $0.kind == .monitor })
+        #expect(monitor.position.y == 0.76)
+        let device = try #require(layout.boxes.first { $0.kind == .device })
+        #expect(device.facing == Direction3D(x: 0, y: 0, z: 1))
+        let classroom = ProjectTemplates.classroom()
+        let classLayout = try #require(RoomPreviewLayout.build(
+            room: classroom.geometry.rooms[0],
+            obstacles: classroom.geometry.obstacles,
+            seats: classroom.scenarios[0].inputs.usage.seats,
+            devices: classroom.scenarios[0].inputs.hvac,
+            registry: .builtIn,
+            occupants: classroom.scenarios[0].inputs.usage.occupants,
+            equipment: classroom.scenarios[0].inputs.usage.equipment))
+        #expect(classLayout.figures.filter { $0.kind == .person }.count == 12)
+        #expect(classLayout.figures.filter { $0.kind == .monitor }.isEmpty)
+    }
 }

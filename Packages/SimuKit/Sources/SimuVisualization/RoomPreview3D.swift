@@ -54,10 +54,10 @@ private struct RoomPreview3DReality: View {
             .id(layout.fingerprint)
             .gesture(orbitGesture)
             .gesture(zoomGesture)
-            .accessibilityLabel("房间三维几何预览，只读，不含气流或温度场")
+            .accessibilityLabel("房间三维示意预览，只读。桌椅、人和空调是外形，不含气流或温度场")
 
             HStack {
-                Text("3D 几何预览（只读）· 拖动旋转 · 双指缩放 · 不含气流/温度场")
+                Text("3D 示意预览（只读）· 拖动旋转 · 双指缩放 · 外形不参与计算，不含气流/温度场")
                     .font(.caption2).foregroundStyle(.secondary)
                     .padding(6).background(.regularMaterial).clipShape(RoundedRectangle(cornerRadius: 6))
                 Spacer()
@@ -106,8 +106,15 @@ private struct RoomPreview3DReality: View {
 
     private func makeScene() -> Entity {
         let root = Entity()
+        let key = DirectionalLight()
+        key.light.intensity = 10000
+        key.look(at: .zero, from: SIMD3<Float>(1.2, 2.4, 1.6), relativeTo: nil)
+        root.addChild(key)
         for box in layout.boxes {
             root.addChild(makeBox(box))
+        }
+        for figure in layout.figures {
+            root.addChild(makeFigure(figure))
         }
         for arrow in layout.arrows {
             root.addChild(makeArrow(arrow))
@@ -116,10 +123,36 @@ private struct RoomPreview3DReality: View {
     }
 
     private func makeBox(_ box: RoomPreviewLayout.Box) -> Entity {
-        let mesh = MeshResource.generateBox(size: SIMD3<Float>(Float(box.size.x), Float(box.size.y), Float(box.size.z)))
-        let entity = ModelEntity(mesh: mesh, materials: [material(for: box.kind)])
-        entity.position = SIMD3<Float>(Float(box.center.x), Float(box.center.y), Float(box.center.z))
-        return entity
+        let center = SIMD3<Float>(Float(box.center.x), Float(box.center.y), Float(box.center.z))
+        let size = SIMD3<Float>(Float(box.size.x), Float(box.size.y), Float(box.size.z))
+        switch box.kind {
+        case .obstacle:
+            return RoomPreviewMeshes.desk(center: center, size: size)
+        case .seat:
+            return RoomPreviewMeshes.chair(at: center)
+        case .device:
+            let facing = SIMD3<Float>(Float(box.facing.x), Float(box.facing.y), Float(box.facing.z))
+            return RoomPreviewMeshes.airConditioner(at: center, facing: facing)
+        case .window:
+            return RoomPreviewMeshes.opening(center: center, size: size, kind: .window)
+        case .door:
+            return RoomPreviewMeshes.opening(center: center, size: size, kind: .door)
+        case .sample:
+            return RoomPreviewMeshes.sample(at: center)
+        case .floor, .wall:
+            let mesh = MeshResource.generateBox(size: size)
+            let entity = ModelEntity(mesh: mesh, materials: [material(for: box.kind)])
+            entity.position = center
+            return entity
+        }
+    }
+
+    private func makeFigure(_ figure: RoomPreviewLayout.Figure) -> Entity {
+        let position = SIMD3<Float>(Float(figure.position.x), Float(figure.position.y), Float(figure.position.z))
+        switch figure.kind {
+        case .person: return RoomPreviewMeshes.person(at: position)
+        case .monitor: return RoomPreviewMeshes.monitor(at: position)
+        }
     }
 
     private func makeArrow(_ arrow: RoomPreviewLayout.Arrow) -> Entity {
@@ -150,31 +183,15 @@ private struct RoomPreview3DReality: View {
         switch kind {
         case .floor:
             var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: .lightGray.withAlphaComponent(0.9))
+            material.baseColor = .init(tint: NSColor(calibratedRed: 0.82, green: 0.78, blue: 0.72, alpha: 1))
             return material
         case .wall:
             var material = PhysicallyBasedMaterial()
             material.baseColor = .init(tint: .systemGray.withAlphaComponent(1))
             material.blending = .transparent(opacity: 0.13)
             return material
-        case .door:
-            var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: .systemBrown.withAlphaComponent(1))
-            material.blending = .transparent(opacity: 0.6)
-            return material
-        case .window:
-            var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: .systemCyan.withAlphaComponent(1))
-            material.blending = .transparent(opacity: 0.45)
-            return material
-        case .obstacle:
-            return SimpleMaterial(color: .systemGray.withAlphaComponent(0.85), isMetallic: false)
-        case .device:
-            return SimpleMaterial(color: .systemBlue.withAlphaComponent(0.9), isMetallic: false)
-        case .seat:
-            return SimpleMaterial(color: .systemGreen.withAlphaComponent(0.95), isMetallic: false)
-        case .sample:
-            return SimpleMaterial(color: .systemTeal.withAlphaComponent(0.9), isMetallic: false)
+        case .door, .window, .obstacle, .device, .seat, .sample:
+            return SimpleMaterial(color: .systemGray, isMetallic: false)
         }
     }
 }

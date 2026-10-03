@@ -3,8 +3,11 @@ import SimuCore
 import SimuDesignSystem
 
 /// Multi-step room creation wizard. Produces an honest ProjectDocument:
-/// geometry + envelope filled from user input; HVAC/usage empty; environment explicitly unknown.
+/// geometry and envelope come from the form; climate uses the Hong Kong October preset;
+/// HVAC and ventilation stay empty until the user fills them.
 public struct RoomWizardDraft: Sendable {
+    public init() {}
+
     public var name = "新项目"
     public var spaceType: SpaceType = .office
     public var widthText = "5.0"
@@ -68,7 +71,7 @@ public struct RoomWizardDraft: Sendable {
         let shape = RectangularRoom(dimensions: Dimensions3D(width: width, depth: depth, height: height))
         let north: SimuCore.Angle = northKnown
             ? .known(value: Double(northText) ?? 0, source: Self.userSource)
-            : .unknown(reason: "Confirm orientation on site")
+            : HongKongOctoberClimate.northAngle()
         let room = Room(id: roomID, name: name, shape: try! ExtensionRecord(shape),
                         northAngle: north, surfaces: surfaces, openings: openings)
         let wallU: UValue = .known(value: Double(wallUText) ?? 1.8, source: Self.userSource)
@@ -78,7 +81,7 @@ public struct RoomWizardDraft: Sendable {
             surfaces: surfaces.map { surface in
                 if exteriorFaces.contains(surface.face) {
                     return SurfaceCondition(surfaceID: surface.id, exposure: .outdoors, uValue: wallU,
-                                            boundary: ThermalBoundary(mode: .temperature, temperature: .unknown(reason: "Boundary condition pending L1 or weather adapter")))
+                                            boundary: ThermalBoundary(mode: .temperature, temperature: HongKongOctoberClimate.exteriorAirTemperature()))
                 }
                 return SurfaceCondition(surfaceID: surface.id, exposure: .adiabatic, uValue: wallU,
                                         boundary: ThermalBoundary(mode: .heatFlux, heatFlux: .known(value: 0, source: .init(kind: .assumed, note: "Adiabatic interior partition (wizard assumption)"))))
@@ -94,9 +97,7 @@ public struct RoomWizardDraft: Sendable {
                                         exfiltration: .known(value: 0, source: .init(kind: .assumed, note: "No exfiltration (wizard default)")),
                                         density: .known(value: 1.2, source: .init(kind: .preset, reference: "Indoor air density near 20–26 °C (preset; verify)")),
                                         openings: openings.map { OpeningState(openingID: $0.id, openFraction: .known(value: 0, source: .init(kind: .assumed, note: "Closed (wizard default)"))) })
-        let environment = Environment(outdoorTemperature: .unknown(reason: "Weather adapter not connected"),
-                                      outdoorHumidity: .unknown(reason: "Weather adapter not connected"),
-                                      indoorHumidity: .unknown(reason: "No measurement or model source yet"))
+        let environment = HongKongOctoberClimate.environment()
         let scenario = Scenario(id: UUID(), name: "基准方案",
                                 inputs: ScenarioInputs(usage: Usage(), hvac: [], controls: [],
                                                        envelope: envelope, ventilation: [ventilation], environment: environment),
@@ -196,7 +197,8 @@ public struct RoomWizardView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("暂时不知道也可以先建房，计算前再补充。").font(.caption).foregroundStyle(.secondary)
+                    Text("未填写时，俯视图远侧按正北。这是香港大学本部的默认朝向，房间不同请之后修改。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -260,7 +262,8 @@ public struct RoomWizardView: View {
                     Text("U 的单位为 W/(m²·K)，越小越隔热；SHGC 是 0–1 的比例。当前显示的初始值还需核实，保存后记为自己填写。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("墙面温度尚未填写，建房完成不代表已能计算。").font(.caption).foregroundStyle(.secondary)
+                Text("外墙外的空气温度已按香港 10 月月平均 25.7°C 填入，可在房间设置里修改。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -271,7 +274,7 @@ public struct RoomWizardView: View {
             LabeledContent("尺寸", value: "\(draft.widthText) × \(draft.depthText) × \(draft.heightText) m")
             LabeledContent("门窗", value: "\(draft.openings.count) 个")
             LabeledContent("接触室外", value: SurfaceFace.allCases.filter { draft.exteriorFaces.contains($0) }.map(faceTitle).joined(separator: "、"))
-            Text("还需填写：空调、座位、通风和天气。未填信息会保留为待补充。")
+            Text("气候、日期和时区已按香港大学 10 月默认填好。还需填写空调和通风；未填的会保留为待补充。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

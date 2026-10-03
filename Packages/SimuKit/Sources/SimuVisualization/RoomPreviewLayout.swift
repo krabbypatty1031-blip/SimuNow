@@ -14,6 +14,26 @@ public struct RoomPreviewLayout: Equatable, Sendable {
         public let kind: BoxKind
         public let center: Position3D  // Apple Y-up metres
         public let size: Position3D    // positive extents, Apple coords
+        /// Unit direction in Apple coords. Devices use the supply direction; other kinds ignore it.
+        public let facing: Direction3D
+
+        public init(kind: BoxKind, center: Position3D, size: Position3D, facing: Direction3D = Direction3D(x: 0, y: 0, z: 1)) {
+            self.kind = kind
+            self.center = center
+            self.size = size
+            self.facing = facing
+        }
+    }
+
+    /// Schematic people and monitors. Positions come from occupants and equipment;
+    /// the mesh size is a display convention and is not a measured body or device.
+    public enum FigureKind: Equatable, Sendable {
+        case person, monitor
+    }
+
+    public struct Figure: Equatable, Sendable {
+        public let kind: FigureKind
+        public let position: Position3D // Apple Y-up metres
     }
 
     public struct Arrow: Equatable, Sendable {
@@ -27,15 +47,19 @@ public struct RoomPreviewLayout: Equatable, Sendable {
     public let roomSize: Position3D    // domain (width, depth, height)
     public let boxes: [Box]
     public let arrows: [Arrow]
+    public let figures: [Figure]
 
     /// Stable identity for view rebuilds (edits are infrequent; orbit gestures must not rebuild).
     public var fingerprint: String {
         var parts = ["room(\(roomSize.x),\(roomSize.y),\(roomSize.z))"]
         for box in boxes {
-            parts.append("\(box.kind):\(box.center.x),\(box.center.y),\(box.center.z):\(box.size.x),\(box.size.y),\(box.size.z)")
+            parts.append("\(box.kind):\(box.center.x),\(box.center.y),\(box.center.z):\(box.size.x),\(box.size.y),\(box.size.z):\(box.facing.x),\(box.facing.y),\(box.facing.z)")
         }
         for arrow in arrows {
             parts.append("\(arrow.role):\(arrow.base.x),\(arrow.base.y),\(arrow.base.z):\(arrow.direction.x),\(arrow.direction.y),\(arrow.direction.z)")
+        }
+        for figure in figures {
+            parts.append("\(figure.kind):\(figure.position.x),\(figure.position.y),\(figure.position.z)")
         }
         return parts.joined(separator: "|")
     }
@@ -58,13 +82,15 @@ public struct RoomPreviewLayout: Equatable, Sendable {
     /// Build from the domain model. Returns nil when the room shape is not a known
     /// rectangular room with known dimensions (the preview shows nothing rather than guessing).
     public static func build(room: Room, obstacles: [Obstacle], seats: [Seat], devices: [HVACDevice],
-                             registry: ModelRegistry) -> RoomPreviewLayout? {
+                             registry: ModelRegistry, occupants: [Occupant] = [],
+                             equipment: [EquipmentGain] = []) -> RoomPreviewLayout? {
         guard let payload = try? room.shape.resolved(as: RectangularRoom.self, registry: registry),
               let w = payload.dimensions.width.value,
               let d = payload.dimensions.depth.value,
               let h = payload.dimensions.height.value else { return nil }
         var boxes: [Box] = []
         var arrows: [Arrow] = []
+        var figures: [Figure] = []
         let t = wallThickness
 
         // Floor + ceiling-thin base and four walls (translucent at draw time).
@@ -110,15 +136,26 @@ public struct RoomPreviewLayout: Equatable, Sendable {
 
         for device in devices {
             // The device marker size is a display convention (the model stores position, not dimensions).
-            boxes.append(Box(kind: .device, center: apple(device.position), size: appleSize(0.32, 0.22, 0.22)))
+            let supply = device.ports.first { $0.role == .supply }?.direction ?? Direction3D(x: 0, y: -1, z: 0)
+            boxes.append(Box(kind: .device, center: apple(device.position), size: appleSize(0.32, 0.22, 0.22),
+                             facing: CoordinateTransform.toApple(supply)))
             for port in device.ports {
                 arrows.append(Arrow(base: apple(port.position), direction: CoordinateTransform.toApple(port.direction),
                                     role: port.role, length: arrowLength))
             }
         }
 
+        let occupied = Set(occupants.map(\.seatID))
+        for seat in seats where occupied.contains(seat.id) {
+            figures.append(Figure(kind: .person, position: apple(seat.position)))
+        }
+        for item in equipment {
+            figures.append(Figure(kind: .monitor, position: apple(item.position)))
+        }
+
         return RoomPreviewLayout(roomCenter: apple(x: w / 2, y: d / 2, z: h / 2),
-                                 roomSize: Position3D(x: w, y: d, z: h), boxes: boxes, arrows: arrows)
+                                 roomSize: Position3D(x: w, y: d, z: h),
+                                 boxes: boxes, arrows: arrows, figures: figures)
     }
 
     // MARK: - Coordinate helpers (domain → Apple Y-up)

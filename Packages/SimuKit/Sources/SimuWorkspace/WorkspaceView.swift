@@ -113,7 +113,7 @@ public struct WorkspaceView: View {
         }
         .sheet(isPresented: $showValidation) {
             NavigationStack {
-                ValidationIssueListView(session: session)
+                ValidationIssueListView(session: session) { openSetting($0, session: session); showValidation = false }
                     .navigationTitle("待填信息")
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showValidation = false } } }
             }
@@ -149,7 +149,7 @@ public struct WorkspaceView: View {
         case .scenarios:
             ComparisonView(session: session, runStore: store.runStore)
         case .runs:
-            RunsView(session: session, runStore: store.runStore)
+            RunsView(session: session, runStore: store.runStore, onOpenSetting: { openSetting($0, session: session) })
         case .reports:
             ReportView(session: session, runStore: store.runStore)
         }
@@ -229,7 +229,9 @@ public struct WorkspaceView: View {
                                                 obstacles: session.project.geometry.obstacles,
                                                 seats: session.currentScenario?.inputs.usage.seats ?? [],
                                                 devices: session.currentScenario?.inputs.hvac ?? [],
-                                                registry: session.registry) {
+                                                registry: session.registry,
+                                                occupants: session.currentScenario?.inputs.usage.occupants ?? [],
+                                                equipment: session.currentScenario?.inputs.usage.equipment ?? []) {
             RoomPreview3D(layout: layout)
         } else {
             ContentUnavailableView("先填写房间尺寸", systemImage: "cube.transparent",
@@ -239,6 +241,15 @@ public struct WorkspaceView: View {
         ContentUnavailableView("请在 Mac 上查看 3D", systemImage: "cube.transparent",
                                description: Text("手机和平板上可以使用俯视图布置房间。"))
         #endif
+    }
+
+    private func openSetting(_ target: SettingTarget, session: ProjectSession) {
+        if let scenarioID = target.scenarioID {
+            session.currentScenarioID = scenarioID
+        }
+        store.destination = .workspace
+        session.selection = target.selection
+        session.focusedSetting = target.anchor
     }
 
     private func save(_ session: ProjectSession) {

@@ -4,8 +4,12 @@ import SimuCore
 /// Validation issues grouped by gate; tapping an issue locates the entity when identifiable.
 public struct ValidationIssueListView: View {
     let session: ProjectSession
+    var onOpen: (SettingTarget) -> Void
 
-    public init(session: ProjectSession) { self.session = session }
+    public init(session: ProjectSession, onOpen: @escaping (SettingTarget) -> Void = { _ in }) {
+        self.session = session
+        self.onOpen = onOpen
+    }
 
     public var body: some View {
         List {
@@ -22,10 +26,13 @@ public struct ValidationIssueListView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(InputPresentation.fieldTitle(issue.path)).font(.headline)
                             Text(InputPresentation.action(for: issue)).font(.subheadline).foregroundStyle(.secondary)
-                            if let id = issue.entityID, let selection = session.selection(forEntityID: id) {
-                                Button("在设置中选中") { session.selection = selection }
-                                    .font(.caption)
-                                Text("关闭此列表后，在右侧查看已选对象。").font(.caption2).foregroundStyle(.secondary)
+                            if let target = session.settingTarget(for: issue) {
+                                Button {
+                                    onOpen(target)
+                                } label: {
+                                    Label("去填写 · \(InputPresentation.placeTitle(target))", systemImage: "arrow.right.circle")
+                                }
+                                .font(.caption)
                             }
                             DisclosureGroup("查看详细原因") {
                                 Text(issue.message).font(.caption)

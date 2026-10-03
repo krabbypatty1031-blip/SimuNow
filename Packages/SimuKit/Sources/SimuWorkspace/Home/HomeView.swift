@@ -29,7 +29,7 @@ public struct HomeView: View {
                     templateButton("教室", detail: "12 个座位 · 8 × 6 米", classroom: true) {
                         store.openProject(ProjectTemplates.classroom())
                     }
-                    Text("模板数值需要核实；天气和温湿度请另行补充。")
+                    Text("已填入香港大学 10 月气候（香港天文台 1991–2020）。朝向默认远侧为正北，房间不同请修改。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("继续已有项目") {

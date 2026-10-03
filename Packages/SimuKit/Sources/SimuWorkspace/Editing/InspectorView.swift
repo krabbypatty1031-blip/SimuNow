@@ -5,35 +5,51 @@ import SimuDesignSystem
 /// Property editor dispatched by the current selection. All edits go through ProjectSession.mutate.
 public struct InspectorView: View {
     let session: ProjectSession
+    @State private var northExpanded = false
+    @State private var weatherExpanded = false
 
     public init(session: ProjectSession) { self.session = session }
 
     public var body: some View {
-        Form {
-            if let selection = session.selection, session.exists(selection) {
-                switch selection {
-                case .room(let id): roomForm(id)
-                case .opening(let id): openingForm(id)
-                case .obstacle(let id): obstacleForm(id)
-                case .device(let id): deviceForm(id)
-                case .port(let deviceID, let portID): portForm(deviceID: deviceID, portID: portID)
-                case .seat(let id): seatForm(id)
-                case .occupant(let id): occupantForm(id)
-                case .equipment(let id): equipmentForm(id)
-                case .control(let id): controlForm(id)
-                case .environment: environmentForm
-                case .cost: costForm
+        ScrollViewReader { proxy in
+            Form {
+                if let selection = session.selection, session.exists(selection) {
+                    switch selection {
+                    case .room(let id): roomForm(id)
+                    case .opening(let id): openingForm(id)
+                    case .obstacle(let id): obstacleForm(id)
+                    case .device(let id): deviceForm(id)
+                    case .port(let deviceID, let portID): portForm(deviceID: deviceID, portID: portID)
+                    case .seat(let id): seatForm(id)
+                    case .occupant(let id): occupantForm(id)
+                    case .equipment(let id): equipmentForm(id)
+                    case .control(let id): controlForm(id)
+                    case .environment: environmentForm
+                    case .cost: costForm
+                    }
+                } else {
+                    Section {
+                        RoomPageIntro("想改哪里？", detail: "点选图中的空调、座位或家具，就能查看设置。")
+                        Text("温度和开机时间在左侧；天气与温湿度也可以单独设置。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    assumptionsSection
                 }
-            } else {
-                Section {
-                    RoomPageIntro("想改哪里？", detail: "点选图中的空调、座位或家具，就能查看设置。")
-                    Text("温度和开机时间在左侧；天气与温湿度也可以单独设置。")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                assumptionsSection
             }
+            .formStyle(.grouped)
+            .onChange(of: session.focusedSetting) { reveal(session.focusedSetting, with: proxy) }
+            .onAppear { reveal(session.focusedSetting, with: proxy) }
         }
-        .formStyle(.grouped)
+    }
+
+    private func reveal(_ anchor: String?, with proxy: ScrollViewProxy) {
+        guard let anchor else { return }
+        if anchor.contains("northAngle") { northExpanded = true }
+        if anchor.contains("/weather") { weatherExpanded = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            withAnimation { proxy.scrollTo(anchor, anchor: .center) }
+        }
     }
 
     // MARK: - Binding helpers
@@ -59,19 +75,28 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section {
                 TextField("名称", text: room.name)
-                DisclosureGroup("房间朝向 · 计算前填写") {
+                DisclosureGroup(isExpanded: $northExpanded) {
                     ParameterRow("北向角", room.northAngle)
+                        .settingAnchor("/geometry/rooms/\(index)/northAngle", focused: session.focusedSetting)
                     Text("从俯视图远侧方向（+Y）顺时针转到真北的角度。").font(.caption).foregroundStyle(.secondary)
+                } label: {
+                    Text("房间朝向 · 计算前填写")
                 }
             } header: { Text("房间") }
             if let payload = try? session.project.geometry.rooms[index].shape.resolved(as: RectangularRoom.self, registry: session.registry) {
                 let shape = shapeBinding(roomIndex: index, fallback: payload)
+                let shapePath = "/geometry/rooms/\(index)/shape/payload/dimensions"
                 Section {
                     ParameterRow("左右宽度", shape.dimensions.width)
+                        .settingAnchor(shapePath + "/width", focused: session.focusedSetting)
                     ParameterRow("前后进深", shape.dimensions.depth)
+                        .settingAnchor(shapePath + "/depth", focused: session.focusedSetting)
                     ParameterRow("高度", shape.dimensions.height)
+                        .settingAnchor(shapePath + "/height", focused: session.focusedSetting)
                 } header: { Text("尺寸") }
             }
+            envelopeFields(roomID: id)
+            ventilationFields(roomID: id)
         })
     }
 
@@ -87,6 +112,120 @@ public struct InspectorView: View {
         })
     }
 
+    @ViewBuilder
+    private func envelopeFields(roomID: UUID) -> some View {
+        if let si = scenarioIndex,
+           let room = session.project.geometry.rooms.first(where: { $0.id == roomID }) {
+            Section("墙面温度与保温") {
+                ForEach(Array(session.project.scenarios[si].inputs.envelope.surfaces.enumerated()), id: \.element.surfaceID) { index, condition in
+                    let face = room.surfaces.first { $0.id == condition.surfaceID }?.face
+                    let title = face.map(InputPresentation.faceTitle) ?? "墙面"
+                    let base = "/scenarios/\(si)/inputs/envelope/surfaces/\(index)"
+                    Text(title).font(.callout)
+                    ParameterRow("传热系数", surfaceUValue(si, index))
+                        .settingAnchor(base + "/uValue", focused: session.focusedSetting)
+                    switch condition.boundary.mode {
+                    case .temperature:
+                        ParameterRow("墙面边界温度", surfaceTemperature(si, index))
+                            .settingAnchor(base + "/boundary/temperature", focused: session.focusedSetting)
+                    case .heatFlux:
+                        ParameterRow("墙面热流", surfaceHeatFlux(si, index))
+                            .settingAnchor(base + "/boundary/heatFlux", focused: session.focusedSetting)
+                    case .fromL1:
+                        Text("\(title)的边界要等能耗计算结果，现在不能在这里填写。")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .settingAnchor(base + "/boundary", focused: session.focusedSetting)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ventilationFields(roomID: UUID) -> some View {
+        if let si = scenarioIndex,
+           let index = session.project.scenarios[si].inputs.ventilation.firstIndex(where: { $0.roomID == roomID }) {
+            let base = "/scenarios/\(si)/inputs/ventilation/\(index)"
+            Section("通风") {
+                ParameterRow("新风量", ventilationFlow(si, index, \.outdoorAir))
+                    .settingAnchor(base + "/outdoorAir", focused: session.focusedSetting)
+                ParameterRow("排风量", ventilationFlow(si, index, \.exhaustAir))
+                    .settingAnchor(base + "/exhaustAir", focused: session.focusedSetting)
+                ParameterRow("渗入风量", ventilationFlow(si, index, \.infiltration))
+                    .settingAnchor(base + "/infiltration", focused: session.focusedSetting)
+                ParameterRow("渗出风量", ventilationFlow(si, index, \.exfiltration))
+                    .settingAnchor(base + "/exfiltration", focused: session.focusedSetting)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func windowFields(openingID: UUID) -> some View {
+        if let si = scenarioIndex,
+           let index = session.project.scenarios[si].inputs.envelope.windows.firstIndex(where: { $0.openingID == openingID }) {
+            let base = "/scenarios/\(si)/inputs/envelope/windows/\(index)"
+            Section("窗户热工") {
+                ParameterRow("传热系数", windowValue(si, index, \.uValue))
+                    .settingAnchor(base + "/uValue", focused: session.focusedSetting)
+                ParameterRow("太阳得热系数", windowValue(si, index, \.shgc))
+                    .settingAnchor(base + "/shgc", focused: session.focusedSetting)
+                ParameterRow("遮阳系数", windowValue(si, index, \.shadingFactor))
+                    .settingAnchor(base + "/shadingFactor", focused: session.focusedSetting)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func openingStateFields(openingID: UUID) -> some View {
+        if let si = scenarioIndex {
+            ForEach(Array(session.project.scenarios[si].inputs.ventilation.enumerated()), id: \.offset) { ventIndex, ventilation in
+                if let stateIndex = ventilation.openings.firstIndex(where: { $0.openingID == openingID }) {
+                    ParameterRow("打开比例", openingFraction(si, ventIndex, stateIndex))
+                        .settingAnchor("/scenarios/\(si)/inputs/ventilation/\(ventIndex)/openings/\(stateIndex)/openFraction",
+                                       focused: session.focusedSetting)
+                }
+            }
+        }
+    }
+
+    private func surfaceUValue(_ si: Int, _ index: Int) -> Binding<UValue> {
+        Binding(get: { session.project.scenarios[si].inputs.envelope.surfaces[index].uValue },
+                set: { newValue in session.mutate { $0.scenarios[si].inputs.envelope.surfaces[index].uValue = newValue } })
+    }
+
+    private func surfaceTemperature(_ si: Int, _ index: Int) -> Binding<Temperature> {
+        Binding(get: {
+            session.project.scenarios[si].inputs.envelope.surfaces[index].boundary.temperature ?? .unknown(reason: "待填写")
+        }, set: { newValue in
+            session.mutate { $0.scenarios[si].inputs.envelope.surfaces[index].boundary.temperature = newValue }
+        })
+    }
+
+    private func surfaceHeatFlux(_ si: Int, _ index: Int) -> Binding<HeatFlux> {
+        Binding(get: {
+            session.project.scenarios[si].inputs.envelope.surfaces[index].boundary.heatFlux ?? .unknown(reason: "待填写")
+        }, set: { newValue in
+            session.mutate { $0.scenarios[si].inputs.envelope.surfaces[index].boundary.heatFlux = newValue }
+        })
+    }
+
+    private func ventilationFlow(_ si: Int, _ index: Int, _ key: WritableKeyPath<RoomVentilation, VolumeFlow>) -> Binding<VolumeFlow> {
+        Binding(get: { session.project.scenarios[si].inputs.ventilation[index][keyPath: key] },
+                set: { newValue in session.mutate { $0.scenarios[si].inputs.ventilation[index][keyPath: key] = newValue } })
+    }
+
+    private func windowValue<Q: QuantityTag>(_ si: Int, _ index: Int, _ key: WritableKeyPath<WindowCondition, PhysicalParameter<Q>>) -> Binding<PhysicalParameter<Q>> {
+        Binding(get: { session.project.scenarios[si].inputs.envelope.windows[index][keyPath: key] },
+                set: { newValue in session.mutate { $0.scenarios[si].inputs.envelope.windows[index][keyPath: key] = newValue } })
+    }
+
+    private func openingFraction(_ si: Int, _ ventIndex: Int, _ stateIndex: Int) -> Binding<Ratio> {
+        Binding(get: { session.project.scenarios[si].inputs.ventilation[ventIndex].openings[stateIndex].openFraction },
+                set: { newValue in
+            session.mutate { $0.scenarios[si].inputs.ventilation[ventIndex].openings[stateIndex].openFraction = newValue }
+        })
+    }
+
     private func openingForm(_ id: UUID) -> AnyView {
         for (ri, room) in session.project.geometry.rooms.enumerated() {
             guard let oi = room.openings.firstIndex(where: { $0.id == id }) else { continue }
@@ -97,11 +236,14 @@ public struct InspectorView: View {
                         Text("窗").tag(OpeningKind.window)
                         Text("门").tag(OpeningKind.door)
                     }
-                    ParameterRow("沿墙位置", opening.offsetU)
-                    ParameterRow("离地高度", opening.offsetV)
-                    ParameterRow("宽", opening.width)
-                    ParameterRow("高", opening.height)
+                    let openingPath = "/geometry/rooms/\(ri)/openings/\(oi)"
+                    ParameterRow("沿墙位置", opening.offsetU).settingAnchor(openingPath + "/offsetU", focused: session.focusedSetting)
+                    ParameterRow("离地高度", opening.offsetV).settingAnchor(openingPath + "/offsetV", focused: session.focusedSetting)
+                    ParameterRow("宽", opening.width).settingAnchor(openingPath + "/width", focused: session.focusedSetting)
+                    ParameterRow("高", opening.height).settingAnchor(openingPath + "/height", focused: session.focusedSetting)
                 }
+                windowFields(openingID: id)
+                openingStateFields(openingID: id)
                 Button(role: .destructive, action: { deleteOpening(roomIndex: ri, openingIndex: oi) }) {
                     Label("删除这扇门或窗", systemImage: "trash")
                 }
@@ -167,6 +309,7 @@ public struct InspectorView: View {
             Section("空调") {
                 TextField("名称", text: device.name)
                 ParameterRow("出风温度", device.supplyTemperature)
+                    .settingAnchor("/scenarios/\(si)/inputs/hvac/\(di)/supplyTemperature", focused: session.focusedSetting)
                 Text("这是吹出来的空气温度，不是遥控器的设定温度。").font(.caption).foregroundStyle(.secondary)
             }
             if let split = try? session.project.scenarios[si].inputs.hvac[di].definition.resolved(as: SingleSplit.self, registry: session.registry) {
@@ -180,9 +323,13 @@ public struct InspectorView: View {
                     }
                 })
                 Section("设备性能") {
+                    let base = "/scenarios/\(si)/inputs/hvac/\(di)/definition/payload"
                     ParameterRow("制冷能力", definition.coolingCapacity)
+                        .settingAnchor(base + "/coolingCapacity", focused: session.focusedSetting)
                     ParameterRow("额定用电功率", definition.electricalPower)
+                        .settingAnchor(base + "/electricalPower", focused: session.focusedSetting)
                     ParameterRow("能效比 COP", definition.cop)
+                        .settingAnchor(base + "/cop", focused: session.focusedSetting)
                     Text("这些数值可从空调铭牌或说明书查到；制冷能力和用电功率不同。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -325,6 +472,7 @@ public struct InspectorView: View {
         return AnyView(Group {
             Section("遥控器温度") {
                 ParameterRow("设定温度", control.setpoint)
+                    .settingAnchor("/scenarios/\(si)/inputs/controls/\(i)/setpoint", focused: session.focusedSetting)
                 Text("这里填写遥控器上的温度。").font(.caption).foregroundStyle(.secondary)
             }
             ScheduleEditor(schedule: control.schedule)
@@ -336,20 +484,33 @@ public struct InspectorView: View {
         let environment = bind(\.scenarios[si].inputs.environment)
         return AnyView(Group {
             Section("环境") {
+                let base = "/scenarios/\(si)/inputs/environment"
                 ParameterRow("室外温度", environment.outdoorTemperature)
+                    .settingAnchor(base + "/outdoorTemperature", focused: session.focusedSetting)
                 ParameterRow("室外湿度", environment.outdoorHumidity)
+                    .settingAnchor(base + "/outdoorHumidity", focused: session.focusedSetting)
                 ParameterRow("室内湿度", environment.indoorHumidity)
+                    .settingAnchor(base + "/indoorHumidity", focused: session.focusedSetting)
             }
             Section("选一天来估算") {
+                let base = "/scenarios/\(si)/inputs/environment"
                 TextField("日期 YYYY-MM-DD", text: optionalString(environment.representativeDate))
+                    .settingAnchor(base + "/representativeDate", focused: session.focusedSetting)
                 TextField("时区，如 Asia/Hong_Kong", text: optionalString(environment.timeZone))
+                    .settingAnchor(base + "/timeZone", focused: session.focusedSetting)
             }
             Section {
-                DisclosureGroup("天气文件 · 计算前配置") {
+                let base = "/scenarios/\(si)/inputs/environment"
+                DisclosureGroup(isExpanded: $weatherExpanded) {
                     TextField("项目内的文件位置", text: weatherPath(environment))
+                        .settingAnchor(base + "/weather/relativePath", focused: session.focusedSetting)
                     TextField("文件校验码 SHA-256", text: weatherHash(environment))
+                        .settingAnchor(base + "/weather/sha256", focused: session.focusedSetting)
                     Text("当前只记录文件引用；需由熟悉项目文件的人配置。").font(.caption).foregroundStyle(.secondary)
+                } label: {
+                    Text("天气文件 · 计算前配置")
                 }
+                .settingAnchor(base + "/weather", focused: session.focusedSetting)
             }
         })
     }
@@ -377,6 +538,7 @@ public struct InspectorView: View {
         let cost = bind(\.scenarios[si].evaluation.cost)
         return AnyView(Section("费用") {
             TextField("币种，如 HKD", text: optionalString(cost.currency))
+                .settingAnchor("/scenarios/\(si)/evaluation/cost/currency", focused: session.focusedSetting)
             Text("电价和报价由项目文件提供；这里只设置币种。未提供价格时无法估算费用。").font(.caption).foregroundStyle(.secondary)
         })
     }
@@ -399,6 +561,17 @@ public struct InspectorView: View {
                 }
                 Text("模板只是起点，实际数值请核实。").font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func settingAnchor(_ anchor: String, focused: String?) -> some View {
+        if focused == anchor {
+            self.id(anchor).listRowBackground(Color.accentColor.opacity(0.16))
+        } else {
+            self.id(anchor)
         }
     }
 }

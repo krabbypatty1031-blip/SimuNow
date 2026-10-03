@@ -33,8 +33,13 @@ public final class ProjectSession {
     public private(set) var packageURL: URL?
     public private(set) var isDirty = false
     public var selection: EntitySelection? {
-        didSet { if let selection, !exists(selection) { self.selection = nil } }
+        didSet {
+            if let selection, !exists(selection) { self.selection = nil }
+            else if oldValue != selection { focusedSetting = nil }
+        }
     }
+    /// Validation path to reveal after a “go fill this in” jump. Cleared when the selection changes.
+    public var focusedSetting: String?
     public var currentScenarioID: UUID {
         didSet { if !project.scenarios.contains(where: { $0.id == currentScenarioID }) {
             currentScenarioID = project.scenarios.first?.id ?? currentScenarioID
@@ -97,6 +102,7 @@ public final class ProjectSession {
         let target = url ?? packageURL
         guard let target else { throw ProjectPackageError.notAPackage("no destination") }
         try packageCodec.write(project, to: target)
+        try HongKongOctoberClimate.installCitationIfReferenced(into: target, project: project)
         packageURL = target
         isDirty = false
         Self.recordRecent(name: project.name, path: target.path)

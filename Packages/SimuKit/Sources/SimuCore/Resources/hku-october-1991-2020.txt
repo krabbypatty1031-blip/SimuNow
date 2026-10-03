@@ -1,0 +1,21 @@
+SimuNow L0 climate citation
+station: Hong Kong Observatory, Tsim Sha Tsui
+period: 1991-2020 monthly normals
+month: October
+applied_to: University of Hong Kong main campus, Pok Fu Lam, 22.284 N, 114.138 E
+applied_to_note: campus coordinates are the published site; the climate station is Tsim Sha Tsui, not a Pok Fu Lam measurement
+role: citation for the constant outdoor state used by L0; this is not an hourly EnergyPlus weather file and L0 does not read it
+mean_air_temperature_c: 25.7
+mean_daily_maximum_c: 28.1
+mean_daily_minimum_c: 23.9
+mean_relative_humidity: 0.73
+daily_global_solar_radiation_kings_park_mj_m2: 14.52
+representative_day: 2026-10-15
+representative_day_meaning: a day in October 2026 used to attach the monthly normal; not that day's observed weather
+time_zone: Asia/Hong_Kong
+north_angle_degrees: 0
+north_angle_meaning: plan +Y is true north until the room orientation is surveyed
+indoor_relative_humidity: 0.73
+indoor_humidity_meaning: outdoor October mean used until an indoor measurement exists
+source: https://www.hko.gov.hk/en/cis/normal/1991_2020/normals.htm
+tables: 4 mean temperature; 5 mean relative humidity; 6 King's Park daily global solar radiation

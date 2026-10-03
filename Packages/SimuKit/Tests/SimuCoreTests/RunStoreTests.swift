@@ -140,8 +140,9 @@ struct RunStoreTests {
     }
 
     @Test func validationGateBlocksSubmit() async throws {
-        // Templates honestly lack weather: inputPreparation fails, nothing is submitted.
-        let project = ProjectTemplates.office()
+        // A cleared outdoor temperature still blocks preparation, so nothing is submitted.
+        var project = ProjectTemplates.office()
+        project.scenarios[0].inputs.environment.outdoorTemperature = .unknown(reason: "test")
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("simunow-runstore-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = makeStore(in: directory)

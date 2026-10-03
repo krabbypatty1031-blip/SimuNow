@@ -78,6 +78,33 @@ enum InputPresentation {
         return context.isEmpty || field == context ? field : "\(context) · \(field)"
     }
 
+    static func faceTitle(_ face: SurfaceFace) -> String {
+        switch face {
+        case .xMin: "左墙"
+        case .xMax: "右墙"
+        case .yMin: "近侧墙"
+        case .yMax: "远侧墙"
+        case .floor: "地板"
+        case .ceiling: "天花板"
+        }
+    }
+
+    static func placeTitle(_ target: SettingTarget) -> String {
+        switch target.selection {
+        case .room: "房间设置"
+        case .opening: "门窗设置"
+        case .obstacle: "家具设置"
+        case .device: "空调设置"
+        case .port: "风口设置"
+        case .seat: "座位设置"
+        case .occupant: "人员设置"
+        case .equipment: "电器设置"
+        case .control: "温度与开机时间"
+        case .environment: "天气与温湿度"
+        case .cost: "电价与报价"
+        }
+    }
+
     static func action(for issue: ValidationIssue) -> String {
         switch issue.code {
         case "missing_parameter", "required_input": "请补充这项信息。"

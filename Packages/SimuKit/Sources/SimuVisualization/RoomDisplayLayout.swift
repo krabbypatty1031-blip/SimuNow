@@ -21,6 +21,40 @@ public struct SlicePlaneLayout: Equatable, Sendable {
     public var center: Position3D
 }
 
+/// Light / dark fill for the see-through room box. RealityKit UnlitMaterial
+/// does not follow SwiftUI `.primary`, so the viewport must pick both.
+public enum ViewportAppearance: String, Sendable {
+    case light
+    case dark
+}
+
+/// Wall fill plus the 12-edge outline. Edges exist so a light-mode canvas
+/// still shows the room when the transparent walls wash out against white.
+public struct RoomEnvelopePalette: Equatable, Sendable {
+    public var wallRed: Double
+    public var wallGreen: Double
+    public var wallBlue: Double
+    public var wallAlpha: Double
+    public var wallBlendOpacity: Double
+    public var edgeRed: Double
+    public var edgeGreen: Double
+    public var edgeBlue: Double
+    public var edgeRadiusM: Double
+}
+
+/// One computation-frame edge of the room box (metres, Z-up).
+public struct RoomEdgeSegment: Equatable, Sendable {
+    public var start: Position3D
+    public var end: Position3D
+
+    public var lengthM: Double {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let dz = end.z - start.z
+        return (dx * dx + dy * dy + dz * dz).squareRoot()
+    }
+}
+
 /// Computation-frame centre and extents of a wall patch, optionally
 /// offset off the face so a mesh does not z-fight the wall.
 public struct PatchPlacement: Equatable, Sendable {
@@ -34,6 +68,44 @@ public enum RoomDisplayLayout: Sendable {
     /// RealityKit boxes are Y-up: height is computation Z, depth is computation Y.
     public static func displayBoxExtents(size: Position3D) -> DisplayBoxExtents {
         DisplayBoxExtents(width: Float(size.x), height: Float(size.z), depth: Float(size.y))
+    }
+
+    /// Light walls are a darker slate so they read on a white canvas; dark
+    /// walls stay pale. Edges invert: charcoal on light, near-white on dark.
+    public static func envelopePalette(appearance: ViewportAppearance) -> RoomEnvelopePalette {
+        switch appearance {
+        case .light:
+            return RoomEnvelopePalette(
+                wallRed: 0.40,
+                wallGreen: 0.44,
+                wallBlue: 0.50,
+                wallAlpha: 0.72,
+                wallBlendOpacity: 0.50,
+                edgeRed: 0.18,
+                edgeGreen: 0.20,
+                edgeBlue: 0.24,
+                edgeRadiusM: 0.022
+            )
+        case .dark:
+            return RoomEnvelopePalette(
+                wallRed: 0.72,
+                wallGreen: 0.76,
+                wallBlue: 0.80,
+                wallAlpha: 0.28,
+                wallBlendOpacity: 0.35,
+                edgeRed: 0.86,
+                edgeGreen: 0.88,
+                edgeBlue: 0.92,
+                edgeRadiusM: 0.022
+            )
+        }
+    }
+
+    public static func roomEdgeSegments(scene: RoomScene) -> [RoomEdgeSegment] {
+        let corners = scene.roomCorners
+        return RoomScene.roomEdgeIndices.map { start, end in
+            RoomEdgeSegment(start: corners[start], end: corners[end])
+        }
     }
 
     public static func roomCenter(scene: RoomScene) -> Position3D {
@@ -244,7 +316,8 @@ public enum RoomDisplayLayout: Sendable {
         fieldHash: String?,
         paletteKey: String?,
         flowHash: String? = nil,
-        seatKey: String? = nil
+        seatKey: String? = nil,
+        appearanceKey: String? = nil
     ) -> String {
         var parts = ["room:\(format(scene.sizeXM)),\(format(scene.sizeYM)),\(format(scene.sizeZM))"]
         for (index, window) in scene.windows.enumerated() {
@@ -275,6 +348,9 @@ public enum RoomDisplayLayout: Sendable {
         // Seat temperatures come from the L2 result, not the draft geometry;
         // a new run with new numbers must rebuild the labels too.
         parts.append(seatKey ?? "-")
+        // Wall and edge colours follow the system appearance; switching
+        // light/dark must rebuild the RealityKit graph.
+        parts.append(appearanceKey ?? "-")
         return parts.joined(separator: "|")
     }
 

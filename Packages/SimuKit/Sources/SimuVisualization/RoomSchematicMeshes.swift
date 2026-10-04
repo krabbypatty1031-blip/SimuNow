@@ -277,6 +277,7 @@ enum RoomSchematicMeshes {
     private static var vent: PlatformColor { rgba(0.25, 0.25, 0.25) }
     private static var indicator: PlatformColor { rgba(0.35, 0.75, 0.85) }
     private static var grilleTan: PlatformColor { rgba(0.86, 0.62, 0.38) }
-    private static var frameWhite: PlatformColor { rgba(0.95, 0.95, 0.95) }
+    // Charcoal, not white: a white sash disappears on a light-mode canvas.
+    private static var frameWhite: PlatformColor { rgba(0.28, 0.30, 0.34) }
     private static var glassTint: PlatformColor { rgba(0.55, 0.82, 0.90) }
 }

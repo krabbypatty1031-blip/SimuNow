@@ -33,6 +33,7 @@ public struct RoomRealityView: View {
     @State private var realityContent: RealityViewCameraContent?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.userFacingCopy) private var copy
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(
         scene: RoomScene,
@@ -76,8 +77,15 @@ public struct RoomRealityView: View {
                     .map { "\($0.id):\($0.tC)" }
                     .sorted()
                     .joined(separator: ",")
-            } ?? "") + "|lang:" + copy.language.rawValue
+            } ?? "") + "|lang:" + copy.language.rawValue,
+            appearanceKey: appearance.rawValue
         )
+    }
+
+    /// RealityKit unlit walls do not follow `.primary`; rebuild when the
+    /// system appearance changes so the outline stays visible.
+    private var appearance: ViewportAppearance {
+        colorScheme == .dark ? .dark : .light
     }
 
     public var body: some View {
@@ -103,7 +111,8 @@ public struct RoomRealityView: View {
                 palette: palette,
                 flow: flow,
                 seatSamples: seatSamples,
-                copy: copy
+                copy: copy,
+                appearance: appearance
             )
             RoomEntityBuilder.applyOrbit(root, scene: scene, orbit: orbit)
             content.add(root)

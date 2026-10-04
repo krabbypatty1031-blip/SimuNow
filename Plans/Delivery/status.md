@@ -83,6 +83,8 @@
 | 代表日日期 + L1 窗/墙热写入 L2（用户要求 2026-10-04） | 已通（自动化） | 草稿可选 `weather` MM-DD（缺省仍 07-15，拒 2/29）。该日写入 EnergyPlus `RunPeriod` 与 L1 哈希；解析当天窗热（Gain−Loss）与不透明围护导热。当前 L1 才把这两项写入 L2 窗通量与 walls `fixedGradient`；缺 L1 / stale L1 保持草稿 80 W/m²，不编造天气热流。检查器「天气日期」；对比口径含天气日期。`Scripts/check.sh test` **233 全绿**；`mac` / `ios` BUILD SUCCEEDED；Python `Backend/tests` **149** + `test/p1` L1/房间契约 **29** 全绿。未宣称实况预报、全年 EnergyPlus、2/29、Release 沙盒 exec。App Debug 改日期后先 L1 再 L2 的座位变化待手测。 |
 | 引擎安装脚本入库（用户要求 2026-10-04） | 已通（仓库） | `/test/*` 曾挡住整个 `test/engines/`，克隆后 README 的 `install_engines.sh` 不存在。现放行 `install_engines.sh`、`openfoam.sh` 与目录 `.gitignore`。EnergyPlus 树、tar.gz、EPW、`MANIFEST.json`、镜像仍不入库。 |
 | 文档与 P5 进度对齐（用户要求 2026-10-04） | 已通（文档） | `AGENTS.md` 去掉「P0 骨架、引擎未接入」与「P0 schema 只覆盖 draft/request/receipt」。`Backend/README.md` 改为 doctor / run-l1 / run-l2 已接入说明。`Plans/README.md` 阶段图改为 P5 已关闭。根 `README.md` 补代表日天气与「当前 L1 才写 L2 边界」。未宣称 Release 沙盒 exec、iOS 求解、RoomPlan、L0/L3、全年核证。 |
+| 亮色模式房间边界可见（用户要求 2026-10-04） | 已通（自动化 + Mac 编译） | RealityKit 墙原先浅灰 0.28 + blend 0.35，白底上看不见。按 `colorScheme` 选 envelope：亮色墙更深、12 条棱描边（炭黑）；暗色保持浅墙、浅棱。窗框改炭色。`RoomDisplayLayout` 3 项新测通过；`Scripts/check.sh test` 全绿；`mac` BUILD SUCCEEDED。App Debug 亮色手测待点。 |
+| README 拆分中英 + 瘦身重排（用户要求 2026-10-04） | 已通（文档） | 原 425 行单文件中英对照改为：英文 `README.md` + 中文 `README.zh-CN.md`，顶部互链，结构重排为「它能告诉你什么 → 快速开始 → 工作原理 → 我们如何避免夸大 → 能力边界 → 贡献者指南」——防夸大表与模块表保留内容、后移位置，内部黑话（P5/闭环/数字守卫）改用户语言。首图用户提供的 App 界面截图入库 `Design/simunow-room-editor.png`（合成模板截图，非真实房间照片）。未宣称能力与旧版一致（Release 沙盒 exec、iOS 求解、RoomPlan、L0/L3、全年核证均仍在「尚未交付」清单）。仅文档改动，无构建/测试影响。 |
 
 ## 下一步
 

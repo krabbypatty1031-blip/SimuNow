@@ -228,3 +228,47 @@ import SimuVisualization
     #expect(abs(plane.center.y - 0.225) < 1e-9)
     #expect(abs(plane.center.z - 1.1) < 1e-9)
 }
+
+@Test func roomEnvelopePaletteKeepsWallsAndEdgesVisibleOnLightAndDark() {
+    // Light walls must be darker than the current near-white 0.72 fill or they
+    // vanish on a white canvas. Dark walls stay pale so they still read on black.
+    let light = RoomDisplayLayout.envelopePalette(appearance: .light)
+    let dark = RoomDisplayLayout.envelopePalette(appearance: .dark)
+    #expect(light.wallRed < 0.55)
+    #expect(light.wallBlendOpacity >= 0.45)
+    #expect(light.edgeRed < 0.35)
+    #expect(dark.wallRed > 0.65)
+    #expect(dark.edgeRed > 0.75)
+    #expect(light.edgeRadiusM > 0.01)
+    #expect(abs(light.edgeRadiusM - dark.edgeRadiusM) < 1e-9)
+}
+
+@Test func roomEdgeSegmentsTraceTheOfficeBox() throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let scene = try #require(RoomScene(draft: draft))
+    let edges = RoomDisplayLayout.roomEdgeSegments(scene: scene)
+    #expect(edges.count == 12)
+    let floorRing = edges.filter { edge in
+        edge.start.z == 0 && edge.end.z == 0
+    }
+    #expect(floorRing.count == 4)
+    var verticalCount = 0
+    for edge in edges where edge.start.x == edge.end.x && edge.start.y == edge.end.y {
+        verticalCount += 1
+    }
+    #expect(verticalCount == 4)
+    #expect(edges.contains { $0.lengthM > 5.9 })
+}
+
+@Test func roomDisplayLayoutBuildIDChangesWhenAppearanceSwitches() throws {
+    let draft = try ProjectTemplates.bundled(named: "office").project
+    let scene = try #require(RoomScene(draft: draft))
+    let light = RoomDisplayLayout.buildID(
+        scene: scene, fieldHash: nil, paletteKey: nil, appearanceKey: "light"
+    )
+    let dark = RoomDisplayLayout.buildID(
+        scene: scene, fieldHash: nil, paletteKey: nil, appearanceKey: "dark"
+    )
+    #expect(light != dark)
+    #expect(light.contains("light"))
+}

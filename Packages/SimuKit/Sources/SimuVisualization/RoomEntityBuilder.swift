@@ -5,6 +5,7 @@ import AppKit
 #endif
 import Foundation
 import RealityKit
+import simd
 import SimuCore
 
 #if os(iOS) || os(tvOS)
@@ -23,10 +24,9 @@ private typealias PlatformFont = NSFont
 /// not leak AppKit/UIKit types into the display DTO layer.
 @available(macOS 15.0, iOS 18.0, *)
 private enum RoomDisplayColor {
-    static var wall: PlatformColor { rgba(0.72, 0.76, 0.80, 0.28) }
     static var floor: PlatformColor { rgba(0.52, 0.42, 0.32, 0.95) }
 
-    static func rgba(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat) -> PlatformColor {
+    static func rgba(_ r: Double, _ g: Double, _ b: Double, _ a: Double) -> PlatformColor {
         #if os(iOS) || os(tvOS)
         UIColor(red: r, green: g, blue: b, alpha: a)
         #else
@@ -34,10 +34,14 @@ private enum RoomDisplayColor {
         #endif
     }
 
-    static func unlit(_ color: PlatformColor, transparent: Bool) -> UnlitMaterial {
+    static func unlit(
+        _ color: PlatformColor,
+        transparent: Bool,
+        blendOpacity: Float = 0.35
+    ) -> UnlitMaterial {
         var material = UnlitMaterial(color: color)
         if transparent {
-            material.blending = .transparent(opacity: 0.35)
+            material.blending = .transparent(opacity: .init(floatLiteral: blendOpacity))
         }
         return material
     }
@@ -56,12 +60,15 @@ enum RoomEntityBuilder {
         palette: SlicePalette?,
         flow: FlowOverlay? = nil,
         seatSamples: [SeatSample]? = nil,
-        copy: UserFacingCopy = .english
+        copy: UserFacingCopy = .english,
+        appearance: ViewportAppearance = .light
     ) async -> Entity {
         let root = Entity()
         root.name = rootName
+        let envelope = RoomDisplayLayout.envelopePalette(appearance: appearance)
         addFloor(to: root, scene: scene)
-        addWalls(to: root, scene: scene)
+        addWalls(to: root, scene: scene, envelope: envelope)
+        addRoomEdges(to: root, scene: scene, envelope: envelope)
         for window in scene.windows {
             addOpening(window, kind: .window, to: root, scene: scene)
         }
@@ -115,8 +122,21 @@ enum RoomEntityBuilder {
         )
     }
 
-    private static func addWalls(to root: Entity, scene: RoomScene) {
-        let wall = RoomDisplayColor.unlit(RoomDisplayColor.wall, transparent: true)
+    private static func addWalls(
+        to root: Entity,
+        scene: RoomScene,
+        envelope: RoomEnvelopePalette
+    ) {
+        let wall = RoomDisplayColor.unlit(
+            RoomDisplayColor.rgba(
+                envelope.wallRed,
+                envelope.wallGreen,
+                envelope.wallBlue,
+                envelope.wallAlpha
+            ),
+            transparent: true,
+            blendOpacity: Float(envelope.wallBlendOpacity)
+        )
         let thickness = 0.04
         addBox(
             to: root,
@@ -150,6 +170,42 @@ enum RoomEntityBuilder {
             material: wall,
             name: PlacementGeometry.wallEntityName(.yMax)
         )
+    }
+
+    /// Twelve-edge outline of the room box. Walls stay see-through for the
+    /// seats; the outline is what remains readable on a white canvas.
+    private static func addRoomEdges(
+        to root: Entity,
+        scene: RoomScene,
+        envelope: RoomEnvelopePalette
+    ) {
+        let material = RoomDisplayColor.unlit(
+            RoomDisplayColor.rgba(
+                envelope.edgeRed,
+                envelope.edgeGreen,
+                envelope.edgeBlue,
+                1
+            ),
+            transparent: false
+        )
+        let radius = Float(envelope.edgeRadiusM)
+        for segment in RoomDisplayLayout.roomEdgeSegments(scene: scene) {
+            let startDisplay = RoomDisplayLayout.centeredDisplay(segment.start, scene: scene)
+            let endDisplay = RoomDisplayLayout.centeredDisplay(segment.end, scene: scene)
+            let start = SIMD3<Float>(startDisplay.x, startDisplay.y, startDisplay.z)
+            let end = SIMD3<Float>(endDisplay.x, endDisplay.y, endDisplay.z)
+            let delta = end - start
+            let length = simd_length(delta)
+            guard length > 0.001 else { continue }
+            let entity = ModelEntity(
+                mesh: .generateCylinder(height: length, radius: radius),
+                materials: [material]
+            )
+            entity.position = (start + end) / 2
+            entity.orientation = simd_quatf(from: SIMD3<Float>(0, 1, 0), to: simd_normalize(delta))
+            entity.name = "simunow.room-edge"
+            root.addChild(entity)
+        }
     }
 
     private static func addOpening(

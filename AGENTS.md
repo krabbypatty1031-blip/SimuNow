@@ -4,7 +4,7 @@
 
 SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与运行分析工具。用统一模型连接 EnergyPlus 能耗与 OpenFOAM 气流，评价位置级舒适、用电和成本。
 团队 3–4 人；比赛 48–72 小时；之后按 6–8 周路线完善。首个场景为单房间办公室或教室。
-当前是可编译的 P0 骨架，数值引擎尚未接入。不要把未来计划描述为已实现功能。
+当前比赛交付已闭环到 **P5**：房间编辑、EnergyPlus L1 代表日、OpenFOAM L2 座位场、同口径对比、守卫 PDF。数值引擎只在 **Mac Debug** 本机执行。不要把未交付能力写成已实现：Release 沙盒 exec、iOS 本机求解、RoomPlan、L0 / L3、全年 EnergyPlus、设备报价与回收期。
 
 ## 开工阅读顺序
 
@@ -17,8 +17,8 @@ SimuNow 是 Mac 优先、尽可能兼容 iOS / iPadOS 的室内空调配置与�
 
 ## 模块归属与依赖
 
-- `Apps/SimuNowMac`：macOS 入口、生命周期、未来 Process / helper 与文件权限适配。
-- `Apps/SimuNowiOS`：iPhone / iPad 入口、未来 RoomPlan 与平台分享适配。
+- `Apps/SimuNowMac`：macOS 入口、生命周期；Debug 本机 Process 跑 Python worker。Release 仍沙盒，生产 exec 走签名 helper（未交付），不以全局关 sandbox 当默认修复。
+- `Apps/SimuNowiOS`：iPhone / iPad 入口，用于编辑与查看。不跑本地 EnergyPlus / OpenFOAM / Docker。RoomPlan 未做。
 - `SimuCore`：Foundation-only Codable / Sendable 数据模型；不得依赖 UI 或外部引擎。
 - `SimuSimulation`：跨平台异步任务协议；不将 Process、Docker 或 macOS 路径泄漏给 iOS。
 - `SimuDesignSystem`：语义颜色、排版、空状态与可访问性组件。
@@ -53,7 +53,7 @@ Mac 使用工作区与 inspector，iPad 自适应分栏，iPhone 保持导航可
 
 每次运行保存不可变输入快照、run ID、scenario ID、输入哈希、引擎版本、求解设置、网格与质量记录。
 旧任务完成后只进入其所属运行；不覆盖当前方案。任务成功、质量通过、结果新鲜度是独立状态。
-共享 JSON 接口改动同步更新 Swift Codable、Python 解析、schema、迁移说明和相应契约验证。当前 P0 schema 只覆盖 draft / request / receipt，不能当作完整可求解项目。
+共享 JSON 接口改动同步更新 Swift Codable、Python 解析、schema、迁移说明和相应契约验证。当前契约覆盖 project-draft v2、request / event / receipt、L1 / L2 result、field-slice、field-flow、report-evidence。缺分区的草稿不能当作可求解项目；有草稿也不等于质量门已通过。
 二进制场写清坐标、单位、float 格式、endian、轴序、有效掩码与哈希。墙和家具内部无效数据不能按 0 参与统计。
 路径以项目根或项目包为基准；禁止硬编码开发者 Desktop / Downloads 路径。
 
@@ -73,9 +73,9 @@ App schemes 当前无 UI 测试 target；共享单测通过 SwiftPM 执行。
 ## 项目文件与依赖
 
 新增包内源码无需改 pbxproj。App target / 资源 / 配置变动维护 `Scripts/generate_project.py`；生成后检查 scheme 与平台编译。
-不自动安装大型计算软件，不在 App 启动时下载依赖。Python / CFD / SDK 版本在 P1 验证后锁定。
+不自动安装大型计算软件，不在 App 启动时下载依赖。已锁定 **EnergyPlus 25.2.0** 与 **OpenFOAM v2512**（`linux/arm64`，求解器 `buoyantBoussinesqSimpleFoam`）；安装脚本在 `test/engines/`，二进制不入库。
 不提交 build、场数据、原始房间照片、密钥、开发者证书或签名资料。匿名基准夹具应带来源；真实房间资料默认本地。
-当前 Mac sandbox 已启用；接入 Process / helper / 容器时先按部署计划验证权限与打包，不以全局关闭 sandbox 作为默认修复。
+Mac Debug 为跑引擎可关 sandbox（见 entitlements）；Release 保持沙盒与 library validation。接入 Process / helper / 容器时先按部署计划验证权限与打包。
 
 ## 完成与记录
 

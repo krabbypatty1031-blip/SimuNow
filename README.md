@@ -49,8 +49,8 @@ SimuNow 把这件事拆开，避免三类常见误导：
 价值链是：**空间模型 → 分层物理计算 → 座位评价 → 同口径对比 → 带守卫的报告**。
 
 1. **同一份房间草稿。** 几何、人数、占用时段、送回风口、电价和舒适假设写在一份 `.simunow` 项目包里。设定温度、送风温度、制冷量、电功率、风量和速度分开建模，不混成一个「冷量」。
-2. **L1 代表日用电（EnergyPlus 25.2）。** 单区等效理想负荷 + COP，写出冷量瓦特与电功率。占用时段进入日程，不是全天常开。缺天气、缺电价或缺电功率时省略对应数字，不填 0。
-3. **L2 代表工况气流（OpenFOAM v2512）。** 稳态浮力求解 `buoyantBoussinesqSimpleFoam`。网格、收敛、质量守恒、能量守恒（含进口面导热）和质量门全部通过后，才采样座位温度、坐姿高度切片和示意流线。家具以阻挡格进入气流，不进入用电账。
+2. **L1 代表日用电（EnergyPlus 25.2）。** 单区等效理想负荷 + COP，写出冷量瓦特与电功率。天气日期是香港典型年里选定的一天（默认 07-15），不是实况预报。占用时段进入日程，不是全天常开。缺天气、缺电价或缺电功率时省略对应数字，不填 0。
+3. **L2 代表工况气流（OpenFOAM v2512）。** 稳态浮力求解 `buoyantBoussinesqSimpleFoam`。**只有当前 L1** 才把当天窗热、墙热写入气流边界；缺 L1 或 L1 已过期不编造天气热流。网格、收敛、质量守恒、能量守恒（含进口面导热）和质量门全部通过后，才采样座位温度、坐姿高度切片和示意流线。家具以阻挡格进入气流，不进入用电账。换日期后须先重跑 L1 再跑 L2，座位不会自动变。
 4. **座位舒适。** 自实现 ISO 7730 附录 D。需要气温、辐射、风速、湿度、衣着和活动；缺一项或超适用范围显示「不可评价」，不编造舒适分数。
 5. **方案对比。** 两个候选必须同一天气、人数、时段和成本口径才能并排比较。任务成功、质量通过、结果是否仍对应当前草稿是三条独立状态。
 6. **顾问式 PDF。** DeepSeek 只根据冻结证据包写四节正文（你的两个方案 / 用电对比 / 座位舒适对比 / 建议下一步）。数字守卫丢掉证据之外的 ΔT、kWh、百分比。附录由 App 本地拼装。排版走 HTML/CSS + WKWebView 导出 PDF。
@@ -252,8 +252,8 @@ The first scene is a single-room office or classroom. One model, two templates, 
 The chain is **spatial model → layered physics → seat evaluation → same-basis comparison → guarded report**.
 
 1. **One project draft.** Geometry, occupancy, occupied hours, supply and return openings, tariff, and comfort assumptions live in a `.simunow` package. Setpoint, supply-air temperature, cooling load, electric power, volume flow, and velocity are separate fields with units.
-2. **L1 representative-day energy (EnergyPlus 25.2).** A single-zone equivalent ideal-loads model plus COP writes cooling watts and electric watts. Occupied hours become a compact schedule, not AlwaysOn. Missing weather, tariff, or power omits the related figure instead of writing zero.
-3. **L2 representative-condition airflow (OpenFOAM v2512).** Steady buoyant `buoyantBoussinesqSimpleFoam`. Seat temperatures, a sitting-height slice, and illustrative streamlines appear only after mesh, convergence, mass, and energy gates pass (inlet-face conduction is measured and included). Furniture enters L2 as blocked cells. It does not enter the electricity ledger.
+2. **L1 representative-day energy (EnergyPlus 25.2).** A single-zone equivalent ideal-loads model plus COP writes cooling watts and electric watts. The weather day is a chosen calendar day on the Hong Kong typical year (default 07-15), not a live forecast. Occupied hours become a compact schedule, not AlwaysOn. Missing weather, tariff, or power omits the related figure instead of writing zero.
+3. **L2 representative-condition airflow (OpenFOAM v2512).** Steady buoyant `buoyantBoussinesqSimpleFoam`. **Only a current L1** writes that day's window and opaque heat into the airflow boundaries; a missing or stale L1 does not invent weather flux. Seat temperatures, a sitting-height slice, and illustrative streamlines appear only after mesh, convergence, mass, and energy gates pass (inlet-face conduction is measured and included). Furniture enters L2 as blocked cells. It does not enter the electricity ledger. After changing the date, run L1 again before L2; seats do not update by themselves.
 4. **Seat comfort.** A self-contained ISO 7730 Annex D implementation. Air temperature, radiation, speed, humidity, clothing, and activity are all required. Missing or out-of-range inputs are “not evaluable.”
 5. **Comparison.** Two candidates compare only on the same weather, occupancy, hours, and cost basis. Run success, quality, and freshness are independent flags.
 6. **Advisor PDF.** DeepSeek writes four sections from a frozen evidence pack (your two schemes / electricity / seat comfort / what to try next). A narration guard drops any ΔT, kWh, or percentage that is not in the evidence. The appendix is assembled locally. Layout is HTML/CSS rendered through WKWebView.

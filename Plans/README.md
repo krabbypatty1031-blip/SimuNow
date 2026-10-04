@@ -7,12 +7,12 @@
 
 | 顺序 | 文档 | 要解决的问题 |
 |---|---|---|
-| 1 | [产品与范围](01-product-scope.md) | 为谁解决什么、比赛做到哪里 |
-| 2 | [系统架构](02-architecture.md) | 模块如何协作、Mac / iOS 怎样复用 |
-| 3 | [交互与视觉设计](03-experience-design.md) | 页面、状态、图层与对比流程 |
-| 4 | [数据与文件契约](04-data-contracts.md) | 各模块交换什么数据 |
-| 5 | [物理计算与决策](05-computation-and-decision.md) | 气流、能耗、舒适、成本如何求 |
-| 6 | [排期与任务索引](06-roadmap-and-backlog.md) | 关键路径、时间、责任和依赖 |
+| 1 | [产品与范围](References/01-product-scope.md) | 为谁解决什么、比赛做到哪里 |
+| 2 | [系统架构](References/02-architecture.md) | 模块如何协作、Mac / iOS 怎样复用 |
+| 3 | [交互与视觉设计](References/03-experience-design.md) | 页面、状态、图层与对比流程 |
+| 4 | [数据与文件契约](References/04-data-contracts.md) | 各模块交换什么数据 |
+| 5 | [物理计算与决策](References/05-computation-and-decision.md) | 气流、能耗、舒适、成本如何求 |
+| 6 | [排期与任务索引](References/06-roadmap-and-backlog.md) | 关键路径、时间、责任和依赖 |
 | 7 | [阶段工作包](Phases/) | 每阶段可执行任务、技术、验收与降级。P5 之后：[用户向界面](Phases/UX-user-facing-ui/UX-user-facing-ui.md) → [3D 视口方案 A](Phases/3D-realitykit-viewport/3D-realitykit-viewport.md) |
 | 8 | [验证计划](Delivery/validation.md) | 工程和物理可信度如何证明 |
 | 9 | [平台与交付](Delivery/platform-and-release.md) | 两端兼容、运行时、打包与发布 |

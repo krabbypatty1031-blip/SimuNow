@@ -5,67 +5,101 @@
 <h1 align="center">SimuNow</h1>
 
 <p align="center">
-  <strong>Draw one room. See what the air conditioner really does — to the bill and to every seat.</strong><br>
-  <a href="README.zh-CN.md">中文</a>
-  ·
-  <a href="https://github.com/krabbypatty1031-blip/SimuNow">GitHub</a>
+  <strong>Same electricity bill. So why is one person sweating and another sitting in a cold draft?</strong><br>
+  SimuNow shows you, seat by seat, before you install or adjust the air conditioner.<br><br>
+  English · <a href="README.zh-CN.md">中文</a>
 </p>
 
 ---
 
-SimuNow is a **Mac-first app** (iPhone / iPad build for editing and review) where you draw a single office or classroom, place seats, furniture, and a split air conditioner — and get two answers on that same draft:
+Draw an office or classroom, place the seats, furniture, and a split air conditioner, and SimuNow answers two questions about that one room:
 
-- **What this day costs to run.** A representative-day energy and bill model (EnergyPlus 25.2).
-- **How each seat feels.** Steady-state CFD (OpenFOAM v2512) sampling the temperature at every seat, plus a sitting-height slice and illustrative streamlines.
+- **What does a day of cooling cost?** EnergyPlus works out the cooling, the electricity, and the bill for a typical day.
+- **How does each seat feel?** OpenFOAM simulates how the air settles, then reports the temperature and comfort at every seat.
 
-Pin two schemes side by side and export an evidence-backed comparison PDF.
+Then put two layouts side by side, say the outlet at 2.1 m versus 2.6 m, and export a PDF that explains the difference.
 
-![SimuNow room editor: one draft, 3D room, doors, windows, furniture, and HVAC](Design/simunow-room-editor.png)
+![SimuNow room editor with doors, windows, furniture, and a split air conditioner](Design/simunow-room-editor.png)
 
-> Numerical engines run only in the **Mac Debug** build. iPhone and iPad never run EnergyPlus or OpenFOAM locally.
+<!-- Screenshot: two schemes compared side by side -->
+<!-- Screenshot: exported comparison PDF -->
 
-## What it can tell you
+## Why we built it
 
-- How much electricity — and money — this representative day's cooling takes.
-- Whether each seat is warm or cool, and whether anyone sits in a draft or behind blocking furniture.
-- Whether moving the supply outlet 0.5 m higher is worth it: two schemes compare **only** on the same weather, occupancy, hours, and cost basis.
+Most people choose and tune an air conditioner by its wattage and whether the room "feels cool." But whether the outlet sits a little higher, whether a desk faces straight into the airflow, and whether a cabinet blocks the return vent barely change the bill. They do change how it feels to sit there.
 
-## Quick start
+Look only at the bill and you can't see who is stuck in a hot spot or a draft. SimuNow puts both questions on the same room model, calculates them separately, and shows them together.
 
-You need Xcode 16 or newer and macOS 14 / iOS 17 or newer. The 3D RealityKit viewport needs macOS 15 / iOS 18; older systems fall back to a 2D wireframe. To actually run the physics (Mac only): Docker Desktop running, plus local `python3`, `curl`, and `tar`.
+## We don't make up numbers
 
-1. Clone and open `SimuNow.xcodeproj`.
+Simulation tools make it easy to print a conclusion that looks good and doesn't hold up. SimuNow deliberately doesn't:
 
-   ```bash
-   git clone https://github.com/krabbypatty1031-blip/SimuNow.git
-   cd SimuNow
-   ```
-
-2. Install the engines once (the app never downloads them at launch).
-
-   ```bash
-   # Docker daemon must already be running
-   test/engines/install_engines.sh
-   export SIMUNOW_ENGINES_ROOT="$PWD/test/engines"
-   PYTHONPATH=Backend/src python3 -m simunow_worker doctor
-   ```
-
-   `doctor` should report L1 / L2 as `configured`. If an engine is missing it prints a repair path — it does not download anything.
-
-3. In Xcode run the shared **SimuNowMac** scheme, destination **My Mac**, configuration **Debug**. On the first compute, point the app at the `test/engines` folder. With no engines configured, compute buttons stay disabled and say why — that is expected, not a bug.
-
-**Optional — advisor PDF.** A DeepSeek API key unlocks the narrative report. It is read from `DEEPSEEK_API_KEY` or `SIMUNOW_REPORT_API_KEY`, then Keychain `app.simunow.report`, then `~/Library/Application Support/SimuNow/deepseek_api_key`. Do not commit the key.
-
-Room inputs are entered in the app itself — the office and classroom templates work out of the box; no prior files required.
+| What you often hear | What SimuNow does |
+|---|---|
+| "Simulate one day, save X a year" | Reports one typical day only. Any yearly figure is clearly labelled as a rough day × 365 |
+| "The room averages 25 °C, so everyone's comfortable" | Reads the temperature at each seat. If the simulation fails its checks, no temperature is shown at all |
+| "90% of seats are satisfied" | That ratio only counts seats that pass in the model. It is not a survey of real people |
+| "The upgrade pays for itself in 2 years" | Without a real quote, cost says "awaiting quote." No invented prices or payback periods |
 
 ## How it works
 
-One `.simunow` project package holds the room, occupancy, openings, tariff, and comfort assumptions. From that single draft:
+```mermaid
+flowchart LR
+  A[Room draft] --> B[EnergyPlus<br>energy for the day]
+  B --> C[OpenFOAM<br>steady airflow]
+  C --> D[Quality checks]
+  D --> E[Seat temperature<br>and comfort]
+  E --> F[Compare two schemes]
+  F --> G[PDF report]
+```
 
-1. **L1 — representative day (EnergyPlus 25.2).** A single-zone equivalent ideal-loads model plus COP writes cooling watts and electric watts. The weather day is a chosen calendar day on the Hong Kong typical year (default 07-15), not a live forecast. Occupied hours become a schedule, not always-on. Missing weather, tariff, or power omits the figure instead of writing zero.
-2. **L2 — airflow (OpenFOAM v2512, steady `buoyantBoussinesqSimpleFoam`).** Only a **current** L1 feeds that day's window and wall heat into the airflow boundaries — a missing or stale L1 never invents weather flux. Seat temperatures, slices, and streamlines appear only after the mesh, convergence, mass, and energy gates pass. Furniture enters as blocked cells; it does not enter the electricity ledger. After changing the date, rerun L1 before L2; seats do not update on their own.
-3. **Seat comfort.** A self-contained ISO 7730 Annex D implementation. Air temperature, radiation, speed, humidity, clothing, and activity are all required; anything missing or out of range reports "not evaluable" — never a made-up PMV.
-4. **Comparison and report.** Run success, quality, and freshness are independent flags. DeepSeek writes the four narrative sections from a **frozen evidence pack**; a number guard drops any ΔT, kWh, or percentage that is not in the evidence; the appendix is assembled locally. Layout is HTML/CSS rendered through WKWebView.
+1. **One room draft.** Size, headcount, working hours, the AC's supply and return vents, the electricity price, and comfort assumptions all live in one `.simunow` project. Setpoint, supply-air temperature, cooling, power, airflow, and air speed are separate fields, never lumped together.
+2. **Energy first.** EnergyPlus 25.2 calculates cooling, power, and the bill for a typical day (Hong Kong, 15 July by default). No electricity price means no bill shown, not a zero.
+3. **Then airflow.** OpenFOAM v2512 solves the steady airflow using that day's heat from windows and walls. Seat temperatures, a sitting-height temperature map, and airflow lines appear only once the mesh, convergence, and energy-balance checks pass. Change the date and you rerun the energy step first.
+4. **Comfort.** Comfort scores follow ISO 7730 (PMV/PPD). They need air temperature, radiant temperature, air speed, humidity, clothing, and activity. If any one is missing, the seat says "can't evaluate."
+5. **Report.** DeepSeek writes the report text from the frozen results. Any number it adds that isn't in those results gets removed automatically.
+
+## Try it
+
+**Just the app, no engines.** Enough to browse the interface and lay out a room.
+
+```bash
+git clone https://github.com/krabbypatty1031-blip/SimuNow.git
+cd SimuNow
+open SimuNow.xcodeproj
+```
+
+Run **SimuNowMac** (or **SimuNowiOS** on a simulator) and start from the office or classroom template. You need Xcode 16+, macOS 14 / iOS 17+. The 3D view needs macOS 15 / iOS 18; older systems show a 2D wireframe. Without engines the compute buttons stay disabled and tell you why.
+
+**Real calculations (Apple Silicon Mac only).** You also need Docker Desktop running, plus `python3`, `curl`, and `tar`.
+
+```bash
+test/engines/install_engines.sh   # once; engines are not committed to Git
+export SIMUNOW_ENGINES_ROOT="$PWD/test/engines"
+PYTHONPATH=Backend/src python3 -m simunow_worker doctor
+```
+
+When `doctor` reports L1 and L2 as `configured`, run **SimuNowMac** in the **Debug** configuration and select the `test/engines` folder under Compute setup in the app.
+
+**PDF report with advice (optional).** Put a DeepSeek API key in `DEEPSEEK_API_KEY`, or save it in the Keychain as `app.simunow.report`.
+
+## What works today
+
+**Ready:** build a room from the office or classroom template; place doors, windows, seats, furniture, and vents; calculate the day's energy and seat-level airflow on a Mac; compare two schemes side by side; export the PDF; switch between Chinese and English; ask the in-app assistant what the current numbers mean.
+
+**Not yet:**
+
+- Running the engines inside the release build (Debug only for now)
+- Calculating on iPhone or iPad (they edit and view only)
+- Scanning a room with RoomPlan
+- Full-year energy simulation, equipment quotes, payback
+- Central AC, multiple rooms, the cool-down after switching on
+
+Detailed progress lives in [Plans/Delivery/status.md](Plans/Delivery/status.md).
+
+## For contributors
+
+Two native apps share one local Swift package. The Python worker only runs on the Mac.
 
 ```mermaid
 flowchart TD
@@ -78,91 +112,33 @@ flowchart TD
   Viz --> Core[SimuCore]
   Sim --> Core
   Rep --> Core
-  Sim -. Mac Process .-> Worker[Python worker]
-  Worker --> L1[EnergyPlus L1]
-  Worker --> L2[OpenFOAM L2]
-  L1 --> Bound[HVAC boundary]
-  Bound --> L2
-  L2 --> Q[Quality / seat samples / slices]
-  Q --> Sim
+  Sim -. Mac only .-> Worker[Python worker]
+  Worker --> L1[EnergyPlus]
+  Worker --> L2[OpenFOAM]
   Rep -. optional .-> DSAPI[DeepSeek]
 ```
 
-| Level | Engine | Question | Status |
-|---|---|---|---|
-| L1 | EnergyPlus | How much cooling and electricity does this day need? | Wired on Mac Debug |
-| L2 | OpenFOAM | After the room settles, how does each seat feel? | Wired on Mac Debug |
-| L0 / L3 | Fast estimate / surrogate | Screening or interpolation | **Not configured** — never presented as CFD |
-
-The shared model is metric, right-handed, Z-up. Apple display coordinates convert to compute coordinates in one place.
-
-## How we avoid overclaiming
-
-HVAC tools earn trust by refusing shortcuts. These are deliberate product decisions, not disclaimers:
-
-| Common shortcut | What SimuNow does |
-|---|---|
-| Treat one simulated day as proven annual savings | Day energy and bill are booked on their own; any "yearly" figure is a day × 365 demonstration, not an EnergyPlus annual run |
-| Treat a room-average temperature as comfort at every seat | Seat temperatures come from OpenFOAM cell samples; failed quality gates omit temperatures; missing comfort inputs never write PMV = 0 |
-| Call "share of passing seats" a measured satisfaction rate | The ratio is model-gate coverage, not a survey or sensor study |
-| Invent payback without a quote | Retrofits stay "awaiting quote"; no fabricated equipment prices or payback years |
-
-## What works — and what does not
-
-**Shipped:** create a project from the office or classroom template; place openings, seats, furniture, and supply/return in the inspector and viewport; submit L1 and L2 from Mac Debug; read seat temperatures, slices, and illustrative flow after quality passes; compare two same-basis candidates; export an advisor PDF; switch the UI between Chinese and English; ask the in-app assistant about the current numbers.
-
-**Not shipped — do not describe these as done:**
-
-- Executing EnergyPlus / OpenFOAM inside the Release sandboxed app (the production path is still a signed helper)
-- On-device solves on iPhone / iPad
-- RoomPlan capture
-- L0 screening or L3 surrogate models
-- A true annual EnergyPlus run, equipment quotes, or payback
-- Central plant, multi-room, or start-up cool-down transients
-
-Stage status lives in [Plans/Delivery/status.md](Plans/Delivery/status.md); architecture decisions in [Plans/Delivery/decisions.md](Plans/Delivery/decisions.md).
-
-## For contributors
-
-Two native app targets share one local Swift package; the Python worker runs only on Mac. Core stays at the bottom, Workspace at the top; engines and renderers are replaceable.
-
-| Module | Owns | Must not |
+| Module | Does | Doesn't |
 |---|---|---|
-| **SimuCore** | Draft, coordinates, run identity, metrics and provenance | UI, Process, solvers |
-| **SimuSimulation** | Submit / cancel, event stream, local execution adapters | Views or hardcoded Desktop paths |
-| **SimuDesignSystem** | Semantic color, type, empty states, accessibility | Physics rules |
-| **SimuVisualization** | Wireframe / RealityKit viewport, slices, streamlines | Loads or recommendations |
-| **SimuReporting** | Evidence pack, number guard, PDF | Recomputing metrics |
-| **SimuWorkspace** | Navigation, editing, compare, export | Calling OpenFOAM directly |
-| **Backend** | IDF / case translation, job orchestration, quality, comfort, cost | Downloading engines at app launch |
+| **SimuCore** | Room draft, coordinates, run identity, metrics | UI, processes, solvers |
+| **SimuSimulation** | Submit and cancel runs, event stream | Views, hardcoded paths |
+| **SimuDesignSystem** | Colors, type, empty states, accessibility | Physics |
+| **SimuVisualization** | 3D / wireframe view, temperature maps, airflow lines | Loads or recommendations |
+| **SimuReporting** | Evidence pack, number check, PDF | Recalculating metrics |
+| **SimuWorkspace** | Navigation, editing, comparison, export | Calling OpenFOAM directly |
+| **Backend** | Turning the room into EnergyPlus / OpenFOAM inputs, running them, quality checks, comfort, cost | Downloading engines at launch |
 
 ```bash
-Scripts/check.sh test  # shared package contract tests
-Scripts/check.sh mac   # Mac Debug build, signing off
-Scripts/check.sh ios   # generic iOS Simulator build, signing off
+Scripts/check.sh test   # shared package tests
+Scripts/check.sh mac    # Mac Debug build, signing off
+Scripts/check.sh ios    # iOS Simulator build, signing off
 Scripts/check.sh all
 ```
 
-No remote Swift dependencies. The scripts honor `DEVELOPER_DIR` when set (otherwise `/Applications/Xcode.app/Contents/Developer`) and never touch the system `xcode-select`. Build products go to a temp `SimuNow-build-*` directory unless `SIMUNOW_BUILD_DIR` is set.
+New Swift files go under `Packages/SimuKit/Sources/<module>/`, where SwiftPM finds them automatically. If you change an app target or build setting, update `Scripts/generate_project.py` and regenerate the project. Don't commit build output, simulation data, real room photos, keys, or signing files.
 
-```text
-SimuNow.xcodeproj/    Two app targets and shared schemes
-Apps/                 Mac / iOS entries, assets, entitlements
-Packages/SimuKit/     Core / Simulation / Design / Viz / Reporting / Workspace
-Configurations/       Shared and per-platform build settings
-Backend/              Python worker: translation, jobs, quality, comfort
-Protocols/            Shared Swift / Python JSON schemas
-Fixtures/             Sourced anonymous test fixtures
-test/engines/         Engine install scripts (binaries are not committed)
-Scripts/              Project generation and check.sh
-Plans/                Product, architecture, phases, delivery notes
-AGENTS.md             Guide for AI agents working in this repo
-```
-
-New Swift feature files go under `Packages/SimuKit/Sources/<module>/` and SwiftPM picks them up. Changing an app entry, target, or build setting means updating `Scripts/generate_project.py` and regenerating the project. Do not commit build products, field data, real room photos, secrets, or signing materials.
+Start with [AGENTS.md](AGENTS.md), the [plan index](Plans/README.md), and the [architecture notes](Plans/References/02-architecture.md).
 
 ## References
 
-- [README (中文)](README.zh-CN.md)
-- [Plan index](Plans/README.md) · [Product scope](Plans/References/01-product-scope.md) · [Architecture](Plans/References/02-architecture.md) · [Platform and release](Plans/Delivery/platform-and-release.md)
-- [EnergyPlus releases](https://github.com/NREL/EnergyPlus/releases) · [OpenFOAM documentation](https://doc.openfoam.com/) · [ISO 7730](https://www.iso.org/standard/39155.html)
+[EnergyPlus](https://github.com/NREL/EnergyPlus/releases) · [OpenFOAM](https://doc.openfoam.com/) · [ISO 7730](https://www.iso.org/standard/39155.html)

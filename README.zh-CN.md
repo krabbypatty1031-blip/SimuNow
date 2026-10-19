@@ -1,67 +1,63 @@
 <p align="center">
-  <img src="Design/simunow-app-icon.png" width="128" alt="SimuNow">
+  <img src="Design/simunow-app-icon.png" width="112" alt="SimuNow 应用图标">
 </p>
 
 <h1 align="center">SimuNow</h1>
 
 <p align="center">
-  <strong>同样的电费，为什么有人坐着闷热，有人一直被冷风吹？</strong><br>
-  装空调、调空调之前，SimuNow 帮你看清每个座位的体感。<br><br>
-  <a href="README.md">English</a> · 中文
+  <strong>在一个原生工作区中，分析室内气流、热舒适与空调能耗。</strong>
 </p>
 
----
+<p align="center">
+  <a href="README.md">English</a> · 简体中文
+</p>
 
-画一个办公室或教室，摆好座位、家具和分体空调，SimuNow 会回答这个房间的两个问题：
+<p align="center">
+  <a href="#核心功能">核心功能</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#工作原理">工作原理</a> ·
+  <a href="#文档导航">文档导航</a> ·
+  <a href="#参与贡献">参与贡献</a>
+</p>
 
-- **开一天空调要花多少电？** 用 EnergyPlus 算出典型一天的制冷量、用电量和电费。
-- **每个座位坐着舒不舒服？** 用 OpenFOAM 模拟空气稳定后的流动，给出每个座位的温度和舒适度。
+SimuNow 是一款以 Mac 为主要平台的室内空调仿真与方案比较工具，面向办公室和教室等单房间场景。建立房间、布置座位与设备后，你可以比较不同配置对气流、座位热舒适和代表日用电的影响。
 
-然后把两个方案并排比较，比如送风口装在 2.1 米和 2.6 米，再导出一份讲清差别的 PDF。
+项目通过统一房间模型连接 **EnergyPlus 能耗模拟**与 **OpenFOAM 计算流体力学（CFD）模拟**，并提供适用于 macOS、iPhone 和 iPad 的原生 SwiftUI 界面。
 
-![SimuNow 房间编辑器：门窗、家具与分体空调](Design/simunow-room-editor.png)
+![SimuNow 房间编辑器：房间几何、家具、座位与空调风口](Design/simunow-room-editor.png)
 
-<!-- 截图：两个方案并排对比 -->
-<!-- 截图：导出的对比 PDF -->
+> [!IMPORTANT]
+> SimuNow 目前是需要从源码构建的早期研究原型。本地仿真仅支持 **Apple Silicon Mac 的 Debug 构建**；iPhone 和 iPad 支持编辑与查看，正式 Release 构建中的引擎执行尚未交付。
 
-## 为什么做这个
+## 核心功能
 
-选空调、调空调，大多数人只看功率和「感觉凉不凉快」。但送风口高一点还是低一点、座位是不是正对着风口、柜子有没有挡住回风，几乎不影响电费，却实实在在影响坐在那里的人。
+- **可视化建立房间。** 从办公室或教室模板开始，编辑尺寸、朝向、门窗、家具、座位以及分体空调送回风口，并将草稿保存为 `.simunow` 项目。
+- **查看气流与温度分布。** 在三维视图中查看房间几何；CFD 结果通过质量检查后，可查看温度切片、速度箭头、流线和座位温度。
+- **逐座位评价热舒适。** 计算 PMV/PPD 热舒适指标和可评价座位中的模型达标比例，同时说明缺失输入与被排除的座位。
+- **分析能耗与运行费用。** 计算代表日冷负荷，根据声明的能效比（COP）估算用电，并按可配置电价计算当天费用。
+- **并排比较候选方案。** 冻结候选运行，查看参数差异，并使用共同镜头和温度色标比较结果；修改输入后，旧结果会标记为待重算。
+- **解释与分享结果。** 通过应用内助手讨论结果，导出基于冻结证据的对比 PDF；这两项功能需要 DeepSeek API 密钥。界面支持中英文切换。
 
-只看电费，你看不见谁坐在热点里、谁一直被风吹。SimuNow 把这两件事放在同一个房间模型里，分开算，一起看。
+### 示例流程
 
-## 我们不编数字
+从办公室模板开始，完成能耗与气流计算，将结果固定为基准。修改送风口高度，重新计算并固定第二个候选。在对比页查看座位温度、舒适度和当天电费的差异，再导出报告。
 
-模拟工具很容易给出一个看起来漂亮、其实站不住的结论。SimuNow 刻意不这样做：
+## 平台支持
 
-| 常见说法 | SimuNow 的做法 |
-|---|---|
-| 「模拟一天，全年能省 X 元」 | 只报典型一天的用电和电费。如果出现全年数字，会标明只是「一天 × 365」的粗略推算 |
-| 「房间平均 25 °C，大家都舒服」 | 每个座位单独取温度。模拟没通过检查，就一个温度都不显示 |
-| 「90% 的座位满意」 | 这个比例只是模型里达标的座位数，不是真人的满意度调查 |
-| 「改造后 2 年回本」 | 没有真实报价就写「待报价」，不编设备价格和回收期 |
+| 能力 | macOS | iOS / iPadOS |
+|---|---|---|
+| 房间编辑与结果界面 | macOS 14+ | iOS / iPadOS 17+ |
+| RealityKit 三维视口 | macOS 15+ | iOS / iPadOS 18+ |
+| 较低受支持系统的视口 | Canvas 线框 | Canvas 线框 |
+| 本地 EnergyPlus / OpenFOAM 执行 | Apple Silicon，Debug 构建 | 不支持 |
 
-## 怎么算的
+RoomPlan 扫描、远程计算、全年能耗模拟、多房间与中央空调、开机降温过程、设备报价和回收期计算尚未实现。具体实施与验证记录见[交付状态](Plans/Delivery/status.md)。
 
-```mermaid
-flowchart LR
-  A[房间草稿] --> B[EnergyPlus<br>当天用电]
-  B --> C[OpenFOAM<br>稳态气流]
-  C --> D[质量检查]
-  D --> E[座位温度<br>与舒适度]
-  E --> F[两个方案对比]
-  F --> G[PDF 报告]
-```
+## 快速开始
 
-1. **一份房间草稿。** 尺寸、人数、上班时段、空调送回风口、电价和舒适假设，都存在一个 `.simunow` 项目里。设定温度、送风温度、制冷量、电功率、风量、风速分开填写，不混成一个数。
-2. **先算用电。** EnergyPlus 25.2 算出典型一天（默认香港 7 月 15 日）的制冷量、电功率和电费。没填电价就不显示电费，而不是显示 0。
-3. **再算气流。** OpenFOAM v2512 结合当天窗户和墙体传进来的热量，求解稳态气流。网格、收敛和能量守恒检查都通过后，才显示座位温度、坐姿高度的温度分布图和气流线。改了日期，要先重新算用电。
-4. **评价舒适度。** 按 ISO 7730 计算 PMV/PPD，需要气温、辐射温度、风速、湿度、衣着和活动量。缺任何一项，这个座位就显示「无法评价」。
-5. **写报告。** DeepSeek 根据冻结的计算结果写报告正文，结果里没有的数字会被自动删掉。
+### 1. 构建并体验应用
 
-## 上手试试
-
-**只看 App，不装引擎。** 浏览界面、摆房间已经够用。
+需要 **Xcode 16 或更新版本**，以及上表中的系统版本。编辑房间无需安装计算引擎或配置 API 密钥。
 
 ```bash
 git clone https://github.com/krabbypatty1031-blip/SimuNow.git
@@ -69,76 +65,98 @@ cd SimuNow
 open SimuNow.xcodeproj
 ```
 
-运行 **SimuNowMac**（或在模拟器上运行 **SimuNowiOS**），从办公室或教室模板开始。需要 Xcode 16 以上、macOS 14 / iOS 17 以上；3D 视图需要 macOS 15 / iOS 18，更低的系统显示 2D 线框。没装引擎时计算按钮不能点，会提示原因。
+在 Xcode 中选择 **SimuNowMac**，使用 **Debug** 配置在 Mac 上运行。体验 iPhone 或 iPad 界面时，选择 **SimuNowiOS** 和一个 iOS 模拟器。
 
-**跑真实计算（仅 Apple Silicon Mac）。** 还需要正在运行的 Docker Desktop，以及 `python3`、`curl`、`tar`。
+从办公室或教室模板创建项目。此时应能编辑房间并查看几何；配置计算引擎前，仿真控件保持不可用。
+
+### 2. 启用本地仿真
+
+在 **Apple Silicon Mac** 上启动 Docker Desktop，并确保可以使用 `python3`、`curl` 和 `tar`。在仓库根目录执行：
 
 ```bash
-test/engines/install_engines.sh   # 只装一次，引擎不进 Git
+# 下载固定版本的计算引擎与天气数据，首次配置时执行。
+test/engines/install_engines.sh
+
 export SIMUNOW_ENGINES_ROOT="$PWD/test/engines"
 PYTHONPATH=Backend/src python3 -m simunow_worker doctor
 ```
 
-`doctor` 显示 L1 和 L2 都是 `configured` 后，用 **Debug** 配置运行 **SimuNowMac**，在 App 的「计算准备」里选中 `test/engines` 文件夹。
+探测结果中的 `l1`（EnergyPlus）和 `l2`（OpenFOAM）应均为 `configured`。这说明配置检查通过；求解器能否成功完成计算，需要由实际运行另行确认。
 
-**带建议的 PDF 报告（可选）。** 把 DeepSeek API 密钥放进环境变量 `DEEPSEEK_API_KEY`，或者存进钥匙串 `app.simunow.report`。
+在 Mac Debug 应用的「计算准备」中选择同一个 `test/engines` 目录。先运行代表日能耗计算（**L1**），再运行稳态气流计算（**L2**）。L2 通过质量检查后，即可查看座位结果和场数据图层。
 
-## 现在做到哪了
+当前固定使用 **EnergyPlus 25.2.0** 与 **OpenFOAM v2512**（`linux/arm64`，`buoyantBoussinesqSimpleFoam`）。引擎单独安装，二进制不纳入 Git。配置细节见[计算端说明](Backend/README.md)。
 
-**已经能用：** 从办公室或教室模板建房间；摆放门窗、座位、家具和风口；在 Mac 上计算当天用电和座位级气流；两个方案并排对比；导出 PDF；中英文界面切换；在 App 里问助手当前数字是什么意思。
+### 3. 启用助手与 PDF 报告
 
-**还没做：**
+向运行中的应用提供 DeepSeek API 密钥：使用环境变量 `DEEPSEEK_API_KEY`；从 Xcode 启动时，应将其配置在 scheme 的 Run 环境变量中。也可以在钥匙串中配置服务名为 `app.simunow.report`、账户名为 `DEEPSEEK_API_KEY` 的项目。
 
-- 正式发布版里直接运行计算引擎（目前只在 Debug 下可用）
-- 在 iPhone / iPad 上计算（目前只能编辑和查看）
-- 用 RoomPlan 扫描房间
-- 全年能耗模拟、设备报价、回收期
-- 中央空调、多房间、开机后的降温过程
+固定需要比较的候选后，从报告页导出。导出需要符合条件的对比证据，以及成功返回的 DeepSeek 响应；未配置密钥时，仍可编辑房间和运行本地仿真。
 
-详细进度见 [Plans/Delivery/status.md](Plans/Delivery/status.md)。
+能耗与气流计算在本地执行。助手与报告请求会将相应上下文或证据发送至 DeepSeek API。请勿将 API 密钥写入项目文件或 Git。
 
-## 参与开发
-
-两个原生 App 共用一个本地 Swift 包，Python 计算端只在 Mac 上运行。
+## 工作原理
 
 ```mermaid
-flowchart TD
-  Mac[SimuNowMac] --> WS[SimuWorkspace]
-  iOS[SimuNowiOS] --> WS
-  WS --> DS[SimuDesignSystem]
-  WS --> Viz[SimuVisualization]
-  WS --> Sim[SimuSimulation]
-  WS --> Rep[SimuReporting]
-  Viz --> Core[SimuCore]
-  Sim --> Core
-  Rep --> Core
-  Sim -. 仅 Mac .-> Worker[Python worker]
-  Worker --> L1[EnergyPlus]
-  Worker --> L2[OpenFOAM]
-  Rep -. 可选 .-> DSAPI[DeepSeek]
+flowchart LR
+  Room[房间模型] --> L1[EnergyPlus：代表日能耗]
+  Room --> L2[OpenFOAM：稳态气流]
+  L1 -->|当前热边界数据| L2
+  L2 --> Quality[质量检查]
+  Quality --> Seats[座位结果与场数据视图]
+  L1 --> Compare[候选方案对比]
+  Seats --> Compare
+  Compare --> Evidence[冻结证据]
+  Evidence --> PDF[DeepSeek 正文与 PDF]
 ```
 
-| 模块 | 负责 | 不做 |
-|---|---|---|
-| **SimuCore** | 房间草稿、坐标、运行身份、指标 | 界面、进程、求解器 |
-| **SimuSimulation** | 提交和取消计算、事件流 | 界面、写死路径 |
-| **SimuDesignSystem** | 颜色、字体、空状态、无障碍 | 物理计算 |
-| **SimuVisualization** | 3D / 线框视图、温度分布图、气流线 | 负荷计算或推荐 |
-| **SimuReporting** | 证据包、数字检查、PDF | 重新计算指标 |
-| **SimuWorkspace** | 导航、编辑、对比、导出 | 直接调用 OpenFOAM |
-| **Backend** | 把房间转成 EnergyPlus / OpenFOAM 输入并运行，做质量检查、舒适度和费用 | 在启动时下载引擎 |
+1. **建立模型。** 统一草稿记录几何、人员、空调参数、天气日期、舒适假设和电价。设定温度、送风温度、冷负荷、电功率、风量与风速分别保留各自的含义和单位。
+2. **计算能耗。** EnergyPlus 模拟一个代表日，默认使用香港 CityUHK 典型年天气文件中的 7 月 15 日；用电按声明的 COP 估算，当天费用由电价决定。
+3. **计算气流。** OpenFOAM 求解稳态房间工况。匹配当前输入的有效 L1 结果为窗户和墙体提供热边界；否则保留草稿声明的边界假设。
+4. **评价与对比。** 质量检查决定座位采样与场数据能否用于展示。冻结候选保留各自的输入、运行身份和结果，供后续对比与报告使用。
+
+### 模型范围与验证
+
+- **质量与新鲜度独立。** 求解器运行结束不等于结果可用于评价；系统检查网格、收敛、质量与能量平衡，并通过输入哈希识别过期结果。
+- **舒适评价有适用条件。** PMV/PPD 采用 ISO 7730 附录 D 的实现，需要适用范围内的气温、辐射温度、风速、湿度、衣着和活动量；缺项或超范围时显示原因。
+- **结果按计算范围解读。** 稳态气流无法预测开机降温时间；单个代表日不能证明全年节能；模型达标座位比例不代表实测人员满意率。
+- **报告保留证据来源。** 定量表格采用冻结运行数据，数字守卫依据证据过滤生成正文；这并不保证每条定性建议都正确。
+
+当前原型用于探索性方案比较，尚未建立针对任意房间的现场校准精度。已有证据与待验证事项见[验证计划](Plans/Delivery/validation.md)、[验证记录](Plans/Delivery/verification.md)和[已知风险](Plans/Delivery/risks.md)。
+
+## 文档导航
+
+| 目标 | 阅读入口 |
+|---|---|
+| 配置 Python worker 与计算引擎 | [计算端说明](Backend/README.md) |
+| 了解已实现的能力 | [交付状态](Plans/Delivery/status.md) |
+| 理解架构与模块边界 | [系统架构](Plans/References/02-architecture.md) |
+| 使用共享 JSON 格式 | [协议与 schema](Protocols/README.md) |
+| 查看示例项目与结果 | [夹具说明](Fixtures/README.md) |
+| 了解项目方向与设计选择 | [计划索引](Plans/README.md) · [决策记录](Plans/Delivery/decisions.md) |
+
+部分计划文档保留了历史阶段描述，判断当前能力时请结合交付状态与实际源码。
+
+## 参与贡献
+
+欢迎问题反馈、文档改进，以及可复现的建模或验证案例。请通过 [Issues](https://github.com/krabbypatty1031-blip/SimuNow/issues) 提问、报告问题或提出功能建议，并附上平台、构建配置、复现步骤及去除私人信息后的相关日志。
+
+两个原生应用共享 `Packages/SimuKit` 下的六个模块：`SimuCore`、`SimuSimulation`、`SimuVisualization`、`SimuReporting`、`SimuDesignSystem` 和 `SimuWorkspace`。Python worker 位于 `Backend/src/simunow_worker`，并复用 `test/p1` 中的求解与后处理代码；该目录也是运行时依赖。
+
+修改前请阅读 [AGENTS.md](AGENTS.md) 与[架构说明](Plans/References/02-architecture.md)。在仓库根目录执行：
 
 ```bash
-Scripts/check.sh test   # 共享包测试
-Scripts/check.sh mac    # Mac Debug 编译，关闭签名
-Scripts/check.sh ios    # iOS 模拟器编译，关闭签名
-Scripts/check.sh all
+Scripts/check.sh test   # 共享 Swift 包测试
+Scripts/check.sh mac    # macOS Debug 编译，关闭代码签名
+Scripts/check.sh ios    # iOS 模拟器编译，关闭代码签名
 ```
 
-新的 Swift 文件放进 `Packages/SimuKit/Sources/<模块>/`，SwiftPM 会自动识别。改了 App target 或构建配置，要同步改 `Scripts/generate_project.py` 并重新生成工程。不要提交构建产物、模拟数据、真实房间照片、密钥或签名文件。
+这些检查不验证数值引擎。修改仿真行为后，还需执行文档中对应的 Python 测试与物理验证。修改应用 target 或构建配置时，应同步维护 `Scripts/generate_project.py`。
 
-开发前先读 [AGENTS.md](AGENTS.md)、[计划总入口](Plans/README.md) 和 [系统架构](Plans/References/02-architecture.md)。
+## 许可证
 
-## 参考
+本仓库尚未指定项目许可证。复用或再分发代码前，请先确认许可条款；第三方计算引擎与服务遵循各自的条款。
 
-[EnergyPlus](https://github.com/NREL/EnergyPlus/releases) · [OpenFOAM](https://doc.openfoam.com/) · [ISO 7730](https://www.iso.org/standard/39155.html)
+## 致谢
+
+项目使用 [SwiftUI](https://developer.apple.com/xcode/swiftui/)、[RealityKit](https://developer.apple.com/augmented-reality/realitykit/)、[EnergyPlus](https://github.com/NREL/EnergyPlus) 与 [OpenFOAM](https://www.openfoam.com/)，热舒适评价基于 [ISO 7730](https://www.iso.org/standard/39155.html)。
